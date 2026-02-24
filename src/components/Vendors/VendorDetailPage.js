@@ -32,7 +32,7 @@ export default function VendorDetailPage() {
 
     // Add item modal
     const [itemModalOpen, setItemModalOpen] = useState(false);
-    const [itemForm, setItemForm] = useState({ name: '', category: '', unit: 'kg', price: '', sku: '', notes: '' });
+    const [itemForm, setItemForm] = useState({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '' });
     const [itemSaving, setItemSaving] = useState(false);
 
     // Edit item modal
@@ -131,12 +131,14 @@ export default function VendorDetailPage() {
     // Add item
     const handleAddItem = async () => {
         if (!itemForm.name.trim()) { toast.warn('Item name is required'); return; }
+        if (!itemForm.brand.trim()) { toast.warn('Brand is required'); return; }
         if (!itemForm.category) { toast.warn('Select a category'); return; }
 
         setItemSaving(true);
         try {
             const itemData = {
                 name: itemForm.name.trim(),
+                brand: itemForm.brand.trim(),
                 category: itemForm.category,
                 unit: itemForm.unit,
                 price: Number(itemForm.price) || 0,
@@ -175,7 +177,7 @@ export default function VendorDetailPage() {
             }
 
             setItemModalOpen(false);
-            setItemForm({ name: '', category: '', unit: 'kg', price: '', sku: '', notes: '' });
+            setItemForm({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '' });
         } catch (err) {
             console.error(err);
             toast.error('Failed to add item');
@@ -589,6 +591,7 @@ export default function VendorDetailPage() {
                             <div className="modalBody">
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                                     <div><label className="ui-label">Item Name *</label><input className="ui-input" placeholder="e.g. Turmeric Powder" value={itemForm.name} onChange={e => setItemForm(p => ({ ...p, name: e.target.value }))} /></div>
+                                    <div><label className="ui-label">Brand *</label><input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={itemForm.brand} onChange={e => setItemForm(p => ({ ...p, brand: e.target.value }))} /></div>
                                     <div><label className="ui-label">Category *</label>
                                         <select className="ui-input" value={itemForm.category} onChange={e => setItemForm(p => ({ ...p, category: e.target.value }))}>
                                             <option value="">Select...</option>

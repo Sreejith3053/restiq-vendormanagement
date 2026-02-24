@@ -13,6 +13,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
 
     const [form, setForm] = useState({
         name: item.name || '',
+        brand: item.brand || '',
         category: item.category || '',
         unit: item.unit || 'kg',
         price: item.price || '',
@@ -30,6 +31,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
     const hasChanges = () => {
         return (
             form.name.trim() !== (item.name || '') ||
+            form.brand.trim() !== (item.brand || '') ||
             form.category !== (item.category || '') ||
             form.unit !== (item.unit || 'kg') ||
             String(form.price) !== String(item.price || '') ||
@@ -43,6 +45,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         setError('');
 
         if (!form.name.trim()) { setError('Item name is required.'); return; }
+        if (!form.brand.trim()) { setError('Brand is required.'); return; }
         if (!form.category) { setError('Select a category.'); return; }
         if (!hasChanges()) { setError('No changes detected.'); return; }
 
@@ -50,6 +53,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         try {
             const proposedData = {
                 name: form.name.trim(),
+                brand: form.brand.trim(),
                 category: form.category,
                 unit: form.unit,
                 price: Number(form.price) || 0,
@@ -59,6 +63,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
 
             const originalData = {
                 name: item.name || '',
+                brand: item.brand || '',
                 category: item.category || '',
                 unit: item.unit || 'kg',
                 price: Number(item.price) || 0,
@@ -142,6 +147,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                     <form onSubmit={handleSubmit}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                             <div><label className="ui-label">Item Name *</label><input className="ui-input" value={form.name} onChange={e => handleChange('name', e.target.value)} placeholder="e.g. Turmeric Powder" /></div>
+                            <div><label className="ui-label">Brand *</label><input className="ui-input" value={form.brand} onChange={e => handleChange('brand', e.target.value)} placeholder="e.g. Eastern, Sakthi, MTR…" /></div>
                             <div><label className="ui-label">Category *</label>
                                 <select className="ui-input" value={form.category} onChange={e => handleChange('category', e.target.value)}>
                                     <option value="">Select...</option>

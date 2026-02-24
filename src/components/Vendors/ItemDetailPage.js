@@ -164,11 +164,13 @@ export default function ItemDetailPage() {
     // ─── Save edit ───
     const handleSave = async () => {
         if (!editForm.name?.trim()) { toast.warn('Name is required'); return; }
+        if (!editForm.brand?.trim()) { toast.warn('Brand is required'); return; }
         if (!editForm.price || isNaN(editForm.price)) { toast.warn('Valid price required'); return; }
         setSaving(true);
         try {
             const proposedData = {
                 name: editForm.name.trim(),
+                brand: editForm.brand.trim(),
                 category: editForm.category || 'Other',
                 unit: editForm.unit || 'kg',
                 price: Number(editForm.price),
@@ -176,7 +178,7 @@ export default function ItemDetailPage() {
                 notes: editForm.notes?.trim() || '',
             };
             const originalData = {
-                name: item.name, category: item.category, unit: item.unit,
+                name: item.name, brand: item.brand || '', category: item.category, unit: item.unit,
                 price: item.price, sku: item.sku || '', notes: item.notes || '',
             };
             const itemRef = doc(db, `vendors/${vendorId}/items`, itemId);
@@ -465,6 +467,7 @@ export default function ItemDetailPage() {
                         <div className="idp-hero__badges">
                             <span className={`badge ${statusBadgeClass(item.status)}`}>{statusLabel(item.status || 'active')}</span>
                             <span className="badge blue">{item.category || 'Other'}</span>
+                            {item.brand && <span className="badge gray">{item.brand}</span>}
                             {item.sku && <span className="badge gray">SKU: {item.sku}</span>}
                         </div>
                         <div className="idp-hero__meta">
@@ -620,6 +623,10 @@ export default function ItemDetailPage() {
                                     <input className="ui-input" value={editForm.name || ''} onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))} />
                                 </div>
                                 <div>
+                                    <label className="ui-label">Brand *</label>
+                                    <input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={editForm.brand || ''} onChange={e => setEditForm(prev => ({ ...prev, brand: e.target.value }))} />
+                                </div>
+                                <div>
                                     <label className="ui-label">Category</label>
                                     <select className="ui-input" value={editForm.category || 'Other'} onChange={e => setEditForm(prev => ({ ...prev, category: e.target.value }))}>
                                         {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -656,6 +663,10 @@ export default function ItemDetailPage() {
                             <div className="idp-field">
                                 <div className="idp-field__label">Name</div>
                                 <div className="idp-field__value">{item.name}</div>
+                            </div>
+                            <div className="idp-field">
+                                <div className="idp-field__label">Brand</div>
+                                <div className="idp-field__value">{item.brand || '—'}</div>
                             </div>
                             <div className="idp-field">
                                 <div className="idp-field__label">Category</div>

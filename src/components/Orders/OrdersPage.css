@@ -96,6 +96,11 @@
     color: #38bdf8;
 }
 
+.status-badge.pending_customer_approval {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+}
+
 .status-badge.delivery_in_route {
     background: rgba(139, 92, 246, 0.15);
     color: #a78bfa;

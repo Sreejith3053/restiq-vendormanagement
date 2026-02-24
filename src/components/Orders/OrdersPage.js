@@ -6,10 +6,14 @@ import { UserContext } from '../../contexts/UserContext';
 import './OrdersPage.css';
 
 export default function OrdersPage() {
-    const { isSuperAdmin, isAdmin, vendorId, permissions } = useContext(UserContext);
+    const { isSuperAdmin, isAdmin, vendorId, permissions, displayName } = useContext(UserContext);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState(null);
+
+    // Editable Items State
+    const [editableItems, setEditableItems] = useState([]);
+    const [itemReasons, setItemReasons] = useState({});
 
     // Acceptance form state
     const [showAcceptForm, setShowAcceptForm] = useState(false);
@@ -23,6 +27,9 @@ export default function OrdersPage() {
             setShowAcceptForm(false);
             setPickupDate('');
             setPickupTime('');
+            // Initialize editable items
+            setEditableItems(JSON.parse(JSON.stringify(selectedOrder.items || [])));
+            setItemReasons({});
         }
     }, [selectedOrder?.id]);
 
@@ -90,15 +97,66 @@ export default function OrdersPage() {
             return;
         }
 
+        // Validate reasons for modified quantities
+        const auditLogEntries = [];
+        let hasMissingReason = false;
+
+        editableItems.forEach((item, index) => {
+            const originalItem = selectedOrder.items[index];
+            if (item.qty < originalItem.qty) {
+                const reason = itemReasons[index]?.trim();
+                if (!reason) {
+                    hasMissingReason = true;
+                } else {
+                    const actionName = item.qty === 0 ? "rejected" : "quantity reduced";
+                    auditLogEntries.push({
+                        action: `Item "${item.name}" ${actionName} from ${originalItem.qty} to ${item.qty}`,
+                        reason: reason,
+                        timestamp: new Date().toISOString(),
+                        user: displayName || 'Admin'
+                    });
+                }
+            }
+        });
+
+        if (hasMissingReason) {
+            toast.warn("Please provide a reason for all reduced or rejected items.");
+            return;
+        }
+
+        // Calculate new totals
+        const newSubtotal = editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        const newTaxTotal = newSubtotal * (selectedOrder.taxRate || 0);
+        const newTotal = newSubtotal + newTaxTotal;
+
         try {
+            const hasModifications = auditLogEntries.length > 0;
+            const newStatus = hasModifications ? 'pending_customer_approval' : 'pending_fulfillment';
+
             const orderRef = doc(db, 'marketplaceOrders', selectedOrder.id);
-            await updateDoc(orderRef, {
-                status: 'pending_fulfillment',
+            const updatePayload = {
+                status: newStatus,
                 pickupDate,
-                pickupTime
-            });
-            toast.success('Order accepted with pickup scheduled!');
-            setSelectedOrder(prev => prev ? { ...prev, status: 'pending_fulfillment', pickupDate, pickupTime } : null);
+                pickupTime,
+                items: editableItems,
+                subtotal: newSubtotal,
+                taxTotal: newTaxTotal,
+                total: newTotal
+            };
+
+            // Only append audit log if there are changes
+            if (hasModifications) {
+                const updatedAuditLog = [...(selectedOrder.auditLog || []), ...auditLogEntries];
+                updatePayload.auditLog = updatedAuditLog;
+            }
+
+            await updateDoc(orderRef, updatePayload);
+            toast.success(hasModifications ? 'Changes submitted for customer approval!' : 'Order accepted with scheduled pickup!');
+
+            setSelectedOrder(prev => prev ? {
+                ...prev,
+                ...updatePayload
+            } : null);
             setShowAcceptForm(false);
         } catch (error) {
             console.error("Error accepting order:", error);
@@ -177,6 +235,7 @@ export default function OrdersPage() {
                 >
                     <option value="All">All Statuses</option>
                     <option value="pending_confirmation">Pending Confirmation</option>
+                    <option value="pending_customer_approval">Pending Customer Approval</option>
                     <option value="pending_fulfillment">Pending Fulfillment</option>
                     <option value="delivery_in_route">Delivery In Route</option>
                     <option value="fulfilled">Fulfilled</option>
@@ -320,39 +379,84 @@ export default function OrdersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(selectedOrder.items || []).map((item, idx) => (
-                                        <tr key={idx}>
-                                            <td className="item-name-cell">
-                                                {item.imageUrl && (
-                                                    <img src={item.imageUrl} alt={item.name} className="item-thumbnail" />
+                                    {editableItems.map((item, idx) => {
+                                        const originalItem = selectedOrder.items?.[idx] || item;
+                                        const isEditable = selectedOrder.status === 'pending_confirmation' && canManageOrders;
+                                        const isModified = item.qty < originalItem.qty;
+
+                                        return (
+                                            <React.Fragment key={idx}>
+                                                <tr style={{ opacity: item.qty === 0 ? 0.5 : 1 }}>
+                                                    <td className="item-name-cell">
+                                                        {item.imageUrl && (
+                                                            <img src={item.imageUrl} alt={item.name} className="item-thumbnail" />
+                                                        )}
+                                                        <div>
+                                                            <div style={{ fontWeight: 500, textDecoration: item.qty === 0 ? 'line-through' : 'none' }}>{item.name}</div>
+                                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                                {item.brand && `${item.brand} • `}{item.unit}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>{formatCurrency(item.price)}</td>
+                                                    <td>
+                                                        {isEditable ? (
+                                                            <input
+                                                                type="number"
+                                                                className="ui-input"
+                                                                style={{ width: '70px', padding: '4px 8px' }}
+                                                                min="0"
+                                                                max={originalItem.qty}
+                                                                value={item.qty}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value) || 0;
+                                                                    const newQty = Math.max(0, Math.min(originalItem.qty, val));
+                                                                    const newItems = [...editableItems];
+                                                                    newItems[idx].qty = newQty;
+                                                                    setEditableItems(newItems);
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            item.qty
+                                                        )}
+                                                    </td>
+                                                    <td>{formatCurrency(item.price * item.qty)}</td>
+                                                </tr>
+                                                {isModified && isEditable && (
+                                                    <tr>
+                                                        <td colSpan="4" style={{ paddingTop: 0, paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(239, 68, 68, 0.05)', padding: '8px 12px', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>
+                                                                <span style={{ fontSize: '13px', color: '#ef4444' }}>Reason for {item.qty === 0 ? 'rejection' : 'reduction'}:</span>
+                                                                <input
+                                                                    type="text"
+                                                                    className="ui-input"
+                                                                    style={{ flex: 1, padding: '4px 8px', fontSize: '13px' }}
+                                                                    placeholder="e.g. Out of stock, damaged..."
+                                                                    value={itemReasons[idx] || ''}
+                                                                    onChange={(e) => setItemReasons(prev => ({ ...prev, [idx]: e.target.value }))}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                    </tr>
                                                 )}
-                                                <div>
-                                                    <div style={{ fontWeight: 500 }}>{item.name}</div>
-                                                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                                        {item.brand && `${item.brand} • `}{item.unit}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>{formatCurrency(item.price)}</td>
-                                            <td>{item.qty}</td>
-                                            <td>{formatCurrency(item.price * item.qty)}</td>
-                                        </tr>
-                                    ))}
+                                            </React.Fragment>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
 
                             <div className="order-summary">
                                 <div className="summary-row">
                                     <span>Subtotal</span>
-                                    <span>{formatCurrency(selectedOrder.subtotal)}</span>
+                                    <span>{formatCurrency(editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0))}</span>
                                 </div>
                                 <div className="summary-row">
                                     <span>Tax ({((selectedOrder.taxRate || 0) * 100).toFixed(0)}%)</span>
-                                    <span>{formatCurrency(selectedOrder.taxTotal)}</span>
+                                    <span>{formatCurrency(editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0) * (selectedOrder.taxRate || 0))}</span>
                                 </div>
                                 <div className="summary-row total">
                                     <span>Total</span>
-                                    <span>{formatCurrency(selectedOrder.total)}</span>
+                                    <span>{formatCurrency(editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0) * (1 + (selectedOrder.taxRate || 0)))}</span>
                                 </div>
                             </div>
 
@@ -388,7 +492,9 @@ export default function OrdersPage() {
                                                     onClick={handleConfirmAccept}
                                                     disabled={!pickupDate || !pickupTime}
                                                 >
-                                                    Confirm & Accept
+                                                    {editableItems.some((item, idx) => item.qty < (selectedOrder.items[idx]?.qty || item.qty))
+                                                        ? 'Submit Changes for Approval'
+                                                        : 'Confirm & Accept'}
                                                 </button>
                                                 <button
                                                     className="ui-btn ghost"
@@ -438,6 +544,29 @@ export default function OrdersPage() {
                                     >
                                         ✅ Mark as Delivered (Fulfilled)
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Audit History UI */}
+                            {selectedOrder.auditLog && selectedOrder.auditLog.length > 0 && (
+                                <div style={{ marginTop: '32px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                                    <h4 style={{ fontSize: '15px', marginBottom: '12px', color: 'var(--text-secondary)' }}>Audit History</h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {selectedOrder.auditLog.map((log, index) => (
+                                            <div key={index} style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', fontSize: '13px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{log.action}</span>
+                                                    <span style={{ color: 'var(--text-secondary)' }}>{formatDate(log.timestamp)}</span>
+                                                </div>
+                                                <div style={{ color: 'var(--text-secondary)' }}>
+                                                    Reason: <span style={{ color: 'var(--text-primary)' }}>{log.reason}</span>
+                                                </div>
+                                                <div style={{ color: 'var(--text-secondary)', marginTop: '4px', fontSize: '11px' }}>
+                                                    User: {log.user}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>

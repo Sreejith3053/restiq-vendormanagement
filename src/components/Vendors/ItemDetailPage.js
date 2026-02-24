@@ -8,10 +8,11 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { UserContext } from '../../contexts/UserContext';
 import { toast } from 'react-toastify';
 import { getTaxRate } from '../../constants/taxRates';
+import { formatItemSize } from './VendorDetailPage';
 import './ItemDetailPage.css';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
-const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'bag', 'box'];
+const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
 
 export default function ItemDetailPage() {
     const { vendorId: urlVendorId, itemId } = useParams();
@@ -499,8 +500,10 @@ export default function ItemDetailPage() {
                                 ) : null;
                             })()}
                             <div className="idp-hero__meta-item">
-                                <span className="idp-hero__meta-label">Unit</span>
-                                <span className="idp-hero__meta-value">{item.unit || '—'}</span>
+                                <span className="idp-hero__meta-label">Pricing Unit</span>
+                                <span className="idp-hero__meta-value" style={{ textTransform: 'capitalize' }}>
+                                    {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
+                                </span>
                             </div>
                             <div className="idp-hero__meta-item">
                                 <span className="idp-hero__meta-label">Category</span>
@@ -536,7 +539,9 @@ export default function ItemDetailPage() {
                 <div className="idp-stat">
                     <div className="idp-stat__icon">📦</div>
                     <div className="idp-stat__label">Unit</div>
-                    <div className="idp-stat__value">{item.unit || '—'}</div>
+                    <div className="idp-stat__value" style={{ textTransform: 'capitalize' }}>
+                        {formatItemSize(item.unit, item.packQuantity, item.itemSize) || '—'}
+                    </div>
                 </div>
                 <div className="idp-stat">
                     <div className="idp-stat__icon">📊</div>

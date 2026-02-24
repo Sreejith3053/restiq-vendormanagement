@@ -8,7 +8,20 @@ import EditItemModal from './EditItemModal';
 import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
-const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'bag', 'box'];
+const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
+
+// Helper to format item size display
+export const formatItemSize = (unit, packQty, size) => {
+    let result = unit || '';
+    if (packQty > 1 || size) {
+        result += ' (';
+        if (packQty > 1) result += `${packQty}`;
+        if (packQty > 1 && size) result += ' x ';
+        if (size) result += size;
+        result += ')';
+    }
+    return result;
+};
 
 export default function VendorDetailPage() {
     const { vendorId: urlVendorId } = useParams();
@@ -145,6 +158,8 @@ export default function VendorDetailPage() {
                 brand: itemForm.brand.trim(),
                 category: itemForm.category,
                 unit: itemForm.unit,
+                packQuantity: Number(itemForm.packQuantity) || 1,
+                itemSize: itemForm.itemSize.trim(),
                 price: Number(itemForm.price) || 0,
                 sku: itemForm.sku.trim(),
                 notes: itemForm.notes.trim(),
@@ -541,7 +556,9 @@ export default function VendorDetailPage() {
                                                     )}
                                                 </td>
                                                 <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
-                                                <td data-label="Unit">{item.unit || '—'}</td>
+                                                <td data-label="Unit" style={{ textTransform: 'capitalize' }}>
+                                                    {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
+                                                </td>
                                                 <td data-label="Price">${Number(item.price || 0).toFixed(2)}</td>
                                                 <td data-label="SKU">{item.sku || '—'}</td>
                                                 <td data-label="Status"><span className={`badge ${statusColor}`}>{statusLabel}</span></td>
@@ -627,12 +644,14 @@ export default function VendorDetailPage() {
                                         </select>
                                     </div>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 16 }}>
-                                    <div><label className="ui-label">Unit</label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginTop: 16 }}>
+                                    <div><label className="ui-label">Pricing Unit</label>
                                         <select className="ui-input" value={itemForm.unit} onChange={e => setItemForm(p => ({ ...p, unit: e.target.value }))}>
                                             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                         </select>
                                     </div>
+                                    <div><label className="ui-label">Qty per Unit</label><input className="ui-input" type="number" min="1" placeholder="e.g. 1" value={itemForm.packQuantity} onChange={e => setItemForm(p => ({ ...p, packQuantity: e.target.value }))} /></div>
+                                    <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={itemForm.itemSize} onChange={e => setItemForm(p => ({ ...p, itemSize: e.target.value }))} /></div>
                                     <div><label className="ui-label">Price ($)</label><input className="ui-input" type="number" step="0.01" placeholder="0.00" value={itemForm.price} onChange={e => setItemForm(p => ({ ...p, price: e.target.value }))} /></div>
                                 </div>
                                 <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" placeholder="Optional SKU or product code" value={itemForm.sku} onChange={e => setItemForm(p => ({ ...p, sku: e.target.value }))} /></div>

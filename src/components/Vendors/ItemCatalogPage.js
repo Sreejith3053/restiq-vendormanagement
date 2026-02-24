@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { formatItemSize } from './VendorDetailPage';
 
 const CATEGORIES = ['All', 'Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 
@@ -132,7 +133,9 @@ export default function ItemCatalogPage() {
                                     <td data-label="Item" style={{ fontWeight: 600 }}>{item.name}</td>
                                     <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
                                     {isSuperAdmin && <td data-label="Vendor">{item.vendorName}</td>}
-                                    <td data-label="Unit">{item.unit || '—'}</td>
+                                    <td data-label="Unit" style={{ textTransform: 'capitalize' }}>
+                                        {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
+                                    </td>
                                     <td data-label="Price">${Number(item.price || 0).toFixed(2)}</td>
                                     <td data-label="SKU">{item.sku || '—'}</td>
                                 </tr>

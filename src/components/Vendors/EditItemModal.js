@@ -6,7 +6,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
-const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'bag', 'box'];
+const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
 
 export default function EditItemModal({ item, vendorId, vendorName, onClose, onItemUpdated, logAudit }) {
     const { isSuperAdmin, userId, displayName } = useContext(UserContext);
@@ -16,6 +16,8 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         brand: item.brand || '',
         category: item.category || '',
         unit: item.unit || 'kg',
+        packQuantity: item.packQuantity || 1,
+        itemSize: item.itemSize || '',
         price: item.price || '',
         sku: item.sku || '',
         notes: item.notes || '',
@@ -35,6 +37,8 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
             form.brand.trim() !== (item.brand || '') ||
             form.category !== (item.category || '') ||
             form.unit !== (item.unit || 'kg') ||
+            Number(form.packQuantity) !== (item.packQuantity || 1) ||
+            form.itemSize.trim() !== (item.itemSize || '') ||
             String(form.price) !== String(item.price || '') ||
             form.sku.trim() !== (item.sku || '') ||
             form.notes.trim() !== (item.notes || '') ||
@@ -58,6 +62,8 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 brand: form.brand.trim(),
                 category: form.category,
                 unit: form.unit,
+                packQuantity: Number(form.packQuantity) || 1,
+                itemSize: form.itemSize.trim(),
                 price: Number(form.price) || 0,
                 sku: form.sku.trim(),
                 notes: form.notes.trim(),
@@ -69,6 +75,8 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 brand: item.brand || '',
                 category: item.category || '',
                 unit: item.unit || 'kg',
+                packQuantity: item.packQuantity || 1,
+                itemSize: item.itemSize || '',
                 price: Number(item.price) || 0,
                 sku: item.sku || '',
                 notes: item.notes || '',
@@ -159,12 +167,14 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                                 </select>
                             </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 16 }}>
-                            <div><label className="ui-label">Unit</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginTop: 16 }}>
+                            <div><label className="ui-label">Pricing Unit</label>
                                 <select className="ui-input" value={form.unit} onChange={e => handleChange('unit', e.target.value)}>
                                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
                             </div>
+                            <div><label className="ui-label">Qty per Unit</label><input className="ui-input" type="number" min="1" placeholder="e.g. 1" value={form.packQuantity} onChange={e => handleChange('packQuantity', e.target.value)} /></div>
+                            <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={form.itemSize} onChange={e => handleChange('itemSize', e.target.value)} /></div>
                             <div><label className="ui-label">Price ($)</label><input className="ui-input" type="number" step="0.01" value={form.price} onChange={e => handleChange('price', e.target.value)} placeholder="0.00" /></div>
                         </div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" value={form.sku} onChange={e => handleChange('sku', e.target.value)} placeholder="Optional SKU or product code" /></div>

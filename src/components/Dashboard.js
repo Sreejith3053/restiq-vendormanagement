@@ -16,6 +16,7 @@ export default function Dashboard() {
 
     // Data state
     const [allOrders, setAllOrders] = useState([]);
+    const [vendorItemsMap, setVendorItemsMap] = useState({});
 
     // Derived state for Dashboard widgets
     const [weeklyRevenue, setWeeklyRevenue] = useState(0);
@@ -56,16 +57,18 @@ export default function Dashboard() {
         filteredOrders.forEach(order => {
             if (order.status !== 'rejected' && order.items && Array.isArray(order.items)) {
                 order.items.forEach(item => {
-                    if (!itemCounts[item.id]) {
-                        itemCounts[item.id] = {
-                            id: item.id,
+                    const resolvedId = item.id || vendorItemsMap[item.name?.toLowerCase()?.trim()];
+                    const itemKey = resolvedId || item.name;
+                    if (!itemCounts[itemKey]) {
+                        itemCounts[itemKey] = {
+                            id: resolvedId,
                             name: item.name,
                             category: item.category || 'N/A',
                             price: item.price,
                             quantity: 0
                         };
                     }
-                    itemCounts[item.id].quantity += (item.qty || 0);
+                    itemCounts[itemKey].quantity += (item.qty || 0);
                 });
             }
         });
@@ -76,7 +79,7 @@ export default function Dashboard() {
 
         return { recentOrders: recent, mostSellingItems: topItems };
 
-    }, [timeFilter, allOrders]);
+    }, [timeFilter, allOrders, vendorItemsMap]);
 
     useEffect(() => {
         (async () => {
@@ -94,14 +97,17 @@ export default function Dashboard() {
                 // 2. Count items & categories for this vendor
                 let totalItems = 0;
                 const categorySet = new Set();
+                const fetchedVendorItems = {};
                 if (vendorId) {
                     try {
                         const itemSnap = await getDocs(collection(db, `vendors/${vendorId}/items`));
                         totalItems = itemSnap.size;
                         itemSnap.docs.forEach(d => {
-                            const cat = d.data().category;
-                            if (cat) categorySet.add(cat);
+                            const data = d.data();
+                            if (data.category) categorySet.add(data.category);
+                            if (data.name) fetchedVendorItems[data.name.toLowerCase().trim()] = d.id;
                         });
+                        setVendorItemsMap(fetchedVendorItems);
                     } catch { /* skip */ }
                 }
 
@@ -261,14 +267,14 @@ export default function Dashboard() {
                                         derivedData.mostSellingItems.map((item, idx) => (
                                             <tr
                                                 key={idx}
-                                                onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)}
+                                                onClick={item.id ? () => navigate(`/vendors/${vendorId}/items/${item.id}`) : undefined}
                                                 style={{
                                                     borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                                    cursor: 'pointer',
+                                                    cursor: item.id ? 'pointer' : 'default',
                                                     transition: 'background 0.2s ease',
                                                 }}
-                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                onMouseEnter={(e) => { if (item.id) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                                                onMouseLeave={(e) => { if (item.id) e.currentTarget.style.background = 'transparent' }}
                                             >
                                                 <td style={{ padding: '16px 20px', fontWeight: 500, color: 'var(--text-primary)' }}>{item.name}</td>
                                                 <td style={{ padding: '16px 20px', color: 'var(--text-secondary)' }}><span className="badge blue" style={{ fontSize: '11px' }}>{item.category}</span></td>

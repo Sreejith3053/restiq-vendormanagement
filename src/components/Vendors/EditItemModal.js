@@ -196,9 +196,11 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
 
                         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                             <button type="button" className="ui-btn ghost" onClick={onClose}>Cancel</button>
-                            <button type="submit" className="ui-btn primary" disabled={saving}>
-                                {saving ? 'Saving…' : isSuperAdmin ? '💾 Update Item' : '📩 Submit for Review'}
-                            </button>
+                            {hasChanges() && (
+                                <button type="submit" className="ui-btn primary" disabled={saving}>
+                                    {saving ? 'Saving…' : isSuperAdmin ? '💾 Update Item' : '📩 Submit for Review'}
+                                </button>
+                            )}
                         </div>
                     </form>
                 </div>

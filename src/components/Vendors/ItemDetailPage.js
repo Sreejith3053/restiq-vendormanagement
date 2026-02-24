@@ -163,11 +163,29 @@ export default function ItemDetailPage() {
         }
     };
 
+    // ─── Check for changes ───
+    const hasChanges = () => {
+        if (!item || !editForm) return false;
+        return (
+            (editForm.name || '').trim() !== (item.name || '').trim() ||
+            (editForm.brand || '').trim() !== (item.brand || '').trim() ||
+            (editForm.category || '') !== (item.category || '') ||
+            (editForm.unit || 'kg') !== (item.unit || 'kg') ||
+            Number(editForm.packQuantity || 1) !== Number(item.packQuantity || 1) ||
+            (editForm.itemSize || '').trim() !== (item.itemSize || '').trim() ||
+            String(editForm.price || '') !== String(item.price || '') ||
+            (editForm.sku || '').trim() !== (item.sku || '').trim() ||
+            (editForm.notes || '').trim() !== (item.notes || '').trim() ||
+            !!editForm.taxable !== !!item.taxable
+        );
+    };
+
     // ─── Save edit ───
     const handleSave = async () => {
         if (!editForm.name?.trim()) { toast.warn('Name is required'); return; }
         if (!editForm.brand?.trim()) { toast.warn('Brand is required'); return; }
         if (!editForm.price || isNaN(editForm.price)) { toast.warn('Valid price required'); return; }
+        if (!hasChanges()) { toast.info('No changes detected.'); setEditing(false); return; }
         setSaving(true);
         try {
             const proposedData = {
@@ -175,6 +193,8 @@ export default function ItemDetailPage() {
                 brand: editForm.brand.trim(),
                 category: editForm.category || 'Other',
                 unit: editForm.unit || 'kg',
+                packQuantity: Number(editForm.packQuantity) || 1,
+                itemSize: editForm.itemSize?.trim() || '',
                 price: Number(editForm.price),
                 sku: editForm.sku?.trim() || '',
                 notes: editForm.notes?.trim() || '',
@@ -182,6 +202,7 @@ export default function ItemDetailPage() {
             };
             const originalData = {
                 name: item.name, brand: item.brand || '', category: item.category, unit: item.unit,
+                packQuantity: item.packQuantity || 1, itemSize: item.itemSize || '',
                 price: item.price, sku: item.sku || '', notes: item.notes || '', taxable: !!item.taxable,
             };
             const itemRef = doc(db, `vendors/${vendorId}/items`, itemId);
@@ -522,7 +543,7 @@ export default function ItemDetailPage() {
                                 🗑️ {isSuperAdmin ? 'Delete' : 'Request Delete'}
                             </button>
                         )}
-                        <button className="ui-btn ghost small" onClick={() => navigate(`/vendors/${vendorId}`)}>
+                        <button className="ui-btn ghost small" onClick={() => navigate(-1)}>
                             ← Back
                         </button>
                     </div>
@@ -664,11 +685,19 @@ export default function ItemDetailPage() {
                                     <label className="ui-label">Price *</label>
                                     <input className="ui-input" type="number" step="0.01" value={editForm.price || ''} onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))} />
                                 </div>
-                                <div>
-                                    <label className="ui-label">Unit</label>
-                                    <select className="ui-input" value={editForm.unit || 'kg'} onChange={e => setEditForm(prev => ({ ...prev, unit: e.target.value }))}>
+                                <div className="idp-detail-item">
+                                    <span className="idp-detail-label">Pricing Unit</span>
+                                    <select className="ui-input" value={editForm.unit || 'kg'} onChange={e => setEditForm({ ...editForm, unit: e.target.value })}>
                                         {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
+                                </div>
+                                <div className="idp-detail-item">
+                                    <span className="idp-detail-label">Qty per Unit</span>
+                                    <input className="ui-input" type="number" min="1" value={editForm.packQuantity || 1} onChange={e => setEditForm({ ...editForm, packQuantity: e.target.value })} />
+                                </div>
+                                <div className="idp-detail-item">
+                                    <span className="idp-detail-label">Size per Qty</span>
+                                    <input className="ui-input" placeholder="e.g. 500g" value={editForm.itemSize || ''} onChange={e => setEditForm({ ...editForm, itemSize: e.target.value })} />
                                 </div>
                                 <div>
                                     <label className="ui-label">SKU</label>
@@ -714,9 +743,11 @@ export default function ItemDetailPage() {
                                 })()}
                             </div>
                             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                                <button className="ui-btn primary small" onClick={handleSave} disabled={saving}>
-                                    {saving ? 'Saving…' : isSuperAdmin ? '💾 Save' : '📩 Submit for Review'}
-                                </button>
+                                {hasChanges() && (
+                                    <button className="ui-btn primary small" onClick={handleSave} disabled={saving}>
+                                        {saving ? 'Saving…' : isSuperAdmin ? '💾 Save' : '📩 Submit for Review'}
+                                    </button>
+                                )}
                                 <button className="ui-btn ghost small" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
                             </div>
                         </div>
@@ -737,6 +768,18 @@ export default function ItemDetailPage() {
                             <div className="idp-field">
                                 <div className="idp-field__label">Price</div>
                                 <div className="idp-field__value" style={{ color: '#4ade80', fontSize: 18, fontWeight: 700 }}>${Number(item.price || 0).toFixed(2)} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>/ {item.unit || '—'}</span></div>
+                            </div>
+                            <div className="idp-field">
+                                <div className="idp-field__label">Pricing Unit</div>
+                                <div className="idp-field__value" style={{ textTransform: 'capitalize' }}>{item.unit || '—'}</div>
+                            </div>
+                            <div className="idp-field">
+                                <div className="idp-field__label">Qty per Unit</div>
+                                <div className="idp-field__value">{item.packQuantity || 1}</div>
+                            </div>
+                            <div className="idp-field">
+                                <div className="idp-field__label">Size per Qty</div>
+                                <div className="idp-field__value">{item.itemSize || '—'}</div>
                             </div>
                             <div className="idp-field">
                                 <div className="idp-field__label">SKU</div>

@@ -128,7 +128,7 @@ export default function ItemCatalogPage() {
                                 <tr
                                     key={`${item.vendorId}-${item.id}`}
                                     className="is-row"
-                                    onClick={() => navigate(isSuperAdmin ? `/vendors/${item.vendorId}` : '/profile')}
+                                    onClick={() => navigate(`/vendors/${item.vendorId}/items/${item.id}`)}
                                 >
                                     <td data-label="Item" style={{ fontWeight: 600 }}>{item.name}</td>
                                     <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>

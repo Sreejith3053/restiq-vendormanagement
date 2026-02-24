@@ -1,0 +1,24 @@
+:root {
+  --bg: #080d1a;
+  --panel: rgba(19, 29, 53, 0.6);
+  --panel-strong: rgba(19, 29, 53, 0.85);
+  --stroke: #23324d;
+  --text: #e6eefc;
+  --muted: #9DB2CE;
+
+  --accent-1: #4dabf7;
+  --accent-2: #a78bfa;
+  --accent-3: #38d9a9;
+
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --shadow-glow: 0 10px 30px rgba(56,189,248,.14);
+
+  --sidebar-w: 270px;
+}
+
+/* Optional light theme */
+:root[data-theme="light"] {
+  --bg:#f8faff; --panel:#fff; --panel-strong:#fff;
+  --stroke:#e5e9f4; --text:#101623; --muted:#51627c;
+}

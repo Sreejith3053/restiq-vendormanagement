@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { UserContext } from '../../contexts/UserContext';
@@ -502,8 +502,8 @@ export default function VendorDetailPage() {
                                 const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : 'Rejected';
                                 return (
                                     <React.Fragment key={item.id}>
-                                        <tr className="is-row">
-                                            <td data-label="Name" style={{ fontWeight: 600 }}>
+                                        <tr className="is-row" onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)} style={{ cursor: 'pointer' }}>
+                                            <td data-label="Name" style={{ fontWeight: 600, color: '#4dabf7' }}>
                                                 {item.name}
                                                 {itemStatus === 'rejected' && item.rejectionComment && (
                                                     <div style={{ fontSize: 11, color: '#ff6b7a', fontWeight: 400, marginTop: 2 }}>
@@ -517,7 +517,7 @@ export default function VendorDetailPage() {
                                             <td data-label="SKU">{item.sku || '—'}</td>
                                             <td data-label="Status"><span className={`badge ${statusColor}`}>{statusLabel}</span></td>
                                             {canEdit && (
-                                                <td>
+                                                <td onClick={e => e.stopPropagation()}>
                                                     <div style={{ display: 'flex', gap: 6 }}>
                                                         <button className="ui-btn mini" onClick={() => setEditingItem(item)}>✏️</button>
                                                         <button className="ui-btn mini danger" onClick={() => handleDeleteItem(item)}>🗑️</button>

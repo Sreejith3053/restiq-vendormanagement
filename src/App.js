@@ -10,6 +10,7 @@ import TopBar from './components/TopBar';
 import Dashboard from './components/Dashboard';
 import VendorListPage from './components/Vendors/VendorListPage';
 import VendorDetailPage from './components/Vendors/VendorDetailPage';
+import ItemDetailPage from './components/Vendors/ItemDetailPage';
 import AddVendorPage from './components/Vendors/AddVendorPage';
 import ItemCatalogPage from './components/Vendors/ItemCatalogPage';
 import UserManagementPage from './components/Users/UserManagementPage';
@@ -67,6 +68,7 @@ function App() {
                                 <Route path="/vendors" element={<VendorListPage />} />
                                 <Route path="/vendors/add" element={<AddVendorPage />} />
                                 <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />
+                                <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/users" element={<UserManagementPage />} />
                                 <Route path="/" element={<Navigate to="/vendors" />} />
                             </>
@@ -77,6 +79,7 @@ function App() {
                             <>
                                 <Route path="/" element={<Dashboard />} />
                                 <Route path="/items" element={<ItemCatalogPage />} />
+                                <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/profile" element={<VendorDetailPage />} />
                                 {normalizedRole === 'admin' && (
                                     <Route path="/users" element={<UserManagementPage />} />

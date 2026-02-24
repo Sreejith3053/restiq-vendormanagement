@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { db } from '../firebase';
-import { collection, getDocs, doc, getDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -11,10 +11,72 @@ export default function Dashboard() {
     const [vendorData, setVendorData] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // New State for Dashboard widgets
+    // Filter state
+    const [timeFilter, setTimeFilter] = useState('This Week');
+
+    // Data state
+    const [allOrders, setAllOrders] = useState([]);
+
+    // Derived state for Dashboard widgets
     const [weeklyRevenue, setWeeklyRevenue] = useState(0);
-    const [recentOrders, setRecentOrders] = useState([]);
-    const [mostSellingItems, setMostSellingItems] = useState([]);
+
+    const derivedData = useMemo(() => {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        let startDate = new Date(0); // Default to beginning of time
+        let endDate = new Date('9999-12-31'); // Default to end of time
+
+        if (timeFilter === 'This Week') {
+            // Last 7 days including today
+            startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+            endDate = now;
+        } else if (timeFilter === 'This Month') {
+            // First day of current month
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Last day of current month
+        } else if (timeFilter === 'Last Month') {
+            // First day of last month
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            // Last day of last month
+            endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        }
+
+        // Filter orders based on selected time range
+        const filteredOrders = allOrders.filter(order => {
+            const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+            return orderDate >= startDate && orderDate <= endDate;
+        });
+
+        // 1. Recent Orders
+        const recent = filteredOrders.slice(0, 5);
+
+        // 2. Most Selling Items
+        const itemCounts = {};
+        filteredOrders.forEach(order => {
+            if (order.status !== 'rejected' && order.items && Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    if (!itemCounts[item.id]) {
+                        itemCounts[item.id] = {
+                            id: item.id,
+                            name: item.name,
+                            category: item.category || 'N/A',
+                            price: item.price,
+                            quantity: 0
+                        };
+                    }
+                    itemCounts[item.id].quantity += (item.qty || 0);
+                });
+            }
+        });
+
+        const topItems = Object.values(itemCounts)
+            .sort((a, b) => b.quantity - a.quantity)
+            .slice(0, 8);
+
+        return { recentOrders: recent, mostSellingItems: topItems };
+
+    }, [timeFilter, allOrders]);
 
     useEffect(() => {
         (async () => {
@@ -60,64 +122,36 @@ export default function Dashboard() {
                     categories: categorySet.size,
                 });
 
-                // 4. Fetch marketplaceOrders for the vendor
+                // 4. Fetch ALL marketplaceOrders for the vendor
                 if (vendorId) {
                     try {
                         const ordersQ = query(
                             collection(db, 'marketplaceOrders'),
                             where('vendorId', '==', vendorId)
-                            // We will fetch all and process them client-side since we need history for most-selling items
                         );
                         const ordersSnap = await getDocs(ordersQ);
-                        const allOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        let fetchedOrders = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                        // Process Weekly Revenue (last 7 days)
-                        const now = new Date();
-                        const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-                        let revenue = 0;
-
-                        // Sort orders by date descending
-                        allOrders.sort((a, b) => {
+                        // Sort globally descending by default
+                        fetchedOrders.sort((a, b) => {
                             const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
                             const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
                             return dateB - dateA;
                         });
 
-                        // Last 5 Orders
-                        setRecentOrders(allOrders.slice(0, 5));
+                        setAllOrders(fetchedOrders);
 
-                        // Aggregate Most Selling Items
-                        const itemCounts = {};
-
-                        allOrders.forEach(order => {
+                        // Calculate fixed weekly revenue (past 7 days regardless of filter)
+                        const now = new Date();
+                        const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+                        let revenue = 0;
+                        fetchedOrders.forEach(order => {
                             const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
                             if (orderDate >= sevenDaysAgo && order.status !== 'rejected') {
                                 revenue += (order.total || 0);
                             }
-
-                            if (order.status !== 'rejected' && order.items && Array.isArray(order.items)) {
-                                order.items.forEach(item => {
-                                    if (!itemCounts[item.id]) {
-                                        itemCounts[item.id] = {
-                                            id: item.id,
-                                            name: item.name,
-                                            category: item.category || 'N/A',
-                                            price: item.price,
-                                            quantity: 0
-                                        };
-                                    }
-                                    itemCounts[item.id].quantity += (item.qty || 0);
-                                });
-                            }
                         });
-
                         setWeeklyRevenue(revenue);
-
-                        // Convert to array and sort by quantity desc, take top 8
-                        const topItems = Object.values(itemCounts)
-                            .sort((a, b) => b.quantity - a.quantity)
-                            .slice(0, 8);
-                        setMostSellingItems(topItems);
 
                     } catch (err) {
                         console.error("Error fetching orders for dashboard:", err);
@@ -157,6 +191,29 @@ export default function Dashboard() {
                     <h2>Welcome, {vendorName || 'Vendor'}</h2>
                     <p className="subtitle" style={{ margin: 0, marginTop: '4px', color: 'var(--text-secondary)' }}>Here's what's happening today.</p>
                 </div>
+
+                {/* Time Filter Dropdown */}
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Data range:</span>
+                    <select
+                        value={timeFilter}
+                        onChange={(e) => setTimeFilter(e.target.value)}
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            outline: 'none',
+                        }}
+                    >
+                        <option value="This Week" style={{ background: '#0a192f', color: '#fff' }}>Past 7 Days</option>
+                        <option value="This Month" style={{ background: '#0a192f', color: '#fff' }}>This Month</option>
+                        <option value="Last Month" style={{ background: '#0a192f', color: '#fff' }}>Last Month</option>
+                    </select>
+                </div>
             </div>
 
             {/* Top Row: General Stats & Revenue */}
@@ -183,7 +240,7 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     {/* Most Selling Items */}
                     <div className="ui-card">
-                        <div className="ui-card-title">Most Selling Items</div>
+                        <div className="ui-card-title">Most Selling Items ({timeFilter})</div>
                         <div className="orders-table-wrapper" style={{ margin: '0 -20px -20px -20px', borderRadius: '0 0 12px 12px' }}>
                             <table className="orders-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
@@ -196,12 +253,12 @@ export default function Dashboard() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {mostSellingItems.length === 0 ? (
+                                    {derivedData.mostSellingItems.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No sales history found</td>
+                                            <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No sales history found for {timeFilter.toLowerCase()}</td>
                                         </tr>
                                     ) : (
-                                        mostSellingItems.map((item, idx) => (
+                                        derivedData.mostSellingItems.map((item, idx) => (
                                             <tr
                                                 key={idx}
                                                 onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)}
@@ -236,10 +293,10 @@ export default function Dashboard() {
                             <button className="ui-btn ghost" style={{ fontSize: '13px', padding: '4px 12px' }} onClick={() => navigate('/orders')}>View All</button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {recentOrders.length === 0 ? (
-                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>No recent orders</div>
+                            {derivedData.recentOrders.length === 0 ? (
+                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>No orders found for {timeFilter.toLowerCase()}</div>
                             ) : (
-                                recentOrders.map(order => (
+                                derivedData.recentOrders.map(order => (
                                     <div
                                         key={order.id}
                                         onClick={() => navigate('/orders')}

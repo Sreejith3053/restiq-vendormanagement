@@ -10,6 +10,7 @@ export const UserContext = createContext({
     vendorId: null,
     vendorName: '',
     isSuperAdmin: false,
+    permissions: {},
     displayName: '',
     login: () => { },
     logout: () => { },
@@ -40,6 +41,12 @@ export function UserProvider({ children }) {
                     if (data.vendorId && !user.vendorId) updates.vendorId = data.vendorId;
                     if (data.vendorName && !user.vendorName) updates.vendorName = data.vendorName;
                     if (data.position && !user.position) updates.position = data.position;
+                    // Hydrate permissions
+                    const currentPerms = JSON.stringify(user.permissions || {});
+                    const newPerms = JSON.stringify(data.permissions || {});
+                    if (currentPerms !== newPerms) {
+                        updates.permissions = data.permissions || {};
+                    }
                     if (Object.keys(updates).length > 0) {
                         const updatedUser = { ...user, ...updates };
                         setUser(updatedUser);
@@ -84,6 +91,7 @@ export function UserProvider({ children }) {
         isSuperAdmin: normalizedRole === 'superadmin',
         isAdmin: normalizedRole === 'admin',
         isUser: normalizedRole === 'user',
+        permissions: user?.permissions || {},
         displayName: user?.displayName || '',
         login,
         logout,

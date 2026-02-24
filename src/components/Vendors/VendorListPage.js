@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { getRegionsForCountry } from '../../constants/taxRates';
 
 const CATEGORIES = ['All', 'Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Other'];
 
@@ -83,9 +84,9 @@ export default function VendorListPage() {
                             <tr>
                                 <th>Vendor Name</th>
                                 <th>Category</th>
+                                <th>Province / State</th>
                                 <th>Contact Name</th>
                                 <th>Phone</th>
-                                <th>Email</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -96,9 +97,9 @@ export default function VendorListPage() {
                                     <td data-label="Category">
                                         <span className="badge blue">{v.category || 'General'}</span>
                                     </td>
+                                    <td data-label="Province / State">{(() => { const r = getRegionsForCountry(v.country || 'Canada').find(r => r.code === v.province); return r ? r.name : v.province || '—'; })()}</td>
                                     <td data-label="Contact">{v.contactName || '—'}</td>
                                     <td data-label="Phone">{v.contactPhone || '—'}</td>
-                                    <td data-label="Email">{v.contactEmail || '—'}</td>
                                     <td data-label="Status">
                                         <span className={`badge ${v.status === 'inactive' ? 'red' : 'green'}`}>
                                             {v.status || 'active'}

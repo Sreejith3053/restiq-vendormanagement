@@ -47,11 +47,17 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/vendors/add" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">➕</span> Add Vendor
                             </NavLink>
+                            <NavLink to="/orders" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📦</span> Orders
+                            </NavLink>
                         </div>
                         <div className="sidebar-section">
                             <div className="sidebar-section-title">Administration</div>
                             <NavLink to="/users" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">👥</span> User Management
+                            </NavLink>
+                            <NavLink to="/settings/permissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">⚙️</span> Role Permissions
                             </NavLink>
                         </div>
                     </>
@@ -68,6 +74,9 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/items" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">📋</span> Items
                             </NavLink>
+                            <NavLink to="/orders" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📦</span> Orders
+                            </NavLink>
                         </div>
                         <div className="sidebar-section">
                             <div className="sidebar-section-title">Vendor</div>
@@ -75,9 +84,15 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <span className="link-icon">🏢</span> Vendor Profile
                             </NavLink>
                             {isAdmin && (
-                                <NavLink to="/users" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                    <span className="link-icon">👥</span> Manage Users
-                                </NavLink>
+                                <>
+                                    <div className="sidebar-section-title" style={{ marginTop: '16px' }}>Settings</div>
+                                    <NavLink to="/users" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                        <span className="link-icon">👥</span> Manage Users
+                                    </NavLink>
+                                    <NavLink to="/settings/permissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                        <span className="link-icon">⚙️</span> Role Permissions
+                                    </NavLink>
+                                </>
                             )}
                         </div>
                     </>

@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, serverT
 import { UserContext } from '../../contexts/UserContext';
 import { toast } from 'react-toastify';
 import EditItemModal from './EditItemModal';
+import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'bag', 'box'];
@@ -12,7 +13,7 @@ const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'bag',
 export default function VendorDetailPage() {
     const { vendorId: urlVendorId } = useParams();
     const navigate = useNavigate();
-    const { role, vendorId: ctxVendorId, isSuperAdmin, isAdmin, userId, displayName } = useContext(UserContext);
+    const { role, vendorId: ctxVendorId, isSuperAdmin, isAdmin, userId, displayName, permissions } = useContext(UserContext);
 
     // Super admin uses URL param; vendor admin/user uses their context vendorId
     const vendorId = isSuperAdmin ? urlVendorId : ctxVendorId;
@@ -32,7 +33,7 @@ export default function VendorDetailPage() {
 
     // Add item modal
     const [itemModalOpen, setItemModalOpen] = useState(false);
-    const [itemForm, setItemForm] = useState({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '' });
+    const [itemForm, setItemForm] = useState({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '', taxable: false });
     const [itemSaving, setItemSaving] = useState(false);
 
     // Edit item modal
@@ -49,7 +50,8 @@ export default function VendorDetailPage() {
     const [auditLogData, setAuditLogData] = useState([]);
     const [auditLogLoading, setAuditLogLoading] = useState(false);
 
-    const canEdit = isSuperAdmin || isAdmin;
+    const canEdit = isSuperAdmin || isAdmin || (typeof permissions === 'object' && permissions?.canManageItems);
+    const canEditProfile = isSuperAdmin || isAdmin || (typeof permissions === 'object' && permissions?.canEditProfile);
 
     // Audit log helper
     const logAudit = async (vid, itemId, action, details = {}) => {
@@ -110,6 +112,8 @@ export default function VendorDetailPage() {
             const patch = {
                 name: editForm.name?.trim() || '',
                 category: editForm.category || '',
+                country: editForm.country || 'Canada',
+                province: editForm.province || '',
                 contactName: editForm.contactName?.trim() || '',
                 contactPhone: editForm.contactPhone?.trim() || '',
                 contactEmail: editForm.contactEmail?.trim() || '',
@@ -144,6 +148,7 @@ export default function VendorDetailPage() {
                 price: Number(itemForm.price) || 0,
                 sku: itemForm.sku.trim(),
                 notes: itemForm.notes.trim(),
+                taxable: !!itemForm.taxable,
                 createdAt: new Date().toISOString(),
             };
 
@@ -177,7 +182,7 @@ export default function VendorDetailPage() {
             }
 
             setItemModalOpen(false);
-            setItemForm({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '' });
+            setItemForm({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '', taxable: false });
         } catch (err) {
             console.error(err);
             toast.error('Failed to add item');
@@ -385,7 +390,7 @@ export default function VendorDetailPage() {
                 <h2>{vendor.name}</h2>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="ui-btn ghost" onClick={() => navigate(isSuperAdmin ? '/vendors' : '/')}>← Back</button>
-                    {canEdit && !editing && (
+                    {canEditProfile && !editing && (
                         <button className="ui-btn small" onClick={() => setEditing(true)}>✏️ Edit</button>
                     )}
                 </div>
@@ -403,6 +408,17 @@ export default function VendorDetailPage() {
                                     {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
+                            <div><label className="ui-label">Country</label>
+                                <select className="ui-input" value={editForm.country || 'Canada'} onChange={e => setEditForm(p => ({ ...p, country: e.target.value, province: '' }))}>
+                                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div><label className="ui-label">{getRegionLabel(editForm.country || 'Canada')}</label>
+                                <select className="ui-input" value={editForm.province || ''} onChange={e => setEditForm(p => ({ ...p, province: e.target.value }))}>
+                                    <option value="">Select...</option>
+                                    {getRegionsForCountry(editForm.country || 'Canada').map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+                                </select>
+                            </div>
                             <div><label className="ui-label">Contact Name</label><input className="ui-input" value={editForm.contactName || ''} onChange={e => setEditForm(p => ({ ...p, contactName: e.target.value }))} /></div>
                             <div><label className="ui-label">Phone</label><input className="ui-input" value={editForm.contactPhone || ''} onChange={e => setEditForm(p => ({ ...p, contactPhone: e.target.value }))} /></div>
                             <div><label className="ui-label">Email</label><input className="ui-input" value={editForm.contactEmail || ''} onChange={e => setEditForm(p => ({ ...p, contactEmail: e.target.value }))} /></div>
@@ -415,6 +431,11 @@ export default function VendorDetailPage() {
                         </div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">Address</label><input className="ui-input" value={editForm.address || ''} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} /></div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><textarea className="ui-input" style={{ height: 60 }} value={editForm.notes || ''} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} /></div>
+                        {editForm.province && (
+                            <div style={{ marginTop: 12 }}>
+                                <span className="badge green" style={{ fontSize: 13 }}>Tax Rate: {getTaxRate(editForm.country || 'Canada', editForm.province)}%</span>
+                            </div>
+                        )}
                         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                             <button className="ui-btn ghost" onClick={() => { setEditing(false); setEditForm(vendor); }}>Cancel</button>
                             <button className="ui-btn primary" onClick={handleSaveVendor}>💾 Save</button>
@@ -423,6 +444,9 @@ export default function VendorDetailPage() {
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                         <div><span className="muted small">Category</span><div><span className="badge blue">{vendor.category || 'General'}</span></div></div>
+                        <div><span className="muted small">Country</span><div>{vendor.country || '—'}</div></div>
+                        <div><span className="muted small">{getRegionLabel(vendor.country || 'Canada')}</span><div>{(() => { const r = getRegionsForCountry(vendor.country || 'Canada').find(r => r.code === vendor.province); return r ? r.name : vendor.province || '—'; })()}</div></div>
+                        <div><span className="muted small">Tax Rate</span><div><span className="badge green">{vendor.province ? `${getTaxRate(vendor.country || 'Canada', vendor.province)}%` : '—'}</span></div></div>
                         <div><span className="muted small">Contact</span><div>{vendor.contactName || '—'}</div></div>
                         <div><span className="muted small">Phone</span><div>{vendor.contactPhone || '—'}</div></div>
                         <div><span className="muted small">Email</span><div>{vendor.contactEmail || '—'}</div></div>
@@ -444,143 +468,147 @@ export default function VendorDetailPage() {
             </div>
 
             {/* Filters */}
-            {items.length > 0 && (
-                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-                    <input
-                        className="ui-input"
-                        placeholder="🔍  Search items or SKU..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        style={{ maxWidth: 300, flex: 1 }}
-                    />
-                    <select
-                        className="ui-input"
-                        value={categoryFilter}
-                        onChange={e => setCategoryFilter(e.target.value)}
-                        style={{ maxWidth: 180 }}
-                    >
-                        {itemCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <select
-                        className="ui-input"
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value)}
-                        style={{ maxWidth: 160 }}
-                    >
-                        <option value="All">All Statuses</option>
-                        <option value="active">Active</option>
-                        <option value="in-review">In Review</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
-                </div>
-            )}
+            {
+                items.length > 0 && (
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                        <input
+                            className="ui-input"
+                            placeholder="🔍  Search items or SKU..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            style={{ maxWidth: 300, flex: 1 }}
+                        />
+                        <select
+                            className="ui-input"
+                            value={categoryFilter}
+                            onChange={e => setCategoryFilter(e.target.value)}
+                            style={{ maxWidth: 180 }}
+                        >
+                            {itemCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select
+                            className="ui-input"
+                            value={statusFilter}
+                            onChange={e => setStatusFilter(e.target.value)}
+                            style={{ maxWidth: 160 }}
+                        >
+                            <option value="All">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="in-review">In Review</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                )
+            }
 
-            {items.length === 0 ? (
-                <div className="ui-card" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
-                    No items yet. {canEdit && <span style={{ color: 'var(--accent-1)', cursor: 'pointer' }} onClick={() => setItemModalOpen(true)}>Add the first item →</span>}
-                </div>
-            ) : filteredItems.length === 0 ? (
-                <div className="ui-card" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
-                    No items match your filters.
-                </div>
-            ) : (
-                <div className="ui-table-wrap">
-                    <table className="ui-table">
-                        <thead>
-                            <tr>
-                                <th>Item Name</th>
-                                <th>Category</th>
-                                <th>Unit</th>
-                                <th>Price</th>
-                                <th>SKU</th>
-                                <th>Status</th>
-                                {canEdit && <th>Actions</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredItems.map(item => {
-                                const itemStatus = item.status || 'active';
-                                const statusColor = itemStatus === 'active' ? 'green' : itemStatus === 'in-review' ? 'yellow' : 'red';
-                                const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : 'Rejected';
-                                return (
-                                    <React.Fragment key={item.id}>
-                                        <tr className="is-row" onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)} style={{ cursor: 'pointer' }}>
-                                            <td data-label="Name" style={{ fontWeight: 600, color: '#4dabf7' }}>
-                                                {item.name}
-                                                {itemStatus === 'rejected' && item.rejectionComment && (
-                                                    <div style={{ fontSize: 11, color: '#ff6b7a', fontWeight: 400, marginTop: 2 }}>
-                                                        ❌ {item.rejectionComment}
-                                                    </div>
+            {
+                items.length === 0 ? (
+                    <div className="ui-card" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
+                        No items yet. {canEdit && <span style={{ color: 'var(--accent-1)', cursor: 'pointer' }} onClick={() => setItemModalOpen(true)}>Add the first item →</span>}
+                    </div>
+                ) : filteredItems.length === 0 ? (
+                    <div className="ui-card" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
+                        No items match your filters.
+                    </div>
+                ) : (
+                    <div className="ui-table-wrap">
+                        <table className="ui-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Unit</th>
+                                    <th>Price</th>
+                                    <th>SKU</th>
+                                    <th>Status</th>
+                                    {canEdit && <th>Actions</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredItems.map(item => {
+                                    const itemStatus = item.status || 'active';
+                                    const statusColor = itemStatus === 'active' ? 'green' : itemStatus === 'in-review' ? 'yellow' : 'red';
+                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : 'Rejected';
+                                    return (
+                                        <React.Fragment key={item.id}>
+                                            <tr className="is-row" onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)} style={{ cursor: 'pointer' }}>
+                                                <td data-label="Name" style={{ fontWeight: 600, color: '#4dabf7' }}>
+                                                    {item.name}
+                                                    {itemStatus === 'rejected' && item.rejectionComment && (
+                                                        <div style={{ fontSize: 11, color: '#ff6b7a', fontWeight: 400, marginTop: 2 }}>
+                                                            ❌ {item.rejectionComment}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
+                                                <td data-label="Unit">{item.unit || '—'}</td>
+                                                <td data-label="Price">${Number(item.price || 0).toFixed(2)}</td>
+                                                <td data-label="SKU">{item.sku || '—'}</td>
+                                                <td data-label="Status"><span className={`badge ${statusColor}`}>{statusLabel}</span></td>
+                                                {canEdit && (
+                                                    <td onClick={e => e.stopPropagation()}>
+                                                        <div style={{ display: 'flex', gap: 6 }}>
+                                                            <button className="ui-btn mini" onClick={() => setEditingItem(item)}>✏️</button>
+                                                            <button className="ui-btn mini danger" onClick={() => handleDeleteItem(item)}>🗑️</button>
+                                                            <button className={`ui-btn mini ${auditLogItemId === item.id ? 'primary' : 'ghost'}`} onClick={() => toggleAuditLog(item.id)} title="View History">📜</button>
+                                                        </div>
+                                                    </td>
                                                 )}
-                                            </td>
-                                            <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
-                                            <td data-label="Unit">{item.unit || '—'}</td>
-                                            <td data-label="Price">${Number(item.price || 0).toFixed(2)}</td>
-                                            <td data-label="SKU">{item.sku || '—'}</td>
-                                            <td data-label="Status"><span className={`badge ${statusColor}`}>{statusLabel}</span></td>
-                                            {canEdit && (
-                                                <td onClick={e => e.stopPropagation()}>
-                                                    <div style={{ display: 'flex', gap: 6 }}>
-                                                        <button className="ui-btn mini" onClick={() => setEditingItem(item)}>✏️</button>
-                                                        <button className="ui-btn mini danger" onClick={() => handleDeleteItem(item)}>🗑️</button>
-                                                        <button className={`ui-btn mini ${auditLogItemId === item.id ? 'primary' : 'ghost'}`} onClick={() => toggleAuditLog(item.id)} title="View History">📜</button>
-                                                    </div>
-                                                </td>
-                                            )}
-                                        </tr>
-                                        {/* Expandable audit log */}
-                                        {auditLogItemId === item.id && (
-                                            <tr>
-                                                <td colSpan={canEdit ? 7 : 6} style={{ padding: 0 }}>
-                                                    <div style={{ background: 'rgba(0,200,255,0.03)', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px' }}>
-                                                        <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>📜 History for {item.name}</div>
-                                                        {auditLogLoading ? (
-                                                            <div style={{ color: 'var(--muted)', fontSize: 12 }}>Loading...</div>
-                                                        ) : auditLogData.length === 0 ? (
-                                                            <div style={{ color: 'var(--muted)', fontSize: 12 }}>No audit history yet.</div>
-                                                        ) : (
-                                                            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-                                                                {auditLogData.map(log => (
-                                                                    <div key={log.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
-                                                                        <div style={{ minWidth: 170, color: 'var(--muted)', fontSize: 11 }}>
-                                                                            {formatReviewDate(log.timestamp)}
-                                                                        </div>
-                                                                        <div style={{ flex: 1 }}>
-                                                                            <div>
-                                                                                <span style={{ fontWeight: 600 }}>{formatAuditAction(log.action)}</span>
-                                                                                <span style={{ color: 'var(--muted)', marginLeft: 8 }}>by {log.performedByName}</span>
-                                                                            </div>
-                                                                            {log.rejectionComment && (
-                                                                                <div style={{ fontSize: 11, color: '#ff6b7a', marginTop: 2 }}>💬 {log.rejectionComment}</div>
-                                                                            )}
-                                                                            {log.proposedData && (
-                                                                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                                                                                    Changes: {Object.keys(log.proposedData).filter(k => {
-                                                                                        const orig = log.originalData ? String(log.originalData[k] ?? '') : '';
-                                                                                        return String(log.proposedData[k] ?? '') !== orig;
-                                                                                    }).map(k => (
-                                                                                        <span key={k} style={{ marginRight: 8 }}>
-                                                                                            <strong>{k}</strong>: {log.originalData ? `${log.originalData[k]} → ` : ''}{log.proposedData[k]}
-                                                                                        </span>
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
                                             </tr>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                                            {/* Expandable audit log */}
+                                            {auditLogItemId === item.id && (
+                                                <tr>
+                                                    <td colSpan={canEdit ? 7 : 6} style={{ padding: 0 }}>
+                                                        <div style={{ background: 'rgba(0,200,255,0.03)', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px' }}>
+                                                            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>📜 History for {item.name}</div>
+                                                            {auditLogLoading ? (
+                                                                <div style={{ color: 'var(--muted)', fontSize: 12 }}>Loading...</div>
+                                                            ) : auditLogData.length === 0 ? (
+                                                                <div style={{ color: 'var(--muted)', fontSize: 12 }}>No audit history yet.</div>
+                                                            ) : (
+                                                                <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                                                                    {auditLogData.map(log => (
+                                                                        <div key={log.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
+                                                                            <div style={{ minWidth: 170, color: 'var(--muted)', fontSize: 11 }}>
+                                                                                {formatReviewDate(log.timestamp)}
+                                                                            </div>
+                                                                            <div style={{ flex: 1 }}>
+                                                                                <div>
+                                                                                    <span style={{ fontWeight: 600 }}>{formatAuditAction(log.action)}</span>
+                                                                                    <span style={{ color: 'var(--muted)', marginLeft: 8 }}>by {log.performedByName}</span>
+                                                                                </div>
+                                                                                {log.rejectionComment && (
+                                                                                    <div style={{ fontSize: 11, color: '#ff6b7a', marginTop: 2 }}>💬 {log.rejectionComment}</div>
+                                                                                )}
+                                                                                {log.proposedData && (
+                                                                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                                                                        Changes: {Object.keys(log.proposedData).filter(k => {
+                                                                                            const orig = log.originalData ? String(log.originalData[k] ?? '') : '';
+                                                                                            return String(log.proposedData[k] ?? '') !== orig;
+                                                                                        }).map(k => (
+                                                                                            <span key={k} style={{ marginRight: 8 }}>
+                                                                                                <strong>{k}</strong>: {log.originalData ? `${log.originalData[k]} → ` : ''}{log.proposedData[k]}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )
+            }
 
             {/* Add Item Modal */}
             {
@@ -609,6 +637,18 @@ export default function VendorDetailPage() {
                                 </div>
                                 <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" placeholder="Optional SKU or product code" value={itemForm.sku} onChange={e => setItemForm(p => ({ ...p, sku: e.target.value }))} /></div>
                                 <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Optional notes" value={itemForm.notes} onChange={e => setItemForm(p => ({ ...p, notes: e.target.value }))} /></div>
+                                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
+                                    <div
+                                        className={`idp-toggle ${itemForm.taxable ? 'active' : ''}`}
+                                        onClick={() => setItemForm(p => ({ ...p, taxable: !p.taxable }))}
+                                        role="switch"
+                                        aria-checked={!!itemForm.taxable}
+                                    >
+                                        <div className="idp-toggle__knob" />
+                                    </div>
+                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{itemForm.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
+                                </div>
                                 <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                                     <button className="ui-btn ghost" onClick={() => setItemModalOpen(false)}>Cancel</button>
                                     <button className="ui-btn primary" onClick={handleAddItem} disabled={itemSaving}>{itemSaving ? 'Saving...' : isSuperAdmin ? '💾 Save Item' : '📩 Submit for Review'}</button>

@@ -7,6 +7,7 @@ import { storage } from '../../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { UserContext } from '../../contexts/UserContext';
 import { toast } from 'react-toastify';
+import { getTaxRate } from '../../constants/taxRates';
 import './ItemDetailPage.css';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
@@ -15,7 +16,7 @@ const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'bag',
 export default function ItemDetailPage() {
     const { vendorId: urlVendorId, itemId } = useParams();
     const navigate = useNavigate();
-    const { isSuperAdmin, isAdmin, userId, displayName, vendorId: ctxVendorId } = useContext(UserContext);
+    const { isSuperAdmin, isAdmin, userId, displayName, vendorId: ctxVendorId, permissions } = useContext(UserContext);
 
     // Use URL param vendorId, fallback to context vendorId for vendor users
     const vendorId = urlVendorId || ctxVendorId;
@@ -44,7 +45,7 @@ export default function ItemDetailPage() {
     const [showRejectInput, setShowRejectInput] = useState(false);
     const [rejectComment, setRejectComment] = useState('');
 
-    const canEdit = isSuperAdmin || isAdmin;
+    const canEdit = isSuperAdmin || isAdmin || (typeof permissions === 'object' && permissions?.canManageItems);
 
     // ─── Image resize + upload ───
     const IMG_SIZE = 400;
@@ -176,10 +177,11 @@ export default function ItemDetailPage() {
                 price: Number(editForm.price),
                 sku: editForm.sku?.trim() || '',
                 notes: editForm.notes?.trim() || '',
+                taxable: !!editForm.taxable,
             };
             const originalData = {
                 name: item.name, brand: item.brand || '', category: item.category, unit: item.unit,
-                price: item.price, sku: item.sku || '', notes: item.notes || '',
+                price: item.price, sku: item.sku || '', notes: item.notes || '', taxable: !!item.taxable,
             };
             const itemRef = doc(db, `vendors/${vendorId}/items`, itemId);
 
@@ -469,12 +471,33 @@ export default function ItemDetailPage() {
                             <span className="badge blue">{item.category || 'Other'}</span>
                             {item.brand && <span className="badge gray">{item.brand}</span>}
                             {item.sku && <span className="badge gray">SKU: {item.sku}</span>}
+                            <span className={`badge ${item.taxable ? 'green' : 'gray'}`}>{item.taxable ? '💲 Taxable' : 'Non-Taxable'}</span>
                         </div>
                         <div className="idp-hero__meta">
                             <div className="idp-hero__meta-item">
                                 <span className="idp-hero__meta-label">Price</span>
                                 <span className="idp-hero__meta-value price">${Number(item.price || 0).toFixed(2)}</span>
                             </div>
+                            {item.taxable && vendor && (() => {
+                                const rate = getTaxRate(vendor.country || 'Canada', vendor.province);
+                                const taxAmt = (Number(item.price || 0) * rate / 100);
+                                return rate > 0 ? (
+                                    <div className="idp-hero__meta-item">
+                                        <span className="idp-hero__meta-label">Tax ({rate}%)</span>
+                                        <span className="idp-hero__meta-value" style={{ color: '#f59e0b' }}>${taxAmt.toFixed(2)}</span>
+                                    </div>
+                                ) : null;
+                            })()}
+                            {item.taxable && vendor && (() => {
+                                const rate = getTaxRate(vendor.country || 'Canada', vendor.province);
+                                const total = Number(item.price || 0) * (1 + rate / 100);
+                                return rate > 0 ? (
+                                    <div className="idp-hero__meta-item">
+                                        <span className="idp-hero__meta-label">Price + Tax</span>
+                                        <span className="idp-hero__meta-value" style={{ color: '#4dabf7' }}>${total.toFixed(2)}</span>
+                                    </div>
+                                ) : null;
+                            })()}
                             <div className="idp-hero__meta-item">
                                 <span className="idp-hero__meta-label">Unit</span>
                                 <span className="idp-hero__meta-value">{item.unit || '—'}</span>
@@ -650,6 +673,40 @@ export default function ItemDetailPage() {
                                     <label className="ui-label">Notes</label>
                                     <textarea className="ui-input" rows={3} value={editForm.notes || ''} onChange={e => setEditForm(prev => ({ ...prev, notes: e.target.value }))} />
                                 </div>
+                                <div className="idp-field--full" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+                                    <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
+                                    <div
+                                        className={`idp-toggle ${editForm.taxable ? 'active' : ''}`}
+                                        onClick={() => setEditForm(prev => ({ ...prev, taxable: !prev.taxable }))}
+                                        role="switch"
+                                        aria-checked={!!editForm.taxable}
+                                    >
+                                        <div className="idp-toggle__knob" />
+                                    </div>
+                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{editForm.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
+                                </div>
+                                {editForm.taxable && (() => {
+                                    const rate = vendor ? getTaxRate(vendor.country || 'Canada', vendor.province) : 0;
+                                    const price = Number(editForm.price || 0);
+                                    const taxAmt = price * rate / 100;
+                                    const total = price + taxAmt;
+                                    if (!vendor?.province) {
+                                        return (
+                                            <div className="idp-field--full" style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(245, 158, 11, .08)', border: '1px solid rgba(245, 158, 11, .2)', fontSize: 13, color: '#f59e0b' }}>
+                                                ⚠️ Set the vendor's province/state in the <a href={`/vendors/${vendorId}`} style={{ color: '#4dabf7', textDecoration: 'underline' }}>vendor page</a> to calculate tax.
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="idp-field--full" style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(74, 222, 128, .06)', border: '1px solid rgba(74, 222, 128, .15)' }}>
+                                            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
+                                                <span style={{ color: 'var(--muted)' }}>Tax Rate: <strong style={{ color: '#f59e0b' }}>{rate}%</strong></span>
+                                                <span style={{ color: 'var(--muted)' }}>Tax: <strong style={{ color: '#f59e0b' }}>${taxAmt.toFixed(2)}</strong></span>
+                                                <span style={{ color: 'var(--muted)' }}>Total: <strong style={{ color: '#4ade80', fontSize: 16 }}>${total.toFixed(2)}</strong> <span style={{ fontSize: 12 }}>/ {editForm.unit || 'unit'}</span></span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                                 <button className="ui-btn primary small" onClick={handleSave} disabled={saving}>
@@ -680,6 +737,25 @@ export default function ItemDetailPage() {
                                 <div className="idp-field__label">SKU</div>
                                 <div className="idp-field__value">{item.sku || '—'}</div>
                             </div>
+                            <div className="idp-field">
+                                <div className="idp-field__label">Taxable</div>
+                                <div className="idp-field__value" style={{ color: item.taxable ? '#4ade80' : 'var(--muted)' }}>{item.taxable ? '✅ Yes' : 'No'}</div>
+                            </div>
+                            {item.taxable && vendor && (() => {
+                                const rate = getTaxRate(vendor.country || 'Canada', vendor.province);
+                                const taxAmt = (Number(item.price || 0) * rate / 100);
+                                const total = Number(item.price || 0) + taxAmt;
+                                return rate > 0 ? (
+                                    <div className="idp-field idp-field--full" style={{ background: 'rgba(245, 158, 11, .06)', borderColor: 'rgba(245, 158, 11, .15)' }}>
+                                        <div className="idp-field__label">Tax Breakdown</div>
+                                        <div className="idp-field__value" style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <span>Rate: <strong style={{ color: '#f59e0b' }}>{rate}%</strong></span>
+                                            <span>Tax: <strong style={{ color: '#f59e0b' }}>${taxAmt.toFixed(2)}</strong></span>
+                                            <span>Total: <strong style={{ color: '#4dabf7' }}>${total.toFixed(2)}</strong> <span style={{ fontSize: 12, color: 'var(--muted)' }}>/ {item.unit || '—'}</span></span>
+                                        </div>
+                                    </div>
+                                ) : null;
+                            })()}
                             {item.notes && (
                                 <div className="idp-field idp-field--full">
                                     <div className="idp-field__label">Notes</div>

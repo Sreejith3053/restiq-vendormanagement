@@ -14,6 +14,8 @@ import ItemDetailPage from './components/Vendors/ItemDetailPage';
 import AddVendorPage from './components/Vendors/AddVendorPage';
 import ItemCatalogPage from './components/Vendors/ItemCatalogPage';
 import UserManagementPage from './components/Users/UserManagementPage';
+import OrdersPage from './components/Orders/OrdersPage';
+import RolePermissionsPage from './components/Settings/RolePermissionsPage';
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -70,6 +72,8 @@ function App() {
                                 <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/users" element={<UserManagementPage />} />
+                                <Route path="/orders" element={<OrdersPage />} />
+                                <Route path="/settings/permissions" element={<RolePermissionsPage />} />
                                 <Route path="/" element={<Navigate to="/vendors" />} />
                             </>
                         )}
@@ -81,8 +85,12 @@ function App() {
                                 <Route path="/items" element={<ItemCatalogPage />} />
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/profile" element={<VendorDetailPage />} />
+                                <Route path="/orders" element={<OrdersPage />} />
                                 {normalizedRole === 'admin' && (
-                                    <Route path="/users" element={<UserManagementPage />} />
+                                    <>
+                                        <Route path="/users" element={<UserManagementPage />} />
+                                        <Route path="/settings/permissions" element={<RolePermissionsPage />} />
+                                    </>
                                 )}
                             </>
                         )}

@@ -19,6 +19,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         price: item.price || '',
         sku: item.sku || '',
         notes: item.notes || '',
+        taxable: !!item.taxable,
     });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -36,7 +37,8 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
             form.unit !== (item.unit || 'kg') ||
             String(form.price) !== String(item.price || '') ||
             form.sku.trim() !== (item.sku || '') ||
-            form.notes.trim() !== (item.notes || '')
+            form.notes.trim() !== (item.notes || '') ||
+            form.taxable !== !!item.taxable
         );
     };
 
@@ -59,6 +61,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 price: Number(form.price) || 0,
                 sku: form.sku.trim(),
                 notes: form.notes.trim(),
+                taxable: !!form.taxable,
             };
 
             const originalData = {
@@ -69,6 +72,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 price: Number(item.price) || 0,
                 sku: item.sku || '',
                 notes: item.notes || '',
+                taxable: !!item.taxable,
             };
 
             if (isSuperAdmin) {
@@ -165,6 +169,18 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                         </div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" value={form.sku} onChange={e => handleChange('sku', e.target.value)} placeholder="Optional SKU or product code" /></div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><input className="ui-input" value={form.notes} onChange={e => handleChange('notes', e.target.value)} placeholder="Optional notes" /></div>
+                        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
+                            <div
+                                className={`idp-toggle ${form.taxable ? 'active' : ''}`}
+                                onClick={() => handleChange('taxable', !form.taxable)}
+                                role="switch"
+                                aria-checked={!!form.taxable}
+                            >
+                                <div className="idp-toggle__knob" />
+                            </div>
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{form.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
+                        </div>
 
                         {error && <div style={{ marginTop: 12, color: '#ff4d6a', fontSize: 13 }}>{error}</div>}
 

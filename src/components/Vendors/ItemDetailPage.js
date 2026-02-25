@@ -449,9 +449,17 @@ export default function ItemDetailPage() {
         <div style={{ padding: '0 4px' }}>
             {/* Breadcrumb */}
             <div className="idp-breadcrumb">
-                <Link to="/vendors">Vendors</Link>
-                <span className="sep">›</span>
-                <Link to={`/vendors/${vendorId}`}>{vendor?.name || 'Vendor'}</Link>
+                {isSuperAdmin ? (
+                    <>
+                        <Link to="/vendors">Vendors</Link>
+                        <span className="sep">›</span>
+                        <Link to={`/vendors/${vendorId}`}>{vendor?.name || 'Vendor'}</Link>
+                    </>
+                ) : (
+                    <>
+                        <Link to="/profile">Profile</Link>
+                    </>
+                )}
                 <span className="sep">›</span>
                 <span style={{ color: 'var(--text)' }}>{item.name}</span>
             </div>

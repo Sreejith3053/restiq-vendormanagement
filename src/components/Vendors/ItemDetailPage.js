@@ -148,7 +148,7 @@ export default function ItemDetailPage() {
         }
     };
 
-    // ─── Audit logger ───
+    // ─── Audit logger ───---
     const logAudit = async (action, details = {}) => {
         try {
             await addDoc(collection(db, `vendors/${vendorId}/items/${itemId}/auditLog`), {

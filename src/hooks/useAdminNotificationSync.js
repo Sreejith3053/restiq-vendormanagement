@@ -57,6 +57,11 @@ const generateInvoiceForOrder = async (order) => {
         // 1. Check for Snapshotted Values
         const hasSnapshot = order.subtotalBeforeTax !== undefined;
 
+        // Fetch Vendor for Commission % (and Legacy Tax)
+        const vendorSnap = await getDoc(doc(db, 'vendors', order.vendorId));
+        const vData = vendorSnap.exists() ? vendorSnap.data() : {};
+        const vendorCommissionPercent = Number(vData.commissionPercent ?? 10);
+
         let subtotalVendorAmount = 0;
         let totalTaxAmount = 0;
         let formattedItems = [];
@@ -77,8 +82,6 @@ const generateInvoiceForOrder = async (order) => {
             }));
         } else {
             // LEGACY PATH: Fallback to dynamic lookup for old orders
-            const vendorSnap = await getDoc(doc(db, 'vendors', order.vendorId));
-            const vData = vendorSnap.exists() ? vendorSnap.data() : {};
             const taxRate = getTaxRate(vData.country || 'Canada', vData.province);
 
             const itemsRef = collection(db, `vendors/${order.vendorId}/items`);
@@ -112,7 +115,10 @@ const generateInvoiceForOrder = async (order) => {
             });
         }
 
-        const totalVendorAmount = Number((subtotalVendorAmount + totalTaxAmount).toFixed(2));
+        const grossVendorAmount = Number(subtotalVendorAmount.toFixed(2));
+        const commissionAmount = Number((grossVendorAmount * (vendorCommissionPercent / 100)).toFixed(2));
+        const netVendorPayable = Number((grossVendorAmount - commissionAmount).toFixed(2));
+        const totalVendorAmount = Number((subtotalVendorAmount + totalTaxAmount).toFixed(2)); // Legacy full amount
         const now = new Date();
         const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}`;
 
@@ -125,9 +131,14 @@ const generateInvoiceForOrder = async (order) => {
             invoiceDate: serverTimestamp(),
             dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             paymentStatus: 'PENDING',
-            subtotalVendorAmount: Number(subtotalVendorAmount.toFixed(2)),
+            subtotalVendorAmount: grossVendorAmount,
             totalTaxAmount: Number(totalTaxAmount.toFixed(2)),
             totalVendorAmount: totalVendorAmount,
+            grossVendorAmount,
+            commissionPercent: vendorCommissionPercent,
+            commissionAmount,
+            netVendorPayable,
+            commissionModel: 'VENDOR_FLAT_PERCENT',
             items: formattedItems,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),

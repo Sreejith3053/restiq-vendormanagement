@@ -135,6 +135,11 @@ export default function VendorDetailPage() {
                 status: editForm.status || 'active',
                 updatedAt: new Date().toISOString(),
             };
+
+            if (isSuperAdmin && editForm.commissionPercent !== undefined) {
+                patch.commissionPercent = Number(editForm.commissionPercent) || 0;
+                patch.commissionType = 'VENDOR_FLAT_PERCENT';
+            }
             await updateDoc(ref, patch);
             setVendor(prev => ({ ...prev, ...patch }));
             setEditing(false);
@@ -444,6 +449,11 @@ export default function VendorDetailPage() {
                                     <option value="inactive">Inactive</option>
                                 </select>
                             </div>
+                            {isSuperAdmin && (
+                                <div><label className="ui-label">Commission %</label>
+                                    <input className="ui-input" type="number" min="0" max="100" step="0.1" value={editForm.commissionPercent ?? 10} onChange={e => setEditForm(p => ({ ...p, commissionPercent: e.target.value }))} />
+                                </div>
+                            )}
                         </div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">Address</label><input className="ui-input" value={editForm.address || ''} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} /></div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><textarea className="ui-input" style={{ height: 60 }} value={editForm.notes || ''} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} /></div>
@@ -468,6 +478,9 @@ export default function VendorDetailPage() {
                         <div><span className="muted small">Email</span><div>{vendor.contactEmail || '—'}</div></div>
                         <div><span className="muted small">Address</span><div>{vendor.address || '—'}</div></div>
                         <div><span className="muted small">Status</span><div><span className={`badge ${vendor.status === 'inactive' ? 'red' : 'green'}`}>{vendor.status || 'active'}</span></div></div>
+                        {isSuperAdmin && (
+                            <div><span className="muted small">Commission %</span><div><span className="badge amber">{vendor.commissionPercent !== undefined ? `${vendor.commissionPercent}%` : '10% (Default)'}</span></div></div>
+                        )}
                         {vendor.notes && <div style={{ gridColumn: '1 / -1' }}><span className="muted small">Notes</span><div>{vendor.notes}</div></div>}
                     </div>
                 )}

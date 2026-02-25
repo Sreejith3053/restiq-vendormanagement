@@ -193,6 +193,19 @@ export default function InvoiceDetailPage() {
                         <span style={{ fontWeight: 600 }}>${Number(invoice.subtotalVendorAmount || invoice.totalVendorAmount || 0).toFixed(2)}</span>
                     </div>
 
+                    {invoice.commissionModel === 'VENDOR_FLAT_PERCENT' && isSuperAdmin && (
+                        <>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                                <span style={{ color: 'var(--muted)' }}>Commission ({invoice.commissionPercent}%)</span>
+                                <span style={{ fontWeight: 600, color: '#ff6b7a' }}>- ${Number(invoice.commissionAmount || 0).toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                                <span style={{ color: 'var(--muted)' }}>Net Payable (Before Tax)</span>
+                                <span style={{ fontWeight: 600 }}>${Number(invoice.netVendorPayable || 0).toFixed(2)}</span>
+                            </div>
+                        </>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                         <span style={{ color: 'var(--muted)' }}>Tax Amount</span>
                         <span style={{ fontWeight: 600, color: '#f59e0b' }}>+ ${Number(invoice.totalTaxAmount || 0).toFixed(2)}</span>
@@ -203,7 +216,9 @@ export default function InvoiceDetailPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--muted)' }}>Total Payout</span>
                         <span style={{ fontSize: 24, fontWeight: 700, color: '#4ade80' }}>
-                            ${Number(invoice.totalVendorAmount || 0).toFixed(2)}
+                            ${invoice.commissionModel === 'VENDOR_FLAT_PERCENT'
+                                ? Number((invoice.netVendorPayable || 0) + (invoice.totalTaxAmount || 0)).toFixed(2)
+                                : Number(invoice.totalVendorAmount || 0).toFixed(2)}
                         </span>
                     </div>
 

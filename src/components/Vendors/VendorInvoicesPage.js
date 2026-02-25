@@ -80,7 +80,9 @@ export default function VendorInvoicesPage() {
                                         <td style={{ fontSize: 13, color: 'var(--muted)' }}>{inv.orderId.slice(-8).toUpperCase()}</td>
                                         <td>{formatDate(inv.invoiceDate)}</td>
                                         <td style={{ fontWeight: 600, color: '#4ade80' }}>
-                                            ${Number(inv.totalVendorAmount || 0).toFixed(2)}
+                                            ${inv.commissionModel === 'VENDOR_FLAT_PERCENT'
+                                                ? Number((inv.netVendorPayable || 0) + (inv.totalTaxAmount || 0)).toFixed(2)
+                                                : Number(inv.totalVendorAmount || 0).toFixed(2)}
                                         </td>
                                         <td>
                                             <span className={`badge ${isPending ? 'amber' : 'green'}`}>

@@ -78,6 +78,11 @@ export default function AdminInvoicesPage() {
                 // 4a. Check for Snapshot
                 const hasSnapshot = order.subtotalBeforeTax !== undefined;
 
+                // Fetch Vendor for Commission % (and Legacy Tax)
+                const vendorSnap = await getDoc(doc(db, 'vendors', order.vendorId));
+                const vData = vendorSnap.exists() ? vendorSnap.data() : {};
+                const vendorCommissionPercent = Number(vData.commissionPercent ?? 10);
+
                 let subtotalVendorAmount = 0;
                 let totalTaxAmount = 0;
                 let formattedItems = [];
@@ -97,8 +102,6 @@ export default function AdminInvoicesPage() {
                     }));
                 } else {
                     // Legacy Fallback
-                    const vendorSnap = await getDoc(doc(db, 'vendors', order.vendorId));
-                    const vData = vendorSnap.exists() ? vendorSnap.data() : {};
                     const taxRate = getTaxRate(vData.country || 'Canada', vData.province);
 
                     const itemsRef = collection(db, `vendors/${order.vendorId}/items`);
@@ -132,6 +135,9 @@ export default function AdminInvoicesPage() {
                     });
                 }
 
+                const grossVendorAmount = Number(subtotalVendorAmount.toFixed(2));
+                const commissionAmount = Number((grossVendorAmount * (vendorCommissionPercent / 100)).toFixed(2));
+                const netVendorPayable = Number((grossVendorAmount - commissionAmount).toFixed(2));
                 const totalVendorAmount = Number((subtotalVendorAmount + totalTaxAmount).toFixed(2));
                 const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}${i}`;
 
@@ -143,9 +149,14 @@ export default function AdminInvoicesPage() {
                     invoiceDate: serverTimestamp(),
                     dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                     paymentStatus: 'PENDING',
-                    subtotalVendorAmount: Number(subtotalVendorAmount.toFixed(2)),
+                    subtotalVendorAmount: grossVendorAmount,
                     totalTaxAmount: Number(totalTaxAmount.toFixed(2)),
                     totalVendorAmount: totalVendorAmount,
+                    grossVendorAmount,
+                    commissionPercent: vendorCommissionPercent,
+                    commissionAmount,
+                    netVendorPayable,
+                    commissionModel: 'VENDOR_FLAT_PERCENT',
                     items: formattedItems,
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
@@ -290,7 +301,9 @@ export default function AdminInvoicesPage() {
                                         <td>{vName}</td>
                                         <td>{formatDate(inv.invoiceDate)}</td>
                                         <td style={{ fontWeight: 600, color: '#4ade80' }}>
-                                            ${Number(inv.totalVendorAmount || 0).toFixed(2)}
+                                            ${inv.commissionModel === 'VENDOR_FLAT_PERCENT'
+                                                ? Number((inv.netVendorPayable || 0) + (inv.totalTaxAmount || 0)).toFixed(2)
+                                                : Number(inv.totalVendorAmount || 0).toFixed(2)}
                                         </td>
                                         <td>
                                             <span className={`badge ${isPending ? 'amber' : 'green'}`}>

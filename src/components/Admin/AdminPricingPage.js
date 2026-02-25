@@ -184,55 +184,32 @@ export default function AdminPricingPage() {
                         <tr>
                             <th>Item Name</th>
                             <th>Vendor Price</th>
-                            <th style={{ width: 100 }}>Comm (%)</th>
-                            <th style={{ width: 100 }}>Market Price</th>
-                            <th style={{ width: 80 }}>Taxable</th>
                             <th style={{ width: 100 }}>Tax Rate</th>
                             <th style={{ width: 100 }}>Total (w/ Tax)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {filteredItems.length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>No items found.</td></tr>
+                            <tr><td colSpan="4" style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>No items found.</td></tr>
                         ) : (
                             filteredItems.map(item => {
                                 const vendorPrice = Number(item.vendorPrice ?? item.price ?? 0);
-                                const comm = Number(item.commissionPercent ?? 0);
-                                const isTaxable = !!item.isTaxable; // matches Step C logic
+                                const isTaxable = !!item.isTaxable; // Still calculate based on vendor's setting
                                 const taxRate = Number(item.taxRate ?? 0.13); // fallback to 0.13 per requirements
 
-                                const marketPrice = round2(vendorPrice * (1 + comm / 100));
-                                const taxAmount = isTaxable ? round2(marketPrice * taxRate) : 0;
-                                const totalPrice = round2(marketPrice + taxAmount);
+                                const taxAmount = isTaxable ? round2(vendorPrice * taxRate) : 0;
+                                const totalPrice = round2(vendorPrice + taxAmount);
 
                                 return (
                                     <tr key={item.id} className="is-row">
                                         <td>
                                             <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</div>
-                                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{item.vendorName} • {item.sku || 'No SKU'}</div>
+                                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                                {item.vendorName} • {item.sku || 'No SKU'}
+                                                {!isTaxable && <span style={{ marginLeft: 6, color: 'var(--muted)', fontStyle: 'italic' }}>(Non-Taxable)</span>}
+                                            </div>
                                         </td>
                                         <td style={{ fontWeight: 600 }}>${vendorPrice.toFixed(2)}</td>
-                                        <td>
-                                            <input
-                                                className="ui-input"
-                                                type="number"
-                                                defaultValue={comm}
-                                                onBlur={(e) => {
-                                                    const val = Number(e.target.value);
-                                                    if (val !== comm) handleUpdateField(item, 'commissionPercent', val);
-                                                }}
-                                                style={{ width: 70, textAlign: 'center' }}
-                                            />
-                                        </td>
-                                        <td style={{ fontWeight: 600, color: '#4dabf7' }}>${marketPrice.toFixed(2)}</td>
-                                        <td>
-                                            <input
-                                                type="checkbox"
-                                                checked={isTaxable}
-                                                onChange={(e) => handleUpdateField(item, 'isTaxable', e.target.checked)}
-                                                style={{ transform: 'scale(1.2)' }}
-                                            />
-                                        </td>
                                         <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                                 <input

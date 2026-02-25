@@ -18,7 +18,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         unit: item.unit || 'kg',
         packQuantity: item.packQuantity || 1,
         itemSize: item.itemSize || '',
-        price: item.price || '',
+        vendorPrice: item.vendorPrice ?? item.price ?? '',
         sku: item.sku || '',
         notes: item.notes || '',
         taxable: !!item.taxable,
@@ -39,7 +39,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
             form.unit !== (item.unit || 'kg') ||
             Number(form.packQuantity) !== (item.packQuantity || 1) ||
             form.itemSize.trim() !== (item.itemSize || '') ||
-            String(form.price) !== String(item.price || '') ||
+            String(form.vendorPrice) !== String(item.vendorPrice ?? item.price ?? '') ||
             form.sku.trim() !== (item.sku || '') ||
             form.notes.trim() !== (item.notes || '') ||
             form.taxable !== !!item.taxable
@@ -64,7 +64,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 unit: form.unit,
                 packQuantity: Number(form.packQuantity) || 1,
                 itemSize: form.itemSize.trim(),
-                price: Number(form.price) || 0,
+                vendorPrice: Number(form.vendorPrice) || 0,
                 sku: form.sku.trim(),
                 notes: form.notes.trim(),
                 taxable: !!form.taxable,
@@ -77,7 +77,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 unit: item.unit || 'kg',
                 packQuantity: item.packQuantity || 1,
                 itemSize: item.itemSize || '',
-                price: Number(item.price) || 0,
+                vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
                 sku: item.sku || '',
                 notes: item.notes || '',
                 taxable: !!item.taxable,
@@ -175,7 +175,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                             </div>
                             <div><label className="ui-label">Qty per Unit</label><input className="ui-input" type="number" min="1" placeholder="e.g. 1" value={form.packQuantity} onChange={e => handleChange('packQuantity', e.target.value)} /></div>
                             <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={form.itemSize} onChange={e => handleChange('itemSize', e.target.value)} /></div>
-                            <div><label className="ui-label">Price ($)</label><input className="ui-input" type="number" step="0.01" value={form.price} onChange={e => handleChange('price', e.target.value)} placeholder="0.00" /></div>
+                            <div><label className="ui-label">Vendor Price ($)</label><input className="ui-input" type="number" step="0.01" value={form.vendorPrice} onChange={e => handleChange('vendorPrice', e.target.value)} placeholder="0.00" /></div>
                         </div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" value={form.sku} onChange={e => handleChange('sku', e.target.value)} placeholder="Optional SKU or product code" /></div>
                         <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><input className="ui-input" value={form.notes} onChange={e => handleChange('notes', e.target.value)} placeholder="Optional notes" /></div>

@@ -16,6 +16,11 @@ import ItemCatalogPage from './components/Vendors/ItemCatalogPage';
 import UserManagementPage from './components/Users/UserManagementPage';
 import OrdersPage from './components/Orders/OrdersPage';
 import RolePermissionsPage from './components/Settings/RolePermissionsPage';
+import AdminPricingPage from './components/Admin/AdminPricingPage';
+import AdminInvoicesPage from './components/Admin/AdminInvoicesPage';
+import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
+import InvoiceDetailPage from './components/Vendors/InvoiceDetailPage';
+import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -27,6 +32,10 @@ function App() {
     const location = useLocation();
 
     const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    const isAdmin = normalizedRole === 'admin'; // Helper for vendor admin routes
+
+    // Start background sync for admin notifications (runs efficiently if isSuperAdmin)
+    useAdminNotificationSync();
 
     // Mobile sidebar
     const [showSidebar, setShowSidebar] = useState(false);
@@ -74,6 +83,9 @@ function App() {
                                 <Route path="/users" element={<UserManagementPage />} />
                                 <Route path="/orders" element={<OrdersPage />} />
                                 <Route path="/settings/permissions" element={<RolePermissionsPage />} />
+                                <Route path="/admin/commissions" element={<AdminPricingPage />} />
+                                <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
+                                <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
                                 <Route path="/" element={<Navigate to="/vendors" />} />
                             </>
                         )}
@@ -86,7 +98,9 @@ function App() {
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/profile" element={<VendorDetailPage />} />
                                 <Route path="/orders" element={<OrdersPage />} />
-                                {normalizedRole === 'admin' && (
+                                <Route path="/vendor/invoices" element={<VendorInvoicesPage />} />
+                                <Route path="/vendor/invoices/:invoiceId" element={<InvoiceDetailPage />} />
+                                {isAdmin && (
                                     <>
                                         <Route path="/users" element={<UserManagementPage />} />
                                         <Route path="/settings/permissions" element={<RolePermissionsPage />} />

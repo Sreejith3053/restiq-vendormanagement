@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { useLocation } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { UserContext } from '../../contexts/UserContext';
 import './OrdersPage.css';
+
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export default function OrdersPage() {
     const { isSuperAdmin, isAdmin, vendorId, permissions, displayName } = useContext(UserContext);
@@ -34,10 +37,30 @@ export default function OrdersPage() {
     }, [selectedOrder?.id]);
 
     // Filters
-    const [searchTerm, setSearchTerm] = useState('');
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const initialSearch = queryParams.get('search') || '';
+
+    const [searchTerm, setSearchTerm] = useState(initialSearch);
     const [statusFilter, setStatusFilter] = useState('All');
     const [restaurantFilter, setRestaurantFilter] = useState('All');
     const [vendorFilter, setVendorFilter] = useState('All');
+
+    useEffect(() => {
+        const queryId = new URLSearchParams(location.search).get('orderId');
+        const querySearch = new URLSearchParams(location.search).get('search');
+
+        if (querySearch) {
+            setSearchTerm(querySearch);
+        }
+
+        if (queryId && orders.length > 0) {
+            const match = orders.find(o => o.id === queryId);
+            if (match) {
+                setSelectedOrder(match);
+            }
+        }
+    }, [location.search, orders.length]);
 
     useEffect(() => {
         let q;
@@ -124,10 +147,17 @@ export default function OrdersPage() {
             return;
         }
 
-        // Calculate new totals
-        const newSubtotal = editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-        const newTaxTotal = newSubtotal * (selectedOrder.taxRate || 0);
-        const newTotal = newSubtotal + newTaxTotal;
+        // Calculate new totals (Snapshot logic)
+        const subtotalBeforeTax = editableItems.reduce((sum, item) => {
+            const lineSubtotal = round2(item.price * item.qty);
+            item.lineSubtotal = lineSubtotal; // Update line snapshot
+            return sum + lineSubtotal;
+        }, 0);
+
+        // For simplicity in this edit, we assume the same tax rate applies to the modified order
+        // In a full implementation, we'd preserve item.taxRate if it exists
+        const totalTax = round2(subtotalBeforeTax * (selectedOrder.taxRate || 0));
+        const grandTotalAfterTax = round2(subtotalBeforeTax + totalTax);
 
         try {
             const hasModifications = auditLogEntries.length > 0;
@@ -139,9 +169,11 @@ export default function OrdersPage() {
                 pickupDate,
                 pickupTime,
                 items: editableItems,
-                subtotal: newSubtotal,
-                taxTotal: newTaxTotal,
-                total: newTotal
+                subtotalBeforeTax,
+                totalTax,
+                grandTotalAfterTax,
+                // Keep legacy total for backward compatibility
+                total: grandTotalAfterTax
             };
 
             // Only append audit log if there are changes
@@ -188,7 +220,9 @@ export default function OrdersPage() {
 
     // Filter logic
     const filteredOrders = orders.filter(order => {
-        const orderIdMatch = (order.orderGroupId || order.id || '').toLowerCase().includes(searchTerm.toLowerCase());
+        const searchLower = searchTerm.toLowerCase();
+        const orderIdMatch = (order.orderGroupId || '').toLowerCase().includes(searchLower) ||
+            (order.id || '').toLowerCase().includes(searchLower);
         const statusMatch = statusFilter === 'All' || order.status === statusFilter;
         const restMatch = restaurantFilter === 'All' || order.restaurantId === restaurantFilter;
         const vendorMatch = vendorFilter === 'All' || order.vendorName === vendorFilter;
@@ -286,7 +320,7 @@ export default function OrdersPage() {
                             ) : (
                                 filteredOrders.map(order => (
                                     <tr key={order.id} onClick={() => setSelectedOrder(order)}>
-                                        <td style={{ fontFamily: 'monospace' }}>{order.orderGroupId || order.id.slice(0, 8)}</td>
+                                        <td style={{ fontFamily: 'monospace' }}>{order.orderGroupId || order.id.slice(-8).toUpperCase()}</td>
                                         <td>{formatDate(order.createdAt)}</td>
                                         {isSuperAdmin && <td>{order.vendorName}</td>}
                                         <td>{order.restaurantId}</td>
@@ -448,16 +482,22 @@ export default function OrdersPage() {
                             <div className="order-summary">
                                 <div className="summary-row">
                                     <span>Subtotal</span>
-                                    <span>{formatCurrency(editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0))}</span>
+                                    <span>{formatCurrency(selectedOrder.subtotalBeforeTax || selectedOrder.subtotal || editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0))}</span>
                                 </div>
                                 <div className="summary-row">
                                     <span>Tax ({((selectedOrder.taxRate || 0) * 100).toFixed(0)}%)</span>
-                                    <span>{formatCurrency(editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0) * (selectedOrder.taxRate || 0))}</span>
+                                    <span>{formatCurrency(selectedOrder.totalTax || selectedOrder.taxTotal || 0)}</span>
                                 </div>
                                 <div className="summary-row total">
                                     <span>Total</span>
-                                    <span>{formatCurrency(editableItems.reduce((sum, item) => sum + (item.price * item.qty), 0) * (1 + (selectedOrder.taxRate || 0)))}</span>
+                                    <span>{formatCurrency(selectedOrder.grandTotalAfterTax || selectedOrder.total || 0)}</span>
                                 </div>
+
+                                {selectedOrder.taxIntegrityStatus === 'MISMATCH' && (
+                                    <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', fontSize: '12px', color: '#ef4444' }}>
+                                        ⚠️ <strong>Tax Mismatch:</strong> The stored total does not match calculated line items.
+                                    </div>
+                                )}
                             </div>
 
                             {selectedOrder.status === 'pending_confirmation' && canManageOrders && (

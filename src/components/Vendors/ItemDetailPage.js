@@ -173,7 +173,7 @@ export default function ItemDetailPage() {
             (editForm.unit || 'kg') !== (item.unit || 'kg') ||
             Number(editForm.packQuantity || 1) !== Number(item.packQuantity || 1) ||
             (editForm.itemSize || '').trim() !== (item.itemSize || '').trim() ||
-            String(editForm.price || '') !== String(item.price || '') ||
+            String(editForm.vendorPrice || '') !== String(item.vendorPrice ?? item.price ?? '') ||
             (editForm.sku || '').trim() !== (item.sku || '').trim() ||
             (editForm.notes || '').trim() !== (item.notes || '').trim() ||
             !!editForm.taxable !== !!item.taxable
@@ -184,7 +184,7 @@ export default function ItemDetailPage() {
     const handleSave = async () => {
         if (!editForm.name?.trim()) { toast.warn('Name is required'); return; }
         if (!editForm.brand?.trim()) { toast.warn('Brand is required'); return; }
-        if (!editForm.price || isNaN(editForm.price)) { toast.warn('Valid price required'); return; }
+        if (!editForm.vendorPrice || isNaN(editForm.vendorPrice)) { toast.warn('Valid vendor price required'); return; }
         if (!hasChanges()) { toast.info('No changes detected.'); setEditing(false); return; }
         setSaving(true);
         try {
@@ -195,7 +195,7 @@ export default function ItemDetailPage() {
                 unit: editForm.unit || 'kg',
                 packQuantity: Number(editForm.packQuantity) || 1,
                 itemSize: editForm.itemSize?.trim() || '',
-                price: Number(editForm.price),
+                vendorPrice: Number(editForm.vendorPrice),
                 sku: editForm.sku?.trim() || '',
                 notes: editForm.notes?.trim() || '',
                 taxable: !!editForm.taxable,
@@ -203,7 +203,7 @@ export default function ItemDetailPage() {
             const originalData = {
                 name: item.name, brand: item.brand || '', category: item.category, unit: item.unit,
                 packQuantity: item.packQuantity || 1, itemSize: item.itemSize || '',
-                price: item.price, sku: item.sku || '', notes: item.notes || '', taxable: !!item.taxable,
+                vendorPrice: item.vendorPrice ?? item.price ?? 0, sku: item.sku || '', notes: item.notes || '', taxable: !!item.taxable,
             };
             const itemRef = doc(db, `vendors/${vendorId}/items`, itemId);
 
@@ -415,16 +415,16 @@ export default function ItemDetailPage() {
 
     // ─── Price history from audit log ───
     const priceHistory = auditLog
-        .filter(log => log.proposedData?.price !== undefined || log.originalData?.price !== undefined)
+        .filter(log => log.proposedData?.vendorPrice !== undefined || log.originalData?.vendorPrice !== undefined || log.proposedData?.price !== undefined)
         .filter(log => {
-            const oldP = log.originalData?.price;
-            const newP = log.proposedData?.price;
+            const oldP = log.originalData?.vendorPrice ?? log.originalData?.price;
+            const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price;
             return oldP !== undefined && newP !== undefined && Number(oldP) !== Number(newP);
         })
         .map(log => ({
             id: log.id,
-            oldPrice: Number(log.originalData.price),
-            newPrice: Number(log.proposedData.price),
+            oldPrice: Number(log.originalData.vendorPrice ?? log.originalData.price ?? 0),
+            newPrice: Number(log.proposedData.vendorPrice ?? log.proposedData.price ?? 0),
             timestamp: log.timestamp,
             performedByName: log.performedByName,
             action: log.action,
@@ -497,12 +497,12 @@ export default function ItemDetailPage() {
                         </div>
                         <div className="idp-hero__meta">
                             <div className="idp-hero__meta-item">
-                                <span className="idp-hero__meta-label">Price</span>
-                                <span className="idp-hero__meta-value price">${Number(item.price || 0).toFixed(2)}</span>
+                                <span className="idp-hero__meta-label">Vendor Price</span>
+                                <span className="idp-hero__meta-value price">${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}</span>
                             </div>
                             {item.taxable && vendor && (() => {
                                 const rate = getTaxRate(vendor.country || 'Canada', vendor.province);
-                                const taxAmt = (Number(item.price || 0) * rate / 100);
+                                const taxAmt = (Number(item.vendorPrice ?? item.price ?? 0) * rate / 100);
                                 return rate > 0 ? (
                                     <div className="idp-hero__meta-item">
                                         <span className="idp-hero__meta-label">Tax ({rate}%)</span>
@@ -512,7 +512,7 @@ export default function ItemDetailPage() {
                             })()}
                             {item.taxable && vendor && (() => {
                                 const rate = getTaxRate(vendor.country || 'Canada', vendor.province);
-                                const total = Number(item.price || 0) * (1 + rate / 100);
+                                const total = Number(item.vendorPrice ?? item.price ?? 0) * (1 + rate / 100);
                                 return rate > 0 ? (
                                     <div className="idp-hero__meta-item">
                                         <span className="idp-hero__meta-label">Price + Tax</span>
@@ -554,8 +554,8 @@ export default function ItemDetailPage() {
             <div className="idp-stats">
                 <div className="idp-stat">
                     <div className="idp-stat__icon">💰</div>
-                    <div className="idp-stat__label">Current Price</div>
-                    <div className="idp-stat__value" style={{ color: '#4ade80' }}>${Number(item.price || 0).toFixed(2)}</div>
+                    <div className="idp-stat__label">Current Vendor Price</div>
+                    <div className="idp-stat__value" style={{ color: '#4ade80' }}>${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}</div>
                 </div>
                 <div className="idp-stat">
                     <div className="idp-stat__icon">📦</div>
@@ -615,9 +615,9 @@ export default function ItemDetailPage() {
                                             return (
                                                 <div key={field} style={{ display: 'flex', gap: 8, fontSize: 13 }}>
                                                     <span style={{ fontWeight: 600, textTransform: 'capitalize', minWidth: 70 }}>{field}:</span>
-                                                    <span style={{ color: '#ff6b7a', textDecoration: 'line-through' }}>{field === 'price' ? `$${Number(orig).toFixed(2)}` : orig || '—'}</span>
+                                                    <span style={{ color: '#ff6b7a', textDecoration: 'line-through' }}>{field === 'vendorPrice' || field === 'price' ? `$${Number(orig).toFixed(2)}` : orig || '—'}</span>
                                                     <span style={{ color: 'var(--muted)' }}>→</span>
-                                                    <span style={{ color: '#4ade80' }}>{field === 'price' ? `$${Number(proposed).toFixed(2)}` : proposed || '—'}</span>
+                                                    <span style={{ color: '#4ade80' }}>{field === 'vendorPrice' || field === 'price' ? `$${Number(proposed).toFixed(2)}` : proposed || '—'}</span>
                                                 </div>
                                             );
                                         })}
@@ -682,8 +682,8 @@ export default function ItemDetailPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="ui-label">Price *</label>
-                                    <input className="ui-input" type="number" step="0.01" value={editForm.price || ''} onChange={e => setEditForm(prev => ({ ...prev, price: e.target.value }))} />
+                                    <label className="ui-label">Vendor Price *</label>
+                                    <input className="ui-input" type="number" step="0.01" value={editForm.vendorPrice || ''} onChange={e => setEditForm(prev => ({ ...prev, vendorPrice: e.target.value }))} />
                                 </div>
                                 <div className="idp-detail-item">
                                     <span className="idp-detail-label">Pricing Unit</span>
@@ -721,7 +721,7 @@ export default function ItemDetailPage() {
                                 </div>
                                 {editForm.taxable && (() => {
                                     const rate = vendor ? getTaxRate(vendor.country || 'Canada', vendor.province) : 0;
-                                    const price = Number(editForm.price || 0);
+                                    const price = Number(editForm.vendorPrice || 0);
                                     const taxAmt = price * rate / 100;
                                     const total = price + taxAmt;
                                     if (!vendor?.province) {
@@ -766,8 +766,8 @@ export default function ItemDetailPage() {
                                 <div className="idp-field__value">{item.category || '—'}</div>
                             </div>
                             <div className="idp-field">
-                                <div className="idp-field__label">Price</div>
-                                <div className="idp-field__value" style={{ color: '#4ade80', fontSize: 18, fontWeight: 700 }}>${Number(item.price || 0).toFixed(2)} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>/ {item.unit || '—'}</span></div>
+                                <div className="idp-field__label">Vendor Price</div>
+                                <div className="idp-field__value" style={{ color: '#4ade80', fontSize: 18, fontWeight: 700 }}>${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>/ {item.unit || '—'}</span></div>
                             </div>
                             <div className="idp-field">
                                 <div className="idp-field__label">Pricing Unit</div>
@@ -791,8 +791,8 @@ export default function ItemDetailPage() {
                             </div>
                             {item.taxable && vendor && (() => {
                                 const rate = getTaxRate(vendor.country || 'Canada', vendor.province);
-                                const taxAmt = (Number(item.price || 0) * rate / 100);
-                                const total = Number(item.price || 0) + taxAmt;
+                                const taxAmt = (Number(item.vendorPrice ?? item.price ?? 0) * rate / 100);
+                                const total = Number(item.vendorPrice ?? item.price ?? 0) + taxAmt;
                                 return rate > 0 ? (
                                     <div className="idp-field idp-field--full" style={{ background: 'rgba(245, 158, 11, .06)', borderColor: 'rgba(245, 158, 11, .15)' }}>
                                         <div className="idp-field__label">Tax Breakdown</div>
@@ -894,9 +894,9 @@ export default function ItemDetailPage() {
                                                         return (
                                                             <div key={field} style={{ marginBottom: 2 }}>
                                                                 <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{field}</span>:{' '}
-                                                                <span style={{ color: '#ff6b7a', textDecoration: 'line-through' }}>{field === 'price' ? `$${Number(orig).toFixed(2)}` : orig || '—'}</span>
+                                                                <span style={{ color: '#ff6b7a', textDecoration: 'line-through' }}>{field === 'vendorPrice' || field === 'price' ? `$${Number(orig).toFixed(2)}` : orig || '—'}</span>
                                                                 {' → '}
-                                                                <span style={{ color: '#4ade80' }}>{field === 'price' ? `$${Number(proposed).toFixed(2)}` : proposed || '—'}</span>
+                                                                <span style={{ color: '#4ade80' }}>{field === 'vendorPrice' || field === 'price' ? `$${Number(proposed).toFixed(2)}` : proposed || '—'}</span>
                                                             </div>
                                                         );
                                                     })}

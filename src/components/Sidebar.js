@@ -59,6 +59,12 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/settings/permissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">⚙️</span> Role Permissions
                             </NavLink>
+                            <NavLink to="/admin/commissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📈</span> Pricing & Tax
+                            </NavLink>
+                            <NavLink to="/admin/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🧾</span> Vendor Invoices
+                            </NavLink>
                         </div>
                     </>
                 ) : (
@@ -82,6 +88,9 @@ export default function Sidebar({ isOpen, onClose }) {
                             <div className="sidebar-section-title">Vendor</div>
                             <NavLink to="/profile" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🏢</span> Vendor Profile
+                            </NavLink>
+                            <NavLink to="/vendor/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">💳</span> My Invoices
                             </NavLink>
                             {isAdmin && (
                                 <>

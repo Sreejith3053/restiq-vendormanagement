@@ -160,7 +160,8 @@ export default function VendorDetailPage() {
                 unit: itemForm.unit,
                 packQuantity: Number(itemForm.packQuantity) || 1,
                 itemSize: itemForm.itemSize.trim(),
-                price: Number(itemForm.price) || 0,
+                vendorPrice: Number(itemForm.price) || 0,
+                commissionPercent: 0,
                 sku: itemForm.sku.trim(),
                 notes: itemForm.notes.trim(),
                 taxable: !!itemForm.taxable,
@@ -228,7 +229,7 @@ export default function VendorDetailPage() {
                         name: item.name || '',
                         category: item.category || '',
                         unit: item.unit || '',
-                        price: Number(item.price) || 0,
+                        vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
                         sku: item.sku || '',
                         notes: item.notes || '',
                     },
@@ -534,6 +535,7 @@ export default function VendorDetailPage() {
                                     <th>Category</th>
                                     <th>Unit</th>
                                     <th>Price</th>
+                                    <th>Tax</th>
                                     <th>SKU</th>
                                     <th>Status</th>
                                     {canEdit && <th>Actions</th>}
@@ -559,7 +561,10 @@ export default function VendorDetailPage() {
                                                 <td data-label="Unit" style={{ textTransform: 'capitalize' }}>
                                                     {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
                                                 </td>
-                                                <td data-label="Price">${Number(item.price || 0).toFixed(2)}</td>
+                                                <td data-label="Price">${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}</td>
+                                                <td data-label="Tax">
+                                                    {item.taxable ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>13%</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
+                                                </td>
                                                 <td data-label="SKU">{item.sku || '—'}</td>
                                                 <td data-label="Status"><span className={`badge ${statusColor}`}>{statusLabel}</span></td>
                                                 {canEdit && (
@@ -753,8 +758,8 @@ export default function VendorDetailPage() {
                                                         return (
                                                             <tr key={field}>
                                                                 <td style={{ fontWeight: 600, textTransform: 'capitalize' }}>{field}</td>
-                                                                <td style={{ color: '#ff6b7a', textDecoration: 'line-through' }}>{field === 'price' ? `$${Number(orig).toFixed(2)}` : orig || '—'}</td>
-                                                                <td style={{ color: '#4ade80' }}>{field === 'price' ? `$${Number(proposed).toFixed(2)}` : proposed || '—'}</td>
+                                                                <td style={{ color: '#ff6b7a', textDecoration: 'line-through' }}>{field === 'vendorPrice' || field === 'price' ? `$${Number(orig).toFixed(2)}` : orig || '—'}</td>
+                                                                <td style={{ color: '#4ade80' }}>{field === 'vendorPrice' || field === 'price' ? `$${Number(proposed).toFixed(2)}` : proposed || '—'}</td>
                                                             </tr>
                                                         );
                                                     })}
@@ -766,7 +771,7 @@ export default function VendorDetailPage() {
                                     {/* Delete summary */}
                                     {item.changeType === 'delete' && item.originalData && (
                                         <div style={{ marginTop: 10, fontSize: 13, color: '#ff6b7a', background: 'rgba(255,77,106,0.06)', padding: '8px 12px', borderRadius: 6 }}>
-                                            ⚠️ Delete <strong>{item.originalData.name}</strong> ({item.originalData.category}, ${Number(item.originalData.price).toFixed(2)}/{item.originalData.unit})
+                                            ⚠️ Delete <strong>{item.originalData.name}</strong> ({item.originalData.category}, ${Number(item.originalData.vendorPrice ?? item.originalData.price ?? 0).toFixed(2)}/{item.originalData.unit})
                                         </div>
                                     )}
 

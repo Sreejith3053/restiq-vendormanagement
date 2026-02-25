@@ -19,7 +19,47 @@ export default function Dashboard() {
     const [vendorItemsMap, setVendorItemsMap] = useState({});
 
     // Derived state for Dashboard widgets
-    const [weeklyRevenue, setWeeklyRevenue] = useState(0);
+    const kpiData = useMemo(() => {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+        const fourteenDaysAgo = new Date(now.getTime() - (14 * 24 * 60 * 60 * 1000));
+
+        let currentRev = 0;
+        let prevRev = 0;
+        let pending = 0;
+        let fulfilled = 0;
+
+        allOrders.forEach(order => {
+            const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+
+            // Revenue calc
+            if (order.status !== 'rejected') {
+                if (orderDate >= sevenDaysAgo) {
+                    currentRev += (order.total || 0);
+                } else if (orderDate >= fourteenDaysAgo && orderDate < sevenDaysAgo) {
+                    prevRev += (order.total || 0);
+                }
+            }
+
+            // Status counters
+            if (['pending_confirmation', 'pending_customer_approval', 'pending_fulfillment', 'delivery_in_route'].includes(order.status)) {
+                pending++;
+            }
+            if (order.status === 'fulfilled') {
+                fulfilled++;
+            }
+        });
+
+        let revChange = 0;
+        if (prevRev > 0) {
+            revChange = ((currentRev - prevRev) / prevRev) * 100;
+        } else if (currentRev > 0) {
+            revChange = 100;
+        }
+
+        return { currentRev, prevRev, revChange, pending, fulfilled };
+    }, [allOrders]);
 
     const derivedData = useMemo(() => {
         const now = new Date();
@@ -75,7 +115,7 @@ export default function Dashboard() {
 
         const topItems = Object.values(itemCounts)
             .sort((a, b) => b.quantity - a.quantity)
-            .slice(0, 8);
+            .slice(0, 5);
 
         return { recentOrders: recent, mostSellingItems: topItems };
 
@@ -147,17 +187,8 @@ export default function Dashboard() {
 
                         setAllOrders(fetchedOrders);
 
-                        // Calculate fixed weekly revenue (past 7 days regardless of filter)
-                        const now = new Date();
-                        const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-                        let revenue = 0;
-                        fetchedOrders.forEach(order => {
-                            const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-                            if (orderDate >= sevenDaysAgo && order.status !== 'rejected') {
-                                revenue += (order.total || 0);
-                            }
-                        });
-                        setWeeklyRevenue(revenue);
+                        // KPI data is now calculated entirely via useMemo (kpiData) based on fetchedOrders
+
 
                     } catch (err) {
                         console.error("Error fetching orders for dashboard:", err);
@@ -180,6 +211,23 @@ export default function Dashboard() {
         if (!timestamp) return 'N/A';
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
         return date.toLocaleDateString();
+    };
+
+    const timeAgo = (dateInput) => {
+        if (!dateInput) return '';
+        const date = dateInput.toDate ? dateInput.toDate() : new Date(dateInput);
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " years ago";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " months ago";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " days ago";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " hours ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " mins ago";
+        return "just now";
     };
 
     if (loading) {
@@ -223,21 +271,41 @@ export default function Dashboard() {
             </div>
 
             {/* Top Row: General Stats & Revenue */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-                <div className="ui-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: 'linear-gradient(135deg, rgba(0, 200, 255, 0.1) 0%, rgba(0, 200, 255, 0.02) 100%)', border: '1px solid rgba(0, 200, 255, 0.2)' }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Weekly Revenue</div>
-                    <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px', color: '#00c8ff' }}>{formatCurrency(weeklyRevenue)}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>Last 7 days (Excl. rejected)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+
+                {/* 1. Weekly Revenue */}
+                <div className="ui-card" style={{ display: 'flex', flexDirection: 'column', padding: '24px', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Weekly Revenue</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{formatCurrency(kpiData.currentRev)}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px' }}>
+                        {kpiData.revChange >= 0 ? (
+                            <span style={{ color: '#4ade80', display: 'flex', alignItems: 'center', fontWeight: 600 }}><span style={{ fontSize: '16px', marginRight: '4px' }}>↑</span> {Math.max(0.1, kpiData.revChange).toFixed(0)}%</span>
+                        ) : (
+                            <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', fontWeight: 600 }}><span style={{ fontSize: '16px', marginRight: '4px' }}>↓</span> {Math.abs(kpiData.revChange).toFixed(0)}%</span>
+                        )}
+                        <span style={{ color: 'var(--text-secondary)' }}>vs last week</span>
+                    </div>
                 </div>
 
-                <div className="ui-card" onClick={() => navigate('/items')} style={{ display: 'flex', flexDirection: 'column', padding: '20px', cursor: 'pointer', transition: 'all 0.2s ease', ':hover': { transform: 'translateY(-2px)' } }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Total Items</div>
-                    <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px', color: 'var(--text-primary)' }}>{stats.items}</div>
+                {/* 2. Pending Orders */}
+                <div className="ui-card" onClick={() => navigate('/orders')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Pending Orders</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{kpiData.pending}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Requires action</div>
                 </div>
 
-                <div className="ui-card" onClick={() => navigate('/users')} style={{ display: 'flex', flexDirection: 'column', padding: '20px', cursor: 'pointer', transition: 'all 0.2s ease' }}>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Team Members</div>
-                    <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px', color: 'var(--text-primary)' }}>{stats.users}</div>
+                {/* 3. Total Items */}
+                <div className="ui-card" onClick={() => navigate('/items')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Items</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{stats.items}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Live in catalog</div>
+                </div>
+
+                {/* 4. Fulfilled Orders */}
+                <div className="ui-card" onClick={() => navigate('/orders')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Fulfilled Orders</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{kpiData.fulfilled}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>All-time delivered</div>
                 </div>
             </div>
 
@@ -245,47 +313,55 @@ export default function Dashboard() {
                 {/* Left Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     {/* Most Selling Items */}
-                    <div className="ui-card">
-                        <div className="ui-card-title">Most Selling Items ({timeFilter})</div>
-                        <div className="orders-table-wrapper" style={{ margin: '0 -20px -20px -20px', borderRadius: '0 0 12px 12px' }}>
-                            <table className="orders-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr>
-                                        <th style={{ padding: '12px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>Item Name</th>
-                                        <th style={{ padding: '12px 20px', textAlign: 'left', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>Category</th>
-                                        <th style={{ padding: '12px 20px', textAlign: 'right', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>Price</th>
-                                        <th style={{ padding: '12px 20px', textAlign: 'right', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>Qty Sold</th>
-                                        <th style={{ padding: '12px 20px', textAlign: 'right', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {derivedData.mostSellingItems.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>No sales history found for {timeFilter.toLowerCase()}</td>
-                                        </tr>
-                                    ) : (
-                                        derivedData.mostSellingItems.map((item, idx) => (
-                                            <tr
-                                                key={idx}
-                                                onClick={item.id ? () => navigate(`/vendors/${vendorId}/items/${item.id}`) : undefined}
-                                                style={{
-                                                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                                    cursor: item.id ? 'pointer' : 'default',
-                                                    transition: 'background 0.2s ease',
-                                                }}
-                                                onMouseEnter={(e) => { if (item.id) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                                                onMouseLeave={(e) => { if (item.id) e.currentTarget.style.background = 'transparent' }}
-                                            >
-                                                <td style={{ padding: '16px 20px', fontWeight: 500, color: 'var(--text-primary)' }}>{item.name}</td>
-                                                <td style={{ padding: '16px 20px', color: 'var(--text-secondary)' }}><span className="badge blue" style={{ fontSize: '11px' }}>{item.category}</span></td>
-                                                <td style={{ padding: '16px 20px', textAlign: 'right', color: 'var(--text-primary)' }}>{formatCurrency(item.price)}</td>
-                                                <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: 600, color: '#4ade80' }}>{item.quantity}</td>
-                                                <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: 600, color: '#00c8ff' }}>{formatCurrency(item.price * item.quantity)}</td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
+                    <div className="ui-card" style={{ background: '#1E1E1E', border: '1px solid #2A2A2A', padding: '24px' }}>
+                        <div className="ui-card-title" style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>Most Selling Items ({timeFilter})</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {derivedData.mostSellingItems.length === 0 ? (
+                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>No sales history found for {timeFilter.toLowerCase()}</div>
+                            ) : (
+                                derivedData.mostSellingItems.map((item, idx) => {
+                                    const maxQty = derivedData.mostSellingItems[0].quantity || 1;
+                                    const percentage = (item.quantity / maxQty) * 100;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={item.id ? () => navigate(`/vendors/${vendorId}/items/${item.id}`) : undefined}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '14px 16px',
+                                                background: 'rgba(255,255,255,0.02)',
+                                                borderRadius: '8px',
+                                                cursor: item.id ? 'pointer' : 'default',
+                                                border: '1px solid rgba(255,255,255,0.05)',
+                                                transition: 'background 0.2s',
+                                            }}
+                                            onMouseEnter={(e) => { if (item.id) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                                            onMouseLeave={(e) => { if (item.id) e.currentTarget.style.background = 'rgba(255,255,255,0.02)' }}
+                                        >
+                                            <div style={{ flex: 1, paddingRight: '16px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                                    <span style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{item.name}</span>
+                                                    {item.category && item.category !== 'N/A' && (
+                                                        <span style={{ padding: '2px 8px', borderRadius: '12px', background: 'rgba(0, 200, 255, 0.1)', color: '#00c8ff', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}>{item.category}</span>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                    <span>{formatCurrency(item.price)} / unit</span>
+                                                    <span>Revenue: <strong style={{ color: 'var(--text-primary)' }}>{formatCurrency(item.quantity * item.price)}</strong></span>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', width: '100px', flexShrink: 0 }}>
+                                                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Qty: {item.quantity}</div>
+                                                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                                    <div style={{ width: `${percentage}%`, height: '100%', background: '#00c8ff', borderRadius: '3px' }} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 </div>
@@ -293,44 +369,73 @@ export default function Dashboard() {
                 {/* Right Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     {/* Recent Orders */}
-                    <div className="ui-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <div className="ui-card-title" style={{ margin: 0 }}>Recent Orders</div>
-                            <button className="ui-btn ghost" style={{ fontSize: '13px', padding: '4px 12px' }} onClick={() => navigate('/orders')}>View All</button>
+                    <div className="ui-card" style={{ background: '#1E1E1E', border: '1px solid #2A2A2A', padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div className="ui-card-title" style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Recent Orders</div>
+                            <button className="ui-btn ghost" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => navigate('/orders')}>View All</button>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                             {derivedData.recentOrders.length === 0 ? (
-                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>No orders found for {timeFilter.toLowerCase()}</div>
+                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>No orders found</div>
                             ) : (
-                                derivedData.recentOrders.map(order => (
-                                    <div
-                                        key={order.id}
-                                        onClick={() => navigate('/orders')}
-                                        style={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            padding: '16px',
-                                            background: 'rgba(255,255,255,0.02)',
-                                            border: '1px solid rgba(255,255,255,0.05)',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            transition: 'background 0.2s ease'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>{order.orderGroupId || order.id.slice(0, 8)}</span>
-                                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{formatDate(order.createdAt)}</span>
+                                derivedData.recentOrders.map(order => {
+                                    let badgeColor = 'rgba(255,255,255,0.1)';
+                                    let badgeText = '#fff';
+                                    const lowerStatus = (order.status || '').toLowerCase();
+
+                                    if (lowerStatus.includes('reject')) {
+                                        badgeColor = 'rgba(239, 68, 68, 0.15)';
+                                        badgeText = '#ef4444';
+                                    } else if (lowerStatus.includes('fulfill') || lowerStatus === 'delivered') {
+                                        badgeColor = 'rgba(74, 222, 128, 0.15)';
+                                        badgeText = '#4ade80';
+                                    } else if (lowerStatus.includes('pending') || lowerStatus.includes('review') || lowerStatus.includes('route')) {
+                                        badgeColor = 'rgba(250, 204, 21, 0.15)';
+                                        badgeText = '#facc15';
+                                    }
+
+                                    return (
+                                        <div
+                                            key={order.id}
+                                            onClick={() => navigate('/orders')}
+                                            style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                padding: '16px',
+                                                background: 'rgba(255,255,255,0.02)',
+                                                border: '1px solid rgba(255,255,255,0.05)',
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                transition: 'background 0.2s ease'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                                        >
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{order.orderGroupId || order.id.slice(0, 8)}</span>
+                                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>• {timeAgo(order.createdAt)}</span>
+                                                </div>
+                                                <span style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>{formatCurrency(order.total)}</span>
+                                            </div>
+                                            <div>
+                                                <span style={{
+                                                    display: 'inline-block',
+                                                    padding: '4px 12px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 700,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px',
+                                                    background: badgeColor,
+                                                    color: badgeText
+                                                }}>
+                                                    {order.status?.replace(/_/g, ' ') || 'unknown'}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <span className={`status-badge ${order.status?.toLowerCase()}`} style={{ fontSize: '11px', padding: '2px 8px' }}>
-                                                {order.status?.replace(/_/g, ' ') || 'unknown'}
-                                            </span>
-                                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{formatCurrency(order.total)}</span>
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>
@@ -362,10 +467,49 @@ export default function Dashboard() {
                                 </div>
                             </div>
                         ) : (
-                            <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>
-                                Vendor profile not found.
-                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No profile data available</div>
                         )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Smart Alerts */}
+            <div className="ui-card" style={{ marginTop: '32px', padding: '24px', background: 'rgba(255, 215, 0, 0.03)', border: '1px solid rgba(255, 215, 0, 0.15)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                    <span style={{ fontSize: '20px' }}>💡</span>
+                    <div className="ui-card-title" style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#facc15' }}>Smart Insights</div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+
+                    {kpiData.pending > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ padding: '8px', background: 'rgba(250, 204, 21, 0.15)', borderRadius: '50%', color: '#facc15', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                ⚠
+                            </div>
+                            <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                                You have <strong style={{ color: '#facc15' }}>{kpiData.pending} pending orders</strong> that require immediate fulfillment.
+                            </div>
+                        </div>
+                    )}
+
+                    {derivedData.mostSellingItems.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ padding: '8px', background: 'rgba(74, 222, 128, 0.15)', borderRadius: '50%', color: '#4ade80', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                📈
+                            </div>
+                            <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                                Top demand item this {timeFilter.split(' ')[1]?.toLowerCase() || 'period'}: <strong style={{ color: '#4ade80' }}>{derivedData.mostSellingItems[0].name}</strong>
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ padding: '8px', background: 'rgba(96, 165, 250, 0.15)', borderRadius: '50%', color: '#60a5fa', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            ℹ
+                        </div>
+                        <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
+                            Keep your catalog up to date to maximize visibility on the RestIQ marketplace.
+                        </div>
                     </div>
                 </div>
             </div>

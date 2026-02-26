@@ -148,15 +148,22 @@ export default function OrdersPage() {
         }
 
         // Calculate new totals (Snapshot logic)
-        const subtotalBeforeTax = editableItems.reduce((sum, item) => {
-            const lineSubtotal = round2(item.price * item.qty);
-            item.lineSubtotal = lineSubtotal; // Update line snapshot
-            return sum + lineSubtotal;
-        }, 0);
+        let subtotalBeforeTax = 0;
+        let totalTax = 0;
+        const taxRate = selectedOrder.taxRate || 0;
 
-        // For simplicity in this edit, we assume the same tax rate applies to the modified order
-        // In a full implementation, we'd preserve item.taxRate if it exists
-        const totalTax = round2(subtotalBeforeTax * (selectedOrder.taxRate || 0));
+        editableItems.forEach(item => {
+            const lineSubtotal = round2((item.vendorPrice ?? item.price ?? 0) * item.qty);
+            item.lineSubtotal = lineSubtotal; // Update line snapshot
+            subtotalBeforeTax += lineSubtotal;
+            // Only apply tax to taxable items
+            if (item.taxable) {
+                totalTax += round2(lineSubtotal * taxRate);
+            }
+        });
+
+        subtotalBeforeTax = round2(subtotalBeforeTax);
+        totalTax = round2(totalTax);
         const grandTotalAfterTax = round2(subtotalBeforeTax + totalTax);
 
         try {

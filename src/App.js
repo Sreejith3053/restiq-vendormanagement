@@ -18,6 +18,8 @@ import OrdersPage from './components/Orders/OrdersPage';
 import RolePermissionsPage from './components/Settings/RolePermissionsPage';
 import AdminPricingPage from './components/Admin/AdminPricingPage';
 import AdminInvoicesPage from './components/Admin/AdminInvoicesPage';
+import AdminRestaurantInvoicesPage from './components/Admin/AdminRestaurantInvoicesPage';
+import RestaurantInvoiceDetailPage from './components/Admin/RestaurantInvoiceDetailPage';
 import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
 import InvoiceDetailPage from './components/Vendors/InvoiceDetailPage';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
@@ -86,6 +88,8 @@ function App() {
                                 <Route path="/admin/commissions" element={<AdminPricingPage />} />
                                 <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
                                 <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
+                                <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />
+                                <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
                                 <Route path="/" element={<Navigate to="/vendors" />} />
                             </>
                         )}

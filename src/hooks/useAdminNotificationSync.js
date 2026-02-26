@@ -1,8 +1,12 @@
 import { useEffect, useRef, useContext } from 'react';
 import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, serverTimestamp, writeBatch, getDocs, where } from 'firebase/firestore';
+import { collection, query, orderBy, where, onSnapshot, doc, getDoc, setDoc, getDocs, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { getTaxRate } from '../constants/taxRates';
 import { UserContext } from '../contexts/UserContext';
+
+// Module-level dedup guards — survive React StrictMode double-mount
+const invoicedOrderIds = new Set();
+const invoicedRestaurantOrderIds = new Set();
 
 // Helper to create notifications idempotently
 const createNotificationIfNotExists = async (notificationId, notificationData) => {
@@ -48,11 +52,14 @@ const batchCreateNotifications = async (notifications) => {
 }
 
 // Helper to generate a single invoice idempotently when an order is fulfilled
-const generateInvoiceForOrder = async (order) => {
+// Uses orderId as the document ID so duplicate writes are impossible
+const generateInvoiceForOrder = async (order, invoiceBase) => {
+
     try {
-        const invQuery = query(collection(db, 'vendorInvoices'), where('orderId', '==', order.id));
-        const invSnap = await getDocs(invQuery);
-        if (!invSnap.empty) return;
+        // Use deterministic doc ID = orderId. If it already exists, skip.
+        const invRef = doc(db, 'vendorInvoices', order.id);
+        const existingSnap = await getDoc(invRef);
+        if (existingSnap.exists()) return;
 
         // 1. Check for Snapshotted Values
         const hasSnapshot = order.subtotalBeforeTax !== undefined;
@@ -67,19 +74,28 @@ const generateInvoiceForOrder = async (order) => {
         let formattedItems = [];
 
         if (hasSnapshot) {
-            // BEST PATH: Use locked-in snapshot values
+            // BEST PATH: Use snapshot subtotal but recalculate tax per-item
+            // to ensure only taxable items contribute to tax
+            const taxRate = getTaxRate(vData.country || 'Canada', vData.province);
             subtotalVendorAmount = order.subtotalBeforeTax;
-            totalTaxAmount = order.totalTax;
-            formattedItems = (order.items || []).map(item => ({
-                itemId: item.itemId,
-                itemName: item.itemName || item.name || 'Unknown Item',
-                unit: item.unit || 'unit',
-                qty: item.qty || 1,
-                vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
-                lineTotalVendor: item.lineSubtotal || Number((item.vendorPrice ?? item.price ?? 0) * (item.qty || 1)),
-                isTaxable: !!item.isTaxable,
-                lineTax: item.lineTax || 0
-            }));
+            formattedItems = (order.items || []).map(item => {
+                const price = Number(item.vendorPrice ?? item.price ?? 0);
+                const qty = item.qty || 1;
+                const lineTotal = item.lineSubtotal || Number((price * qty).toFixed(2));
+                const isTaxable = !!item.taxable;
+                const lineTax = isTaxable ? Number((lineTotal * (taxRate / 100)).toFixed(2)) : 0;
+                totalTaxAmount += lineTax;
+                return {
+                    itemId: item.itemId,
+                    itemName: item.itemName || item.name || 'Unknown Item',
+                    unit: item.unit || 'unit',
+                    qty,
+                    vendorPrice: price,
+                    lineTotalVendor: lineTotal,
+                    isTaxable,
+                    lineTax
+                };
+            });
         } else {
             // LEGACY PATH: Fallback to dynamic lookup for old orders
             const taxRate = getTaxRate(vData.country || 'Canada', vData.province);
@@ -120,11 +136,12 @@ const generateInvoiceForOrder = async (order) => {
         const netVendorPayable = Number((grossVendorAmount - commissionAmount).toFixed(2));
         const totalVendorAmount = Number((subtotalVendorAmount + totalTaxAmount).toFixed(2)); // Legacy full amount
         const now = new Date();
-        const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}`;
+        const invoiceNumber = `INV-V-${invoiceBase}`;
 
-        const invRef = doc(collection(db, 'vendorInvoices'));
+        // invRef already defined above with deterministic ID = order.id
         await setDoc(invRef, {
             orderId: order.id,
+            orderGroupId: order.orderGroupId || order.id.slice(-8).toUpperCase(),
             vendorId: order.vendorId,
             restaurantId: order.restaurantId || 'Unknown Restaurant',
             invoiceNumber,
@@ -145,8 +162,86 @@ const generateInvoiceForOrder = async (order) => {
             adminNotes: hasSnapshot ? 'Auto-generated (Snapshot)' : 'Auto-generated (Dynamic Fallback)'
         });
 
+        // Cleanup: delete any stale duplicate invoices for this order (from old code with random IDs)
+        try {
+            const dupeQuery = query(collection(db, 'vendorInvoices'), where('orderId', '==', order.id));
+            const dupeSnap = await getDocs(dupeQuery);
+            dupeSnap.docs.forEach(async (d) => {
+                if (d.id !== order.id) {
+                    await deleteDoc(doc(db, 'vendorInvoices', d.id));
+                }
+            });
+        } catch (cleanupErr) {
+            console.error('Cleanup stale vendor invoices failed:', cleanupErr);
+        }
+
     } catch (err) {
-        console.error('Failed to generate invoice automatically:', err);
+        console.error('Failed to generate vendor invoice automatically:', err);
+    }
+}
+
+// Helper to generate a restaurant invoice (full amount, no commission deduction)
+// Uses orderId as the document ID so duplicate writes are impossible
+const generateRestaurantInvoiceForOrder = async (order, invoiceBase) => {
+    try {
+        const invRef = doc(db, 'restaurantInvoices', order.id);
+        const existingSnap = await getDoc(invRef);
+        if (existingSnap.exists()) return;
+
+        // Fetch Vendor for tax rate
+        const vendorSnap = await getDoc(doc(db, 'vendors', order.vendorId));
+        const vData = vendorSnap.exists() ? vendorSnap.data() : {};
+        const taxRate = getTaxRate(vData.country || 'Canada', vData.province);
+
+        let subtotal = 0;
+        let totalTax = 0;
+        const formattedItems = (order.items || []).map(item => {
+            const price = Number(item.vendorPrice ?? item.price ?? 0);
+            const qty = item.qty || 1;
+            const lineTotal = item.lineSubtotal || Number((price * qty).toFixed(2));
+            const isTaxable = !!item.taxable;
+            const lineTax = isTaxable ? Number((lineTotal * (taxRate / 100)).toFixed(2)) : 0;
+            subtotal += lineTotal;
+            totalTax += lineTax;
+            return {
+                itemId: item.itemId,
+                itemName: item.itemName || item.name || 'Unknown Item',
+                unit: item.unit || 'unit',
+                qty,
+                price,
+                lineTotal,
+                isTaxable,
+                lineTax
+            };
+        });
+
+        subtotal = Number(subtotal.toFixed(2));
+        totalTax = Number(totalTax.toFixed(2));
+        const grandTotal = Number((subtotal + totalTax).toFixed(2));
+        const now = new Date();
+        const invoiceNumber = `INV-C-${invoiceBase}`;
+
+        await setDoc(invRef, {
+            orderId: order.id,
+            orderGroupId: order.orderGroupId || order.id.slice(-8).toUpperCase(),
+            vendorId: order.vendorId,
+            vendorName: order.vendorName || vData.name || 'Unknown Vendor',
+            restaurantId: order.restaurantId || 'Unknown Restaurant',
+            invoiceNumber,
+            invoiceDate: serverTimestamp(),
+            dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            paymentStatus: 'PENDING',
+            subtotal,
+            totalTax,
+            grandTotal,
+            items: formattedItems,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            adminNotes: 'Auto-generated for restaurant'
+        });
+
+    } catch (err) {
+        console.error('Failed to generate restaurant invoice automatically:', err);
     }
 }
 
@@ -217,9 +312,20 @@ export default function useAdminNotificationSync() {
                             data: { orderId: order.id, type, role: 'VENDOR', vendorId, title, message }
                         });
 
-                        // Automatically generate an invoice if status just changed to 'fulfilled'
+                        // Automatically generate invoices if status just changed to 'fulfilled'
                         if (order.status === 'fulfilled') {
-                            generateInvoiceForOrder(order);
+                            const now = new Date();
+                            const invoiceBase = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}`;
+                            // Vendor invoice
+                            if (!invoicedOrderIds.has(order.id)) {
+                                invoicedOrderIds.add(order.id);
+                                generateInvoiceForOrder(order, invoiceBase);
+                            }
+                            // Restaurant invoice
+                            if (!invoicedRestaurantOrderIds.has(order.id)) {
+                                invoicedRestaurantOrderIds.add(order.id);
+                                generateRestaurantInvoiceForOrder(order, invoiceBase);
+                            }
                         }
                     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
@@ -38,11 +38,12 @@ export default function OrdersPage() {
 
     // Filters
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const queryParams = new URLSearchParams(location.search);
     const initialSearch = queryParams.get('search') || '';
 
     const [searchTerm, setSearchTerm] = useState(initialSearch);
-    const [statusFilter, setStatusFilter] = useState('All');
+    const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All');
     const [restaurantFilter, setRestaurantFilter] = useState('All');
     const [vendorFilter, setVendorFilter] = useState('All');
 

@@ -3,7 +3,7 @@ import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
 import { collection, query, orderBy, onSnapshot, doc, writeBatch, getDocs, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getTaxRate } from '../../constants/taxRates';
 
 export default function AdminInvoicesPage() {
@@ -14,10 +14,11 @@ export default function AdminInvoicesPage() {
     const [scanning, setScanning] = useState(false);
     const [processingId, setProcessingId] = useState(null);
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
-    // Filters
+    // Filters — read initial status from URL ?status=PENDING
     const [vendorFilter, setVendorFilter] = useState('All');
-    const [statusFilter, setStatusFilter] = useState('All');
+    const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All');
     const [search, setSearch] = useState('');
 
     useEffect(() => {

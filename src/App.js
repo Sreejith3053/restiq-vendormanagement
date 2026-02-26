@@ -16,13 +16,13 @@ import ItemCatalogPage from './components/Vendors/ItemCatalogPage';
 import UserManagementPage from './components/Users/UserManagementPage';
 import OrdersPage from './components/Orders/OrdersPage';
 import RolePermissionsPage from './components/Settings/RolePermissionsPage';
-import AdminPricingPage from './components/Admin/AdminPricingPage';
 import AdminInvoicesPage from './components/Admin/AdminInvoicesPage';
 import AdminRestaurantInvoicesPage from './components/Admin/AdminRestaurantInvoicesPage';
 import RestaurantInvoiceDetailPage from './components/Admin/RestaurantInvoiceDetailPage';
 import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
 import InvoiceDetailPage from './components/Vendors/InvoiceDetailPage';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
+import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -78,6 +78,7 @@ function App() {
                         {/* ── Super Admin Routes ── */}
                         {isSuperAdmin && (
                             <>
+                                <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
                                 <Route path="/vendors" element={<VendorListPage />} />
                                 <Route path="/vendors/add" element={<AddVendorPage />} />
                                 <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />
@@ -85,12 +86,11 @@ function App() {
                                 <Route path="/users" element={<UserManagementPage />} />
                                 <Route path="/orders" element={<OrdersPage />} />
                                 <Route path="/settings/permissions" element={<RolePermissionsPage />} />
-                                <Route path="/admin/commissions" element={<AdminPricingPage />} />
                                 <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
                                 <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
                                 <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />
                                 <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
-                                <Route path="/" element={<Navigate to="/vendors" />} />
+                                <Route path="/" element={<Navigate to="/admin/dashboard" />} />
                             </>
                         )}
 

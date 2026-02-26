@@ -41,6 +41,9 @@ export default function Sidebar({ isOpen, onClose }) {
                     <>
                         <div className="sidebar-section">
                             <div className="sidebar-section-title">Platform</div>
+                            <NavLink to="/admin/dashboard" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📊</span> Dashboard
+                            </NavLink>
                             <NavLink to="/vendors" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🏢</span> All Vendors
                             </NavLink>
@@ -59,9 +62,7 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/settings/permissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">⚙️</span> Role Permissions
                             </NavLink>
-                            <NavLink to="/admin/commissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📈</span> Pricing & Tax
-                            </NavLink>
+
                             <NavLink to="/admin/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🧾</span> Vendor Invoices
                             </NavLink>

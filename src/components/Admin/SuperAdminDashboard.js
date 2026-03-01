@@ -45,6 +45,10 @@ export default function SuperAdminDashboard() {
     // Revenue modal
     const [showRevenueModal, setShowRevenueModal] = useState(false);
 
+    // Top Items History state
+    const [topItemsWithHistory, setTopItemsWithHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+
     // Raw Data
     const [orders, setOrders] = useState([]);
     const [invoices, setInvoices] = useState([]);
@@ -242,6 +246,39 @@ export default function SuperAdminDashboard() {
             })
             .sort((a, b) => b.total - a.total);
 
+        // Top Selling Items by Category
+        const categoryItemMap = {};
+        const fulfilledOrders = orders.filter(o => ['fulfilled', 'completed', 'accepted', 'delivery_in_route'].includes((o.status || '').toLowerCase()));
+
+        fulfilledOrders.forEach(o => {
+            (o.items || []).forEach(item => {
+                const cat = item.category || 'Uncategorized';
+                const itemIdKey = item.id || `${item.name}_${o.vendorId}`;
+
+                if (!categoryItemMap[cat]) categoryItemMap[cat] = {};
+                if (!categoryItemMap[cat][itemIdKey]) {
+                    categoryItemMap[cat][itemIdKey] = {
+                        id: item.id || '',
+                        name: item.name,
+                        category: cat,
+                        vendorId: o.vendorId,
+                        vendorName: o.vendorName,
+                        qtySold: 0,
+                        revenue: 0,
+                        currentPrice: Number(item.vendorPrice ?? item.price ?? 0),
+                    };
+                }
+                categoryItemMap[cat][itemIdKey].qtySold += Number(item.qty || 0);
+                categoryItemMap[cat][itemIdKey].revenue += Number(item.qty || 0) * Number(item.vendorPrice ?? item.price ?? 0);
+            });
+        });
+
+        const topItemsByCategory = Object.keys(categoryItemMap).map(cat => {
+            const items = Object.values(categoryItemMap[cat]);
+            items.sort((a, b) => b.qtySold - a.qtySold);
+            return items[0]; // Get the top #1 item for this category
+        }).filter(Boolean).sort((a, b) => b.qtySold - a.qtySold);
+
         return {
             totalRevenue,
             ordersToday,
@@ -254,9 +291,54 @@ export default function SuperAdminDashboard() {
             topVendors,
             chartData,
             commissionDetails,
-            revenueDetails
+            revenueDetails,
+            topItemsByCategory
         };
     }, [orders, invoices, vendors, timeframe]);
+
+
+    // Fetch Last Price Change for top items asynchronously
+    useEffect(() => {
+        const fetchHistory = async () => {
+            if (!stats.topItemsByCategory || stats.topItemsByCategory.length === 0) return;
+            setLoadingHistory(true);
+            try {
+                const itemsWithLog = await Promise.all(stats.topItemsByCategory.map(async (item) => {
+                    if (!item.id || !item.vendorId) return { ...item, lastPriceChange: '—' };
+                    // Fetch audit log for this item
+                    const snap = await getDocs(collection(db, `vendors/${item.vendorId}/items/${item.id}/auditLog`));
+                    const logs = snap.docs.map(d => d.data());
+                    logs.sort((a, b) => {
+                        const tA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || 0;
+                        const tB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || 0;
+                        return tB - tA;
+                    });
+
+                    // Find the most recent price change in the audit log
+                    const lastChangeLog = logs.find(log => {
+                        const oldP = log.originalData?.vendorPrice ?? log.originalData?.price;
+                        const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price;
+                        return oldP !== undefined && newP !== undefined && Number(oldP) !== Number(newP);
+                    });
+
+                    let lastPriceChange = '—';
+                    if (lastChangeLog && lastChangeLog.timestamp) {
+                        const d = lastChangeLog.timestamp.toDate ? lastChangeLog.timestamp.toDate() : new Date(lastChangeLog.timestamp.seconds * 1000);
+                        lastPriceChange = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    }
+                    return { ...item, lastPriceChange };
+                }));
+                setTopItemsWithHistory(itemsWithLog);
+            } catch (error) {
+                console.error("Failed to fetch price history for top items", error);
+                setTopItemsWithHistory(stats.topItemsByCategory);
+            } finally {
+                setLoadingHistory(false);
+            }
+        };
+        fetchHistory();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stats.topItemsByCategory]);
 
     if (!isSuperAdmin) {
         return <div style={{ padding: 40, textAlign: 'center' }}>Access Denied</div>;
@@ -346,23 +428,42 @@ export default function SuperAdminDashboard() {
                 </div>
 
                 <div className="ui-card" style={{ padding: 20 }}>
-                    <h3 style={{ marginBottom: 16 }}>Financial Snapshot</h3>
-
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>Total Vendor Gross</div>
-                        <div style={{ fontSize: 20, fontWeight: 600 }}>${stats.totalVendorGross.toFixed(2)}</div>
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>Total Commission</div>
-                        <div style={{ fontSize: 20, fontWeight: 600, color: '#4ade80' }}>${stats.totalCommission.toFixed(2)}</div>
-                    </div>
-
-                    <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
-
-                    <div>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>Net Marketplace Profit</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#4dabf7' }}>${stats.totalCommission.toFixed(2)}</div>
-                    </div>
+                    <h3 style={{ marginBottom: 16 }}>Most Selling Items by Category</h3>
+                    {loadingHistory ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Loading top items...</div>
+                    ) : topItemsWithHistory.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>No sales data available.</div>
+                    ) : (
+                        <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
+                            <table className="ui-table" style={{ margin: 0, fontSize: 13 }}>
+                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--card-bg, #1a1b1e)', zIndex: 1 }}>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Name</th>
+                                        <th style={{ textAlign: 'right' }}>Qty Sold</th>
+                                        <th style={{ textAlign: 'right' }}>Revenue</th>
+                                        <th style={{ textAlign: 'right' }}>Current Price</th>
+                                        <th style={{ textAlign: 'right' }}>Last Price Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {topItemsWithHistory.map((item, i) => (
+                                        <tr key={i}>
+                                            <td style={{ fontWeight: 600 }}>{item.category}</td>
+                                            <td>
+                                                <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>{item.name}</div>
+                                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>{item.vendorName}</div>
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#4dabf7' }}>{item.qtySold}</td>
+                                            <td style={{ textAlign: 'right', color: '#4ade80' }}>${item.revenue.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right' }}>${item.currentPrice.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right', color: 'var(--muted)', fontSize: 12 }}>{item.lastPriceChange}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
 

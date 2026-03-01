@@ -1,0 +1,19 @@
+.admin-items-page {
+    /* Base styles are inherited from App.css and index.css */
+}
+
+.admin-items-page .ui-table th {
+    font-weight: 600;
+    color: var(--text, #e9ecef);
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--border, #2c2e33);
+}
+
+.admin-items-page .ui-table td {
+    padding: 12px 16px;
+    vertical-align: middle;
+}
+
+.admin-items-page button:hover {
+    filter: brightness(1.1);
+}

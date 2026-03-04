@@ -14,6 +14,9 @@ export default function Dashboard() {
     // Filter state
     const [timeFilter, setTimeFilter] = useState('This Week');
 
+    // Revenue modal state
+    const [showRevenueModal, setShowRevenueModal] = useState(false);
+
     // Data state
     const [allOrders, setAllOrders] = useState([]);
     const [vendorItemsMap, setVendorItemsMap] = useState({});
@@ -30,13 +33,19 @@ export default function Dashboard() {
         let pending = 0;
         let fulfilled = 0;
 
+        const currentWeekOrders = [];
+
         allOrders.forEach(order => {
             const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
 
             // Revenue calc
-            if (order.status !== 'rejected') {
+            const lowerStatus = (order.status || '').toLowerCase();
+            const isCompleted = ['fulfilled', 'completed', 'delivered'].includes(lowerStatus);
+
+            if (isCompleted) {
                 if (orderDate >= sevenDaysAgo) {
                     currentRev += (order.total || 0);
+                    currentWeekOrders.push(order);
                 } else if (orderDate >= fourteenDaysAgo && orderDate < sevenDaysAgo) {
                     prevRev += (order.total || 0);
                 }
@@ -58,7 +67,15 @@ export default function Dashboard() {
             revChange = 100;
         }
 
-        return { currentRev, prevRev, revChange, pending, fulfilled };
+        const revenueDetails = currentWeekOrders.map(o => ({
+            id: o.id,
+            orderGroupId: o.orderGroupId || o.id.slice(-8).toUpperCase(),
+            status: o.status,
+            createdAt: o.createdAt,
+            total: Number(o.total || 0)
+        })).sort((a, b) => b.total - a.total);
+
+        return { currentRev, prevRev, revChange, pending, fulfilled, revenueDetails };
     }, [allOrders]);
 
     const derivedData = useMemo(() => {
@@ -274,7 +291,7 @@ export default function Dashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '32px' }}>
 
                 {/* 1. Weekly Revenue */}
-                <div className="ui-card" style={{ display: 'flex', flexDirection: 'column', padding: '24px', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                <div className="ui-card" onClick={() => setShowRevenueModal(true)} style={{ display: 'flex', flexDirection: 'column', padding: '24px', background: '#1E1E1E', cursor: 'pointer', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Weekly Revenue</div>
                     <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{formatCurrency(kpiData.currentRev)}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px' }}>
@@ -285,10 +302,13 @@ export default function Dashboard() {
                         )}
                         <span style={{ color: 'var(--text-secondary)' }}>vs last week</span>
                     </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', fontStyle: 'italic' }}>
+                        Click for breakdown
+                    </div>
                 </div>
 
                 {/* 2. Pending Orders */}
-                <div className="ui-card" onClick={() => navigate('/orders')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                <div className="ui-card" onClick={() => navigate('/orders?status=pending_confirmation,pending_customer_approval,pending_fulfillment,delivery_in_route')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Pending Orders</div>
                     <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{kpiData.pending}</div>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Requires action</div>
@@ -302,7 +322,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* 4. Fulfilled Orders */}
-                <div className="ui-card" onClick={() => navigate('/orders')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                <div className="ui-card" onClick={() => navigate('/orders?status=fulfilled')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Fulfilled Orders</div>
                     <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{kpiData.fulfilled}</div>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>All-time delivered</div>
@@ -513,6 +533,99 @@ export default function Dashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* ── Revenue Breakdown Modal ── */}
+            {showRevenueModal && (
+                <>
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 999,
+                        backdropFilter: 'blur(4px)'
+                    }} onClick={() => setShowRevenueModal(false)} />
+                    <div style={{
+                        position: 'fixed', top: '50%', left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        backgroundColor: 'var(--card-bg, #1a1b1e)',
+                        border: '1px solid var(--border, #2c2e33)',
+                        borderRadius: 12, padding: 0,
+                        width: '90%', maxWidth: 800, maxHeight: '80vh',
+                        overflow: 'hidden', zIndex: 1000,
+                        display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
+                    }}>
+                        <div style={{
+                            padding: '20px 24px', borderBottom: '1px solid var(--border, #2c2e33)',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                            <div>
+                                <h3 style={{ margin: 0, color: '#fff' }}>Revenue Breakdown</h3>
+                                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                                    This Week's fulfilled orders
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowRevenueModal(false)}
+                                style={{
+                                    background: 'none', border: 'none', color: 'var(--muted)',
+                                    fontSize: 22, cursor: 'pointer', padding: '4px 8px',
+                                    borderRadius: 6, lineHeight: 1
+                                }}
+                                onMouseEnter={e => e.target.style.color = '#fff'}
+                                onMouseLeave={e => e.target.style.color = 'var(--muted)'}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                            <table className="ui-table" style={{ margin: 0, width: '100%' }}>
+                                <thead style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                                    <tr>
+                                        <th style={{ padding: '12px 24px', textAlign: 'left', borderBottom: '1px solid #2c2e33', color: 'var(--text-secondary)' }}>Order ID</th>
+                                        <th style={{ padding: '12px 24px', textAlign: 'left', borderBottom: '1px solid #2c2e33', color: 'var(--text-secondary)' }}>Date</th>
+                                        <th style={{ padding: '12px 24px', textAlign: 'center', borderBottom: '1px solid #2c2e33', color: 'var(--text-secondary)' }}>Status</th>
+                                        <th style={{ padding: '12px 24px', textAlign: 'right', borderBottom: '1px solid #2c2e33', color: 'var(--text-secondary)' }}>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(kpiData?.revenueDetails || []).length === 0 ? (
+                                        <tr>
+                                            <td colSpan="4" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
+                                                No revenue data for this timeframe.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        <>
+                                            {(kpiData?.revenueDetails || []).map((row, i) => (
+                                                <tr key={row.id || i} className="is-row" style={{ cursor: 'pointer', borderBottom: '1px solid #2c2e33', transition: 'background 0.2s' }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                    onClick={() => { setShowRevenueModal(false); navigate(`/orders?orderId=${row.id}`); }}>
+                                                    <td style={{ padding: '16px 24px', fontWeight: 600, fontSize: 13, color: '#fff' }}>{row.orderGroupId}</td>
+                                                    <td style={{ padding: '16px 24px', fontSize: 13, color: 'var(--text-secondary)' }}>{formatDate(row.createdAt)}</td>
+                                                    <td style={{ padding: '16px 24px', textAlign: 'center' }}>
+                                                        <span className="badge green" style={{ display: 'inline-block' }}>
+                                                            {row.status?.replace(/_/g, ' ') || 'unknown'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 600, color: '#4dabf7' }}>
+                                                        {formatCurrency(row.total)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            <tr style={{ backgroundColor: 'rgba(255,255,255,0.01)' }}>
+                                                <td colSpan="3" style={{ padding: '16px 24px', fontWeight: 700, color: '#fff' }}>Total ({(kpiData?.revenueDetails || []).length} orders)</td>
+                                                <td style={{ padding: '16px 24px', textAlign: 'right', fontWeight: 700, color: '#4dabf7', fontSize: 16 }}>
+                                                    {formatCurrency(kpiData?.currentRev || 0)}
+                                                </td>
+                                            </tr>
+                                        </>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

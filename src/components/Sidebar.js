@@ -56,6 +56,9 @@ export default function Sidebar({ isOpen, onClose }) {
                         </div>
                         <div className="sidebar-section">
                             <div className="sidebar-section-title">Administration</div>
+                            <NavLink to="/admin/items" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📋</span> All Items
+                            </NavLink>
                             <NavLink to="/users" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">👥</span> User Management
                             </NavLink>

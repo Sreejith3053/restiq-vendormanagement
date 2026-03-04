@@ -404,7 +404,17 @@ export default function OrdersPage() {
         const searchLower = searchTerm.toLowerCase();
         const orderIdMatch = (order.orderGroupId || '').toLowerCase().includes(searchLower) ||
             (order.id || '').toLowerCase().includes(searchLower);
-        const statusMatch = statusFilter === 'All' || order.status === statusFilter;
+
+        let statusMatch = false;
+        if (statusFilter === 'All') {
+            statusMatch = true;
+        } else if (statusFilter.includes(',')) {
+            const allowedStatuses = statusFilter.split(',').map(s => s.trim());
+            statusMatch = allowedStatuses.includes(order.status);
+        } else {
+            statusMatch = order.status === statusFilter;
+        }
+
         const restMatch = restaurantFilter === 'All' || order.restaurantId === restaurantFilter;
         const vendorMatch = vendorFilter === 'All' || order.vendorName === vendorFilter;
 
@@ -449,6 +459,7 @@ export default function OrdersPage() {
                     style={{ maxWidth: 200 }}
                 >
                     <option value="All">All Statuses</option>
+                    {statusFilter.includes(',') && <option value={statusFilter}>Custom Filter</option>}
                     <option value="pending_confirmation">Pending Confirmation</option>
                     <option value="pending_customer_approval">Pending Customer Approval</option>
                     <option value="pending_fulfillment">Pending Fulfillment</option>

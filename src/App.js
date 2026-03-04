@@ -23,6 +23,7 @@ import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
 import InvoiceDetailPage from './components/Vendors/InvoiceDetailPage';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
+import AdminItemsPage from './components/Admin/AdminItemsPage';
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -86,6 +87,7 @@ function App() {
                                 <Route path="/users" element={<UserManagementPage />} />
                                 <Route path="/orders" element={<OrdersPage />} />
                                 <Route path="/settings/permissions" element={<RolePermissionsPage />} />
+                                <Route path="/admin/items" element={<AdminItemsPage />} />
                                 <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
                                 <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
                                 <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />

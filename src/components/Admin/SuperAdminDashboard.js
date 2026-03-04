@@ -45,9 +45,14 @@ export default function SuperAdminDashboard() {
     // Revenue modal
     const [showRevenueModal, setShowRevenueModal] = useState(false);
 
+    // Top Items History state
+    const [topItemsWithHistory, setTopItemsWithHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+
     // Raw Data
     const [orders, setOrders] = useState([]);
     const [invoices, setInvoices] = useState([]);
+    const [restaurantInvoices, setRestaurantInvoices] = useState([]);
     const [vendors, setVendors] = useState([]);
 
     // ─── Data Fetching ───
@@ -75,12 +80,17 @@ export default function SuperAdminDashboard() {
                 const invSnap = await getDocs(collection(db, 'vendorInvoices'));
                 const allInvoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // 3. Fetch Vendors for names
+                // 3. Fetch Restaurant Invoices
+                const rInvSnap = await getDocs(collection(db, 'restaurantInvoices'));
+                const allRestaurantInvoices = rInvSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                // 4. Fetch Vendors for names
                 const vSnap = await getDocs(collection(db, 'vendors'));
                 const allVendors = vSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 setOrders(allOrders);
                 setInvoices(allInvoices);
+                setRestaurantInvoices(allRestaurantInvoices);
                 setVendors(allVendors);
 
             } catch (err) {
@@ -111,6 +121,7 @@ export default function SuperAdminDashboard() {
         // Filter valid orders and invoices
         const tfOrders = orders.filter(o => isWithinTimeframe(o.createdAt || o.orderDate));
         const tfInvoices = invoices.filter(i => isWithinTimeframe(i.createdAt || i.invoiceDate));
+        const tfRestaurantInvoices = restaurantInvoices.filter(i => isWithinTimeframe(i.createdAt || i.invoiceDate));
 
         // Metics
         let totalRevenue = 0; // grandTotalAfterTax of completed/fulfilled orders
@@ -122,16 +133,20 @@ export default function SuperAdminDashboard() {
 
         tfOrders.forEach(o => {
             const status = (o.status || '').toLowerCase();
+            const isCompleted = ['fulfilled', 'completed', 'delivered'].includes(status);
+
             // Count today's metrics
             const d = (o.createdAt || o.orderDate)?.toDate ? (o.createdAt || o.orderDate).toDate() : new Date(o.createdAt || o.orderDate);
             if (d && d >= todayStart) {
-                ordersToday++;
+                if (isCompleted) {
+                    ordersToday++;
+                }
                 if (['cancelled', 'rejected'].includes(status)) cancelledToday++;
             }
             if (['new', 'pending', 'pending_confirmation', 'pending_customer_approval', 'pending_fulfillment'].includes(status)) newOrdersCount++;
 
             // Revenue
-            if (['fulfilled', 'completed', 'accepted', 'delivery_in_route'].includes(status)) {
+            if (isCompleted) {
                 totalRevenue += Number(o.grandTotalAfterTax || o.total || 0);
             }
         });
@@ -145,33 +160,78 @@ export default function SuperAdminDashboard() {
         tfInvoices.forEach(inv => {
             totalCommission += Number(inv.commissionAmount || 0);
             totalVendorGross += Number(inv.grossVendorAmount || inv.subtotalVendorAmount || 0);
+        });
 
+        // Calculate pending payouts globally (all time)
+        invoices.forEach(inv => {
             if (inv.paymentStatus === 'PENDING') {
-                totalPendingPayout += Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                if (inv.commissionModel === 'VENDOR_FLAT_PERCENT') {
+                    totalPendingPayout += Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                } else {
+                    totalPendingPayout += Number(inv.totalVendorAmount || 0);
+                }
                 pendingInvoicesCount++;
+            }
+        });
+
+        // Restaurant Invoices Metrics
+        let totalRestaurantPending = 0;
+        let restaurantPendingCount = 0;
+        let totalRestaurantPaid = 0;
+        let restaurantPaidCount = 0;
+
+        // Global pending for Restaurants
+        restaurantInvoices.forEach(inv => {
+            if (inv.paymentStatus === 'PENDING') {
+                totalRestaurantPending += Number(inv.grandTotal || 0);
+                restaurantPendingCount++;
+            }
+        });
+
+        // Timeframe paid for Restaurants
+        tfRestaurantInvoices.forEach(inv => {
+            if (inv.paymentStatus === 'PAID') {
+                totalRestaurantPaid += Number(inv.grandTotal || 0);
+                restaurantPaidCount++;
             }
         });
 
         // Vendor Performance Data (Top 5)
         const vendorAgg = {};
         tfOrders.forEach(o => {
+            const status = (o.status || '').toLowerCase();
             if (!vendorAgg[o.vendorId]) {
                 vendorAgg[o.vendorId] = { id: o.vendorId, orders: 0, revenue: 0, cancelled: 0 };
             }
             vendorAgg[o.vendorId].orders++;
-            if (o.status === 'CANCELLED') vendorAgg[o.vendorId].cancelled++;
-            if (o.status === 'FULFILLED' || o.status === 'ACCEPTED') {
+            if (status === 'cancelled' || status === 'rejected') vendorAgg[o.vendorId].cancelled++;
+            if (['fulfilled', 'completed', 'delivered'].includes(status)) {
                 vendorAgg[o.vendorId].revenue += Number(o.grandTotalAfterTax || o.total || 0);
             }
         });
 
         tfInvoices.forEach(inv => {
             if (!vendorAgg[inv.vendorId]) {
-                vendorAgg[inv.vendorId] = { id: inv.vendorId, orders: 0, revenue: 0, cancelled: 0 };
+                vendorAgg[inv.vendorId] = { id: inv.vendorId, orders: 0, revenue: 0, cancelled: 0, pending: 0 };
             }
             vendorAgg[inv.vendorId].commission = (vendorAgg[inv.vendorId].commission || 0) + Number(inv.commissionAmount || 0);
+        });
+
+        // Global pending for Top Vendors (Outstanding liabilities never disappear)
+        invoices.forEach(inv => {
             if (inv.paymentStatus === 'PENDING') {
-                vendorAgg[inv.vendorId].pending = (vendorAgg[inv.vendorId].pending || 0) + Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                // Ensure we track this even if they had no orders this timeframe
+                if (!vendorAgg[inv.vendorId]) {
+                    vendorAgg[inv.vendorId] = { id: inv.vendorId, orders: 0, revenue: 0, cancelled: 0, commission: 0, pending: 0 };
+                }
+
+                let amount = 0;
+                if (inv.commissionModel === 'VENDOR_FLAT_PERCENT') {
+                    amount = Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                } else {
+                    amount = Number(inv.totalVendorAmount || 0);
+                }
+                vendorAgg[inv.vendorId].pending = (vendorAgg[inv.vendorId].pending || 0) + amount;
             }
         });
 
@@ -189,7 +249,8 @@ export default function SuperAdminDashboard() {
         const chartDataMap = {};
 
         tfOrders.forEach(o => {
-            if (o.status === 'FULFILLED' || o.status === 'ACCEPTED') {
+            const status = (o.status || '').toLowerCase();
+            if (['fulfilled', 'completed', 'delivered'].includes(status)) {
                 const dt = (o.createdAt || o.orderDate)?.toDate ? (o.createdAt || o.orderDate).toDate() : new Date(o.createdAt || o.orderDate);
                 if (!dt) return;
                 const dStr = dt.toISOString().split('T')[0];
@@ -242,6 +303,39 @@ export default function SuperAdminDashboard() {
             })
             .sort((a, b) => b.total - a.total);
 
+        // Top Selling Items by Category
+        const categoryItemMap = {};
+        const fulfilledOrders = orders.filter(o => ['fulfilled', 'completed', 'accepted', 'delivery_in_route'].includes((o.status || '').toLowerCase()));
+
+        fulfilledOrders.forEach(o => {
+            (o.items || []).forEach(item => {
+                const cat = item.category || 'Uncategorized';
+                const itemIdKey = item.id || `${item.name}_${o.vendorId}`;
+
+                if (!categoryItemMap[cat]) categoryItemMap[cat] = {};
+                if (!categoryItemMap[cat][itemIdKey]) {
+                    categoryItemMap[cat][itemIdKey] = {
+                        id: item.id || '',
+                        name: item.name,
+                        category: cat,
+                        vendorId: o.vendorId,
+                        vendorName: o.vendorName,
+                        qtySold: 0,
+                        revenue: 0,
+                        currentPrice: Number(item.vendorPrice ?? item.price ?? 0),
+                    };
+                }
+                categoryItemMap[cat][itemIdKey].qtySold += Number(item.qty || 0);
+                categoryItemMap[cat][itemIdKey].revenue += Number(item.qty || 0) * Number(item.vendorPrice ?? item.price ?? 0);
+            });
+        });
+
+        const topItemsByCategory = Object.keys(categoryItemMap).map(cat => {
+            const items = Object.values(categoryItemMap[cat]);
+            items.sort((a, b) => b.qtySold - a.qtySold);
+            return items[0]; // Get the top #1 item for this category
+        }).filter(Boolean).sort((a, b) => b.qtySold - a.qtySold);
+
         return {
             totalRevenue,
             ordersToday,
@@ -251,12 +345,61 @@ export default function SuperAdminDashboard() {
             totalCommission,
             pendingInvoicesCount,
             totalVendorGross,
+            totalRestaurantPending,
+            restaurantPendingCount,
+            totalRestaurantPaid,
+            restaurantPaidCount,
             topVendors,
             chartData,
             commissionDetails,
-            revenueDetails
+            revenueDetails,
+            topItemsByCategory
         };
     }, [orders, invoices, vendors, timeframe]);
+
+
+    // Fetch Last Price Change for top items asynchronously
+    useEffect(() => {
+        const fetchHistory = async () => {
+            if (!stats.topItemsByCategory || stats.topItemsByCategory.length === 0) return;
+            setLoadingHistory(true);
+            try {
+                const itemsWithLog = await Promise.all(stats.topItemsByCategory.map(async (item) => {
+                    if (!item.id || !item.vendorId) return { ...item, lastPriceChange: '—' };
+                    // Fetch audit log for this item
+                    const snap = await getDocs(collection(db, `vendors/${item.vendorId}/items/${item.id}/auditLog`));
+                    const logs = snap.docs.map(d => d.data());
+                    logs.sort((a, b) => {
+                        const tA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || 0;
+                        const tB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || 0;
+                        return tB - tA;
+                    });
+
+                    // Find the most recent price change in the audit log
+                    const lastChangeLog = logs.find(log => {
+                        const oldP = log.originalData?.vendorPrice ?? log.originalData?.price;
+                        const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price;
+                        return oldP !== undefined && newP !== undefined && Number(oldP) !== Number(newP);
+                    });
+
+                    let lastPriceChange = '—';
+                    if (lastChangeLog && lastChangeLog.timestamp) {
+                        const d = lastChangeLog.timestamp.toDate ? lastChangeLog.timestamp.toDate() : new Date(lastChangeLog.timestamp.seconds * 1000);
+                        lastPriceChange = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    }
+                    return { ...item, lastPriceChange };
+                }));
+                setTopItemsWithHistory(itemsWithLog);
+            } catch (error) {
+                console.error("Failed to fetch price history for top items", error);
+                setTopItemsWithHistory(stats.topItemsByCategory);
+            } finally {
+                setLoadingHistory(false);
+            }
+        };
+        fetchHistory();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stats.topItemsByCategory]);
 
     if (!isSuperAdmin) {
         return <div style={{ padding: 40, textAlign: 'center' }}>Access Denied</div>;
@@ -302,6 +445,16 @@ export default function SuperAdminDashboard() {
                     <div className="stat-value" style={{ color: '#f59e0b' }}>${stats.totalPendingPayout.toFixed(2)}</div>
                     <div className="stat-context">{stats.pendingInvoicesCount} invoices waiting</div>
                 </div>
+                <div className="ui-card stat-card" style={{ padding: 20, cursor: 'pointer', borderLeft: '3px solid #f06595' }} onClick={() => navigate('/admin/restaurant-invoices?status=PENDING')}>
+                    <div className="stat-label">Restaurant Receivables</div>
+                    <div className="stat-value" style={{ color: '#f06595' }}>${stats.totalRestaurantPending.toFixed(2)}</div>
+                    <div className="stat-context">{stats.restaurantPendingCount} unpaid invoices (All Time)</div>
+                </div>
+                <div className="ui-card stat-card" style={{ padding: 20, cursor: 'pointer', borderLeft: '3px solid #845ef7' }} onClick={() => navigate('/admin/restaurant-invoices?status=PAID')}>
+                    <div className="stat-label">Restaurant Paid</div>
+                    <div className="stat-value" style={{ color: '#845ef7' }}>${stats.totalRestaurantPaid.toFixed(2)}</div>
+                    <div className="stat-context">{stats.restaurantPaidCount} paid in timeframe</div>
+                </div>
                 <div className="ui-card stat-card" style={{ padding: 20, cursor: 'pointer' }} onClick={() => setShowCommissionModal(true)}>
                     <div className="stat-label">Total Commission Earned</div>
                     <div className="stat-value" style={{ color: '#4ade80' }}>${stats.totalCommission.toFixed(2)}</div>
@@ -346,23 +499,42 @@ export default function SuperAdminDashboard() {
                 </div>
 
                 <div className="ui-card" style={{ padding: 20 }}>
-                    <h3 style={{ marginBottom: 16 }}>Financial Snapshot</h3>
-
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>Total Vendor Gross</div>
-                        <div style={{ fontSize: 20, fontWeight: 600 }}>${stats.totalVendorGross.toFixed(2)}</div>
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>Total Commission</div>
-                        <div style={{ fontSize: 20, fontWeight: 600, color: '#4ade80' }}>${stats.totalCommission.toFixed(2)}</div>
-                    </div>
-
-                    <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
-
-                    <div>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>Net Marketplace Profit</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: '#4dabf7' }}>${stats.totalCommission.toFixed(2)}</div>
-                    </div>
+                    <h3 style={{ marginBottom: 16 }}>Most Selling Items by Category</h3>
+                    {loadingHistory ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Loading top items...</div>
+                    ) : topItemsWithHistory.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>No sales data available.</div>
+                    ) : (
+                        <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
+                            <table className="ui-table" style={{ margin: 0, fontSize: 13 }}>
+                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--card-bg, #1a1b1e)', zIndex: 1 }}>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Name</th>
+                                        <th style={{ textAlign: 'right' }}>Qty Sold</th>
+                                        <th style={{ textAlign: 'right' }}>Revenue</th>
+                                        <th style={{ textAlign: 'right' }}>Current Price</th>
+                                        <th style={{ textAlign: 'right' }}>Last Price Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {topItemsWithHistory.map((item, i) => (
+                                        <tr key={i}>
+                                            <td style={{ fontWeight: 600 }}>{item.category}</td>
+                                            <td>
+                                                <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>{item.name}</div>
+                                                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>{item.vendorName}</div>
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#4dabf7' }}>{item.qtySold}</td>
+                                            <td style={{ textAlign: 'right', color: '#4ade80' }}>${item.revenue.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right' }}>${item.currentPrice.toFixed(2)}</td>
+                                            <td style={{ textAlign: 'right', color: 'var(--muted)', fontSize: 12 }}>{item.lastPriceChange}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
 

@@ -298,9 +298,16 @@ export default function useAdminNotificationSync() {
                 if (change.type === 'modified' && oldOrder && !isInitialLoad.current) {
                     // Detect Status Change
                     if (oldOrder.status !== order.status) {
-                        const isCancel = order.status === 'cancelled' || order.status === 'rejected';
-                        const type = isCancel ? 'ORDER_CANCELLED' : 'STATUS_CHANGED';
-                        const title = isCancel ? `Order Cancelled` : `Order Status Updated`;
+                        const isCancel = order.status === 'cancelled' || order.status === 'rejected' || order.status === 'cancelled_by_vendor' || order.status === 'cancelled_by_customer';
+                        const isAwaitingConfirm = order.status === 'delivered_awaiting_confirmation';
+                        const isInReview = order.status === 'in_review';
+
+                        let type = 'STATUS_CHANGED';
+                        let title = 'Order Status Updated';
+                        if (isCancel) { type = 'ORDER_CANCELLED'; title = 'Order Cancelled'; }
+                        if (isAwaitingConfirm) { type = 'DELIVERY_CONFIRMED'; title = 'Delivery Awaiting Confirmation'; }
+                        if (isInReview) { type = 'ISSUE_RAISED'; title = 'Issue Reported on Order'; }
+
                         const message = `Order ${order.id.slice(-8).toUpperCase()} is now ${order.status.replace(/_/g, ' ')}.`;
 
                         newNotifications.push({

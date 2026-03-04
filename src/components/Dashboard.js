@@ -413,7 +413,7 @@ export default function Dashboard() {
                                         >
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{order.orderGroupId || order.id.slice(0, 8)}</span>
+                                                    <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{order.orderGroupId || order.id.slice(-8).toUpperCase()}</span>
                                                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>• {timeAgo(order.createdAt)}</span>
                                                 </div>
                                                 <span style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>{formatCurrency(order.total)}</span>

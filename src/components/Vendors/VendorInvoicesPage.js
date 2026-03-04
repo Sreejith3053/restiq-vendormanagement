@@ -77,7 +77,7 @@ export default function VendorInvoicesPage() {
                                 return (
                                     <tr key={inv.id} className="is-row" onClick={() => navigate(`/vendor/invoices/${inv.id}`)} style={{ cursor: 'pointer' }}>
                                         <td style={{ fontWeight: 600 }}>{inv.invoiceNumber}</td>
-                                        <td style={{ fontSize: 13, color: 'var(--muted)' }}>{inv.orderId.slice(-8).toUpperCase()}</td>
+                                        <td style={{ fontSize: 13, color: 'var(--muted)' }}>{inv.orderGroupId || inv.orderId.slice(-8).toUpperCase()}</td>
                                         <td>{formatDate(inv.invoiceDate)}</td>
                                         <td style={{ fontWeight: 600, color: '#4ade80' }}>
                                             ${inv.commissionModel === 'VENDOR_FLAT_PERCENT'

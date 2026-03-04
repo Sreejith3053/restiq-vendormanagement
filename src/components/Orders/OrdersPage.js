@@ -23,6 +23,15 @@ export default function OrdersPage() {
     const [pickupDate, setPickupDate] = useState('');
     const [pickupTime, setPickupTime] = useState('');
 
+    // Cancel/Reject modal state — cancelModalAction is 'reject' | 'cancel' | null
+    const [cancelModalAction, setCancelModalAction] = useState(null);
+    const [cancelReason, setCancelReason] = useState('');
+
+    // Resolution state (superadmin in_review)
+    const [resolutionItems, setResolutionItems] = useState([]);
+    const [resolutionAction, setResolutionAction] = useState('');
+    const [resolutionNotes, setResolutionNotes] = useState('');
+
     const canManageOrders = isSuperAdmin || isAdmin || (typeof permissions === 'object' && permissions?.canManageOrders);
 
     useEffect(() => {
@@ -30,8 +39,14 @@ export default function OrdersPage() {
             setShowAcceptForm(false);
             setPickupDate('');
             setPickupTime('');
+            setCancelModalAction(null);
+            setCancelReason('');
+            setResolutionAction('');
+            setResolutionNotes('');
             // Initialize editable items
-            setEditableItems(JSON.parse(JSON.stringify(selectedOrder.items || [])));
+            const clonedItems = JSON.parse(JSON.stringify(selectedOrder.items || []));
+            setEditableItems(clonedItems);
+            setResolutionItems(JSON.parse(JSON.stringify(clonedItems)));
             setItemReasons({});
         }
     }, [selectedOrder?.id]);
@@ -204,6 +219,164 @@ export default function OrdersPage() {
         }
     };
 
+    const handleCancelOrder = async () => {
+        if (!cancelReason.trim()) {
+            toast.warn(`Please provide a reason for ${cancelModalAction === 'reject' ? 'rejection' : 'cancellation'}.`);
+            return;
+        }
+
+        const actionLabel = cancelModalAction === 'reject' ? 'Order rejected by vendor' : 'Order cancelled by vendor';
+
+        try {
+            const orderRef = doc(db, 'marketplaceOrders', selectedOrder.id);
+            const auditEntry = {
+                action: actionLabel,
+                reason: cancelReason.trim(),
+                timestamp: new Date().toISOString(),
+                user: displayName || 'Vendor'
+            };
+            const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
+
+            const updatePayload = {
+                status: 'cancelled_by_vendor',
+                auditLog: updatedAuditLog,
+                cancelledAt: new Date().toISOString(),
+                cancelReason: cancelReason.trim()
+            };
+
+            await updateDoc(orderRef, updatePayload);
+
+            toast.success('Order has been cancelled.');
+            setSelectedOrder(prev => prev ? { ...prev, status: 'cancelled_by_vendor', auditLog: updatedAuditLog } : null);
+            setCancelModalAction(null);
+            setCancelReason('');
+        } catch (error) {
+            console.error('Error cancelling order:', error);
+            toast.error('Failed to cancel order');
+        }
+    };
+
+    // Mark as Delivered → delivered_awaiting_confirmation
+    const handleMarkDelivered = async () => {
+        try {
+            const orderRef = doc(db, 'marketplaceOrders', selectedOrder.id);
+            const now = new Date();
+            const reviewWindowEndsAt = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+            const auditEntry = {
+                action: 'Order marked as delivered — awaiting restaurant confirmation',
+                reason: 'Delivery completed',
+                timestamp: now.toISOString(),
+                user: displayName || 'Vendor'
+            };
+            const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
+
+            await updateDoc(orderRef, {
+                status: 'delivered_awaiting_confirmation',
+                deliveredAt: now.toISOString(),
+                reviewWindowEndsAt,
+                auditLog: updatedAuditLog
+            });
+
+            toast.success('Order marked as delivered. Awaiting restaurant confirmation.');
+            setSelectedOrder(prev => prev ? {
+                ...prev,
+                status: 'delivered_awaiting_confirmation',
+                deliveredAt: now.toISOString(),
+                reviewWindowEndsAt,
+                auditLog: updatedAuditLog
+            } : null);
+        } catch (error) {
+            console.error('Error marking delivered:', error);
+            toast.error('Failed to mark as delivered');
+        }
+    };
+
+    // SuperAdmin: Resolve issue → fulfilled
+    const handleResolveIssue = async () => {
+        if (!resolutionAction) {
+            toast.warn('Please select a resolution action.');
+            return;
+        }
+
+        try {
+            const orderRef = doc(db, 'marketplaceOrders', selectedOrder.id);
+
+            // Recalculate totals from resolution items
+            let subtotalBeforeTax = 0;
+            let totalTax = 0;
+            const taxRate = selectedOrder.taxRate || 0;
+            resolutionItems.forEach(item => {
+                const lineSubtotal = round2((item.vendorPrice ?? item.price ?? 0) * item.qty);
+                item.lineSubtotal = lineSubtotal;
+                subtotalBeforeTax += lineSubtotal;
+                if (item.taxable) {
+                    totalTax += round2(lineSubtotal * taxRate);
+                }
+            });
+            subtotalBeforeTax = round2(subtotalBeforeTax);
+            totalTax = round2(totalTax);
+            const grandTotalAfterTax = round2(subtotalBeforeTax + totalTax);
+
+            const now = new Date();
+            const auditEntry = {
+                action: `Issue resolved — ${resolutionAction.replace(/_/g, ' ')}`,
+                reason: resolutionNotes || 'Resolved by admin',
+                timestamp: now.toISOString(),
+                user: displayName || 'SuperAdmin'
+            };
+            const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
+
+            await updateDoc(orderRef, {
+                status: 'fulfilled',
+                issueStatus: 'resolved',
+                resolutionAction: {
+                    type: resolutionAction,
+                    details: resolutionNotes,
+                    resolvedBy: displayName || 'SuperAdmin',
+                    resolvedAt: now.toISOString()
+                },
+                resolvedAt: now.toISOString(),
+                items: resolutionItems,
+                subtotalBeforeTax,
+                totalTax,
+                grandTotalAfterTax,
+                total: grandTotalAfterTax,
+                auditLog: updatedAuditLog
+            });
+
+            toast.success('Issue resolved. Order finalized and invoice will be generated.');
+            setSelectedOrder(prev => prev ? {
+                ...prev,
+                status: 'fulfilled',
+                issueStatus: 'resolved',
+                resolvedAt: now.toISOString(),
+                items: resolutionItems,
+                subtotalBeforeTax,
+                totalTax,
+                grandTotalAfterTax,
+                total: grandTotalAfterTax,
+                auditLog: updatedAuditLog
+            } : null);
+            setResolutionAction('');
+            setResolutionNotes('');
+        } catch (error) {
+            console.error('Error resolving issue:', error);
+            toast.error('Failed to resolve issue');
+        }
+    };
+
+    // Review window countdown helper
+    const getReviewWindowStatus = (order) => {
+        if (!order.reviewWindowEndsAt) return null;
+        const endsAt = new Date(order.reviewWindowEndsAt);
+        const now = new Date();
+        const diff = endsAt - now;
+        if (diff <= 0) return { expired: true, text: 'Review window has expired' };
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        return { expired: false, text: `${hours}h ${minutes}m remaining` };
+    };
+
     const deleteOrder = async (orderId) => {
         if (!window.confirm("Are you sure you want to delete this order? This action cannot be undone.")) {
             return;
@@ -279,9 +452,13 @@ export default function OrdersPage() {
                     <option value="pending_confirmation">Pending Confirmation</option>
                     <option value="pending_customer_approval">Pending Customer Approval</option>
                     <option value="pending_fulfillment">Pending Fulfillment</option>
-                    <option value="delivery_in_route">Delivery In Route</option>
+                    <option value="delivery_in_route">Delivery in Route</option>
+                    <option value="delivered_awaiting_confirmation">Delivered - Awaiting Confirmation</option>
+                    <option value="in_review">In Review</option>
                     <option value="fulfilled">Fulfilled</option>
                     <option value="rejected">Rejected</option>
+                    <option value="cancelled_by_vendor">Cancelled by Vendor</option>
+                    <option value="cancelled_by_customer">Cancelled by Customer</option>
                 </select>
                 <select
                     className="ui-input"
@@ -376,7 +553,7 @@ export default function OrdersPage() {
                             <div className="order-info-grid">
                                 <div className="info-item">
                                     <span className="info-label">Order ID</span>
-                                    <span className="info-value" style={{ fontFamily: 'monospace' }}>{selectedOrder.orderGroupId || selectedOrder.id}</span>
+                                    <span className="info-value" style={{ fontFamily: 'monospace' }}>{selectedOrder.orderGroupId || selectedOrder.id.slice(-8).toUpperCase()}</span>
                                 </div>
                                 <div className="info-item">
                                     <span className="info-label">Date</span>
@@ -421,69 +598,72 @@ export default function OrdersPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {editableItems.map((item, idx) => {
-                                        const originalItem = selectedOrder.items?.[idx] || item;
+                                    {(() => {
                                         const isEditable = selectedOrder.status === 'pending_confirmation' && canManageOrders;
-                                        const isModified = item.qty < originalItem.qty;
+                                        const displayItems = isEditable ? editableItems : (selectedOrder.items || []);
+                                        return displayItems.map((item, idx) => {
+                                            const originalItem = selectedOrder.items?.[idx] || item;
+                                            const isModified = isEditable && item.qty < originalItem.qty;
 
-                                        return (
-                                            <React.Fragment key={idx}>
-                                                <tr style={{ opacity: item.qty === 0 ? 0.5 : 1 }}>
-                                                    <td className="item-name-cell">
-                                                        {item.imageUrl && (
-                                                            <img src={item.imageUrl} alt={item.name} className="item-thumbnail" />
-                                                        )}
-                                                        <div>
-                                                            <div style={{ fontWeight: 500, textDecoration: item.qty === 0 ? 'line-through' : 'none' }}>{item.name}</div>
-                                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                                                {item.brand && `${item.brand} • `}{item.unit}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>{formatCurrency(item.price)}</td>
-                                                    <td>
-                                                        {isEditable ? (
-                                                            <input
-                                                                type="number"
-                                                                className="ui-input"
-                                                                style={{ width: '70px', padding: '4px 8px' }}
-                                                                min="0"
-                                                                max={originalItem.qty}
-                                                                value={item.qty}
-                                                                onChange={(e) => {
-                                                                    const val = parseInt(e.target.value) || 0;
-                                                                    const newQty = Math.max(0, Math.min(originalItem.qty, val));
-                                                                    const newItems = [...editableItems];
-                                                                    newItems[idx].qty = newQty;
-                                                                    setEditableItems(newItems);
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            item.qty
-                                                        )}
-                                                    </td>
-                                                    <td>{formatCurrency(item.price * item.qty)}</td>
-                                                </tr>
-                                                {isModified && isEditable && (
-                                                    <tr>
-                                                        <td colSpan="4" style={{ paddingTop: 0, paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(239, 68, 68, 0.05)', padding: '8px 12px', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>
-                                                                <span style={{ fontSize: '13px', color: '#ef4444' }}>Reason for {item.qty === 0 ? 'rejection' : 'reduction'}:</span>
-                                                                <input
-                                                                    type="text"
-                                                                    className="ui-input"
-                                                                    style={{ flex: 1, padding: '4px 8px', fontSize: '13px' }}
-                                                                    placeholder="e.g. Out of stock, damaged..."
-                                                                    value={itemReasons[idx] || ''}
-                                                                    onChange={(e) => setItemReasons(prev => ({ ...prev, [idx]: e.target.value }))}
-                                                                />
+                                            return (
+                                                <React.Fragment key={idx}>
+                                                    <tr style={{ opacity: item.qty === 0 ? 0.5 : 1 }}>
+                                                        <td className="item-name-cell">
+                                                            {item.imageUrl && (
+                                                                <img src={item.imageUrl} alt={item.name} className="item-thumbnail" />
+                                                            )}
+                                                            <div>
+                                                                <div style={{ fontWeight: 500, textDecoration: item.qty === 0 ? 'line-through' : 'none' }}>{item.name}</div>
+                                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                                    {item.brand && `${item.brand} • `}{item.unit}
+                                                                </div>
                                                             </div>
                                                         </td>
+                                                        <td>{formatCurrency(item.price)}</td>
+                                                        <td>
+                                                            {isEditable ? (
+                                                                <input
+                                                                    type="number"
+                                                                    className="ui-input"
+                                                                    style={{ width: '70px', padding: '4px 8px' }}
+                                                                    min="0"
+                                                                    max={originalItem.qty}
+                                                                    value={item.qty}
+                                                                    onChange={(e) => {
+                                                                        const val = parseInt(e.target.value) || 0;
+                                                                        const newQty = Math.max(0, Math.min(originalItem.qty, val));
+                                                                        const newItems = [...editableItems];
+                                                                        newItems[idx].qty = newQty;
+                                                                        setEditableItems(newItems);
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                item.qty
+                                                            )}
+                                                        </td>
+                                                        <td>{formatCurrency(item.price * item.qty)}</td>
                                                     </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
+                                                    {isModified && isEditable && (
+                                                        <tr>
+                                                            <td colSpan="4" style={{ paddingTop: 0, paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(239, 68, 68, 0.05)', padding: '8px 12px', borderRadius: '6px', borderLeft: '3px solid #ef4444' }}>
+                                                                    <span style={{ fontSize: '13px', color: '#ef4444' }}>Reason for {item.qty === 0 ? 'rejection' : 'reduction'}:</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="ui-input"
+                                                                        style={{ flex: 1, padding: '4px 8px', fontSize: '13px' }}
+                                                                        placeholder="e.g. Out of stock, damaged..."
+                                                                        value={itemReasons[idx] || ''}
+                                                                        onChange={(e) => setItemReasons(prev => ({ ...prev, [idx]: e.target.value }))}
+                                                                    />
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })
+                                    })()}
                                 </tbody>
                             </table>
 
@@ -556,7 +736,7 @@ export default function OrdersPage() {
                                         <>
                                             <button
                                                 className="btn-reject"
-                                                onClick={() => updateOrderStatus(selectedOrder.id, 'rejected')}
+                                                onClick={() => setCancelModalAction('reject')}
                                             >
                                                 ✗ Reject Order
                                             </button>
@@ -574,8 +754,14 @@ export default function OrdersPage() {
                             {selectedOrder.status === 'pending_fulfillment' && canManageOrders && (
                                 <div className="order-actions">
                                     <button
+                                        className="btn-reject"
+                                        onClick={() => setCancelModalAction('cancel')}
+                                    >
+                                        ✗ Cancel Order
+                                    </button>
+                                    <button
                                         className="btn-accept"
-                                        style={{ width: '100%' }}
+                                        style={{ flex: 1 }}
                                         onClick={() => updateOrderStatus(selectedOrder.id, 'delivery_in_route')}
                                     >
                                         🚚 Mark as Picked Up / In Route
@@ -583,15 +769,200 @@ export default function OrdersPage() {
                                 </div>
                             )}
 
-                            {selectedOrder.status === 'delivery_in_route' && isSuperAdmin && (
+                            {selectedOrder.status === 'delivery_in_route' && canManageOrders && (
                                 <div className="order-actions">
                                     <button
-                                        className="btn-accept"
-                                        style={{ width: '100%' }}
-                                        onClick={() => updateOrderStatus(selectedOrder.id, 'fulfilled')}
+                                        className="btn-reject"
+                                        onClick={() => setCancelModalAction('cancel')}
                                     >
-                                        ✅ Mark as Delivered (Fulfilled)
+                                        ✗ Cancel Order
                                     </button>
+                                    <button
+                                        className="btn-accept"
+                                        style={{ flex: 1 }}
+                                        onClick={handleMarkDelivered}
+                                    >
+                                        📦 Mark as Delivered
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Review Window Banner — delivered_awaiting_confirmation */}
+                            {selectedOrder.status === 'delivered_awaiting_confirmation' && (() => {
+                                const windowStatus = getReviewWindowStatus(selectedOrder);
+                                return (
+                                    <>
+                                        <div className="review-window-banner">
+                                            <span className="banner-icon">⏳</span>
+                                            <div className="banner-text">
+                                                <strong>Awaiting Restaurant Confirmation</strong>
+                                                <span>
+                                                    {windowStatus?.expired
+                                                        ? 'Review window has expired — awaiting auto-confirmation'
+                                                        : `Review window: ${windowStatus?.text}`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="invoice-blocked-badge">
+                                            🚫 Invoice generation blocked until confirmation
+                                        </div>
+                                    </>
+                                );
+                            })()}
+
+                            {/* Issue Raised Banner — in_review */}
+                            {selectedOrder.status === 'in_review' && (
+                                <>
+                                    <div className="issue-banner">
+                                        <h4>⚠️ Issue Reported by Restaurant</h4>
+                                        <div style={{ marginBottom: '6px' }}>
+                                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                {selectedOrder.issueReport?.type || 'Issue'}
+                                            </span>
+                                        </div>
+                                        <div style={{ color: 'var(--text-primary)' }}>
+                                            {selectedOrder.issueReport?.notes || selectedOrder.issueDetails?.description || 'No details provided'}
+                                        </div>
+                                        {selectedOrder.issueReport?.items?.length > 0 && (
+                                            <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(249, 115, 22, 0.2)' }}>
+                                                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Affected Items:</span>
+                                                {selectedOrder.issueReport.items.map((item, idx) => (
+                                                    <div key={idx} style={{ fontSize: '13px', color: 'var(--text-primary)', padding: '2px 0' }}>
+                                                        • <strong>{item.name}</strong> (x{item.qty}){item.notes ? ` — "${item.notes}"` : ''}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="issue-meta">
+                                            <span>Reported by: {selectedOrder.issueReport?.reportedBy || selectedOrder.issueDetails?.reportedBy || 'Restaurant'}</span>
+                                            <span>Date: {formatDate(selectedOrder.issueReport?.reportedAt || selectedOrder.issueDetails?.reportedAt)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="invoice-blocked-badge">
+                                        🚫 Invoice generation blocked — issue under review
+                                    </div>
+
+                                    {/* SuperAdmin Resolution Panel */}
+                                    {isSuperAdmin && (
+                                        <div className="resolution-panel">
+                                            <h4>🔧 Resolve Issue</h4>
+
+                                            <div className="resolution-actions">
+                                                {['update_quantity', 'void_item', 'approve_partial', 'reject_claim'].map(action => (
+                                                    <button
+                                                        key={action}
+                                                        className={`resolution-action-btn ${resolutionAction === action ? 'active' : ''}`}
+                                                        onClick={() => setResolutionAction(action)}
+                                                    >
+                                                        {action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {resolutionAction && resolutionAction !== 'reject_claim' && (
+                                                <>
+                                                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
+                                                        Adjust item quantities below. Voided items should be set to 0.
+                                                    </p>
+                                                    <table className="order-items-table" style={{ marginBottom: '16px' }}>
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Item</th>
+                                                                <th>Original Qty</th>
+                                                                <th>Adjusted Qty</th>
+                                                                <th>Total</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {resolutionItems.map((item, idx) => (
+                                                                <tr key={idx} style={{ opacity: item.qty === 0 ? 0.5 : 1 }}>
+                                                                    <td>{item.name}</td>
+                                                                    <td>{selectedOrder.items?.[idx]?.qty || item.qty}</td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="ui-input"
+                                                                            style={{ width: '70px', padding: '4px 8px' }}
+                                                                            min="0"
+                                                                            value={item.qty}
+                                                                            onChange={(e) => {
+                                                                                const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                                                const updated = [...resolutionItems];
+                                                                                updated[idx].qty = val;
+                                                                                setResolutionItems(updated);
+                                                                            }}
+                                                                        />
+                                                                    </td>
+                                                                    <td>{formatCurrency((item.vendorPrice ?? item.price ?? 0) * item.qty)}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </>
+                                            )}
+
+                                            <textarea
+                                                className="ui-input"
+                                                rows={2}
+                                                placeholder="Resolution notes..."
+                                                value={resolutionNotes}
+                                                onChange={e => setResolutionNotes(e.target.value)}
+                                                style={{ width: '100%', resize: 'vertical', fontSize: '13px', marginBottom: '12px' }}
+                                            />
+
+                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                                <button
+                                                    className="btn-accept"
+                                                    onClick={handleResolveIssue}
+                                                    disabled={!resolutionAction}
+                                                >
+                                                    ✅ Approve & Finalize Order
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Vendor view of in_review — read-only */}
+                                    {!isSuperAdmin && canManageOrders && (
+                                        <div style={{ marginTop: '16px', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: '1px solid var(--border-color)', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                            This order is under review by the admin team. You will be notified once a resolution is made.
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Reject / Cancel Order Modal */}
+                            {cancelModalAction && (
+                                <div style={{ marginTop: '24px', padding: '20px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px' }}>
+                                    <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#ef4444' }}>
+                                        {cancelModalAction === 'reject' ? 'Reject Order' : 'Cancel Order'}
+                                    </h4>
+                                    <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                        Please provide a reason for {cancelModalAction === 'reject' ? 'rejecting' : 'cancelling'} this order. This action cannot be undone.
+                                    </p>
+                                    <textarea
+                                        className="ui-input"
+                                        rows={3}
+                                        placeholder="e.g. Item out of stock, unable to fulfill..."
+                                        value={cancelReason}
+                                        onChange={e => setCancelReason(e.target.value)}
+                                        style={{ width: '100%', resize: 'vertical', fontSize: '13px', marginBottom: '12px' }}
+                                    />
+                                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                        <button
+                                            className="ui-btn ghost"
+                                            onClick={() => { setCancelModalAction(null); setCancelReason(''); }}
+                                        >
+                                            Back
+                                        </button>
+                                        <button
+                                            className="btn-reject"
+                                            style={{ background: '#ef4444', color: '#fff', border: 'none' }}
+                                            onClick={handleCancelOrder}
+                                        >
+                                            {cancelModalAction === 'reject' ? 'Confirm Rejection' : 'Confirm Cancellation'}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 

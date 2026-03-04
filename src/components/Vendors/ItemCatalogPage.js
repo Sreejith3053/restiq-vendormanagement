@@ -130,7 +130,11 @@ export default function ItemCatalogPage() {
                                     className="is-row"
                                     onClick={() => navigate(`/vendors/${item.vendorId}/items/${item.id}`)}
                                 >
-                                    <td data-label="Item" style={{ fontWeight: 600 }}>{item.name}</td>
+                                    <td data-label="Item" style={{ fontWeight: 600 }}>
+                                        {item.name}
+                                        {item.disabled && <span className="badge red" style={{ marginLeft: 8, fontSize: 10 }}>Disabled</span>}
+                                        {item.outOfStock && !item.disabled && <span className="badge amber" style={{ marginLeft: 8, fontSize: 10 }}>OOS</span>}
+                                    </td>
                                     <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
                                     {isSuperAdmin && <td data-label="Vendor">{item.vendorName}</td>}
                                     <td data-label="Unit" style={{ textTransform: 'capitalize' }}>

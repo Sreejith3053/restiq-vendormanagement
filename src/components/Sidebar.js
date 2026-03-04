@@ -69,8 +69,11 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/admin/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🧾</span> Vendor Invoices
                             </NavLink>
+                            <NavLink to="/admin/restaurants" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🏪</span> All Restaurants
+                            </NavLink>
                             <NavLink to="/admin/restaurant-invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏪</span> Restaurant Invoices
+                                <span className="link-icon">🧾</span> Restaurant Invoices
                             </NavLink>
                         </div>
                     </>

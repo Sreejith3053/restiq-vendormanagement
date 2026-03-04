@@ -11,6 +11,13 @@ const AdminItemsPage = () => {
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [categories, setCategories] = useState(['All']);
+    const [selectedVendor, setSelectedVendor] = useState('All');
+    const [uniqueVendors, setUniqueVendors] = useState([]);
+
+    // Analytics Modal State
+    const [analyticsItem, setAnalyticsItem] = useState(null);
+    const [analyticsData, setAnalyticsData] = useState(null);
+    const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
     // History Modal State
     const [historyItem, setHistoryItem] = useState(null);
@@ -23,29 +30,44 @@ const AdminItemsPage = () => {
         const fetchItems = async () => {
             setLoading(true);
             try {
-                // Fetch all items from all vendors using collectionGroup
+                // 1. Fetch all items
                 const itemsQuery = query(collectionGroup(db, 'items'));
                 const snapshot = await getDocs(itemsQuery);
 
+                // 2. Fetch all vendors for proper name mapping
+                const vendorsSnap = await getDocs(collection(db, 'vendors'));
+                const vendorsMap = {};
+                vendorsSnap.docs.forEach(d => {
+                    vendorsMap[d.id] = d.data().name || d.data().businessName || d.id;
+                });
+
                 const allItems = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    // We need to extract vendorId from the reference path
+                    // Extract vendorId from the reference path
                     const vendorId = doc.ref.parent.parent.id;
                     return {
                         id: doc.id,
                         vendorId,
+                        vendorName: vendorsMap[vendorId] || 'Unknown Vendor',
                         ...data
                     };
                 });
 
                 setItems(allItems);
 
-                // Extract unique categories
+                // Extract unique categories and vendors
                 const cats = new Set(['All']);
+                const vMap = new Map(); // vendorId -> Vendor Name
+
                 allItems.forEach(item => {
                     if (item.category) cats.add(item.category);
+                    if (item.vendorId) {
+                        vMap.set(item.vendorId, item.vendorName);
+                    }
                 });
+
                 setCategories(Array.from(cats).sort());
+                setUniqueVendors(Array.from(vMap.entries()).map(([id, name]) => ({ id, name })));
             } catch (err) {
                 console.error("Error fetching admin items:", err);
                 toast.error("Failed to load items");
@@ -56,6 +78,113 @@ const AdminItemsPage = () => {
 
         fetchItems();
     }, [isSuperAdmin]);
+
+    const handleViewAnalytics = async (item) => {
+        setAnalyticsItem(item);
+        setAnalyticsData(null);
+        setLoadingAnalytics(true);
+
+        try {
+            // 1. Fetch all orders for this vendor to calculate item's performance
+            const ordersQuery = query(collection(db, 'marketplaceOrders'));
+            const oSnap = await getDocs(ordersQuery);
+            const allVendorOrders = oSnap.docs.map(d => d.data()).filter(o => o.vendorId === item.vendorId);
+
+            let totalSold = 0;
+            let totalRevenue = 0;
+
+            allVendorOrders.forEach(o => {
+                const status = (o.status || '').toLowerCase();
+                if (['fulfilled', 'completed', 'delivered'].includes(status)) {
+                    (o.items || []).forEach(orderItem => {
+                        const isMatch = orderItem.id === item.id || (orderItem.name === item.name && orderItem.vendorId === item.vendorId);
+                        if (isMatch) {
+                            const qty = Number(orderItem.qty || 0);
+                            const price = Number(orderItem.vendorPrice ?? orderItem.price ?? 0);
+                            totalSold += qty;
+                            totalRevenue += (qty * price);
+                        }
+                    });
+                }
+            });
+
+            // 2. Fetch Audit Logs for Price Trend
+            const auditRef = collection(db, `vendors/${item.vendorId}/items/${item.id}/auditLog`);
+            const aSnap = await getDocs(auditRef);
+            const logs = aSnap.docs.map(d => d.data());
+
+            logs.sort((a, b) => {
+                const tA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || 0;
+                const tB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || 0;
+                return tA - tB; // Ascending (oldest first)
+            });
+
+            const monthlyPrices = {};
+            const itemCreationPrice = Number(item.vendorPrice ?? item.price ?? 0);
+
+            // Group price by month (assuming logs sorted oldest to newest)
+            logs.forEach(log => {
+                const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? log.newData?.vendorPrice ?? log.newData?.price;
+                if (newP !== undefined) {
+                    const dt = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp?.seconds * 1000);
+                    const monthKey = dt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+                    // Store the LATEST price for that month
+                    monthlyPrices[monthKey] = Number(newP);
+                }
+            });
+
+            // Ensure current month is always present even if no logs
+            const currentMonthKey = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+            if (Object.keys(monthlyPrices).length === 0) {
+                monthlyPrices[currentMonthKey] = itemCreationPrice;
+            } else if (!monthlyPrices[currentMonthKey]) {
+                // If there weren't changes this exact month, carry over the last known value
+                monthlyPrices[currentMonthKey] = Number(Object.values(monthlyPrices).pop() || itemCreationPrice);
+            }
+
+            const monthKeys = Object.keys(monthlyPrices);
+            const priceTrend = [];
+            let previousPrice = null;
+
+            monthKeys.forEach((month) => {
+                const price = monthlyPrices[month];
+                let percentChange = 0;
+                if (previousPrice) {
+                    percentChange = ((price - previousPrice) / previousPrice) * 100;
+                }
+                priceTrend.push({
+                    month,
+                    price,
+                    percentChange: previousPrice ? percentChange : 0,
+                });
+                previousPrice = price;
+            });
+
+            // Calculate overall insight (first month vs latest month)
+            const firstPrice = priceTrend[0].price;
+            const lastPrice = priceTrend[priceTrend.length - 1].price;
+            let overallChange = 0;
+            if (firstPrice > 0) {
+                overallChange = ((lastPrice - firstPrice) / firstPrice) * 100;
+            }
+
+            const estimatedCommission = totalRevenue * ((item.vendorCommission || 15) / 100);
+
+            setAnalyticsData({
+                totalSold,
+                totalRevenue,
+                estimatedCommission,
+                priceTrend, // Ascending for horizontal scroll layout
+                overallChange
+            });
+
+        } catch (error) {
+            console.error("Error fetching analytics:", error);
+            toast.error("Failed to load item analytics.");
+        } finally {
+            setLoadingAnalytics(false);
+        }
+    };
 
     const handleViewHistory = async (item) => {
         setHistoryItem(item);
@@ -93,9 +222,11 @@ const AdminItemsPage = () => {
         return <div style={{ padding: 40, textAlign: 'center' }}>Access Denied</div>;
     }
 
-    const filteredItems = selectedCategory === 'All'
-        ? items
-        : items.filter(item => item.category === selectedCategory);
+    const filteredItems = items.filter(item => {
+        const matchCategory = selectedCategory === 'All' || item.category === selectedCategory;
+        const matchVendor = selectedVendor === 'All' || item.vendorId === selectedVendor;
+        return matchCategory && matchVendor;
+    });
 
     return (
         <div className="admin-items-page" style={{ padding: 24, paddingBottom: 100 }}>
@@ -127,58 +258,155 @@ const AdminItemsPage = () => {
                 ))}
             </div>
 
-            {/* Items Table */}
-            <div className="ui-card" style={{ padding: 20 }}>
+            {/* Vendor Filter */}
+            <div style={{ marginBottom: 20 }}>
+                <select
+                    className="ui-input"
+                    value={selectedVendor}
+                    onChange={e => setSelectedVendor(e.target.value)}
+                    style={{ maxWidth: 250 }}
+                >
+                    <option value="All">All Vendors</option>
+                    {uniqueVendors.sort((a, b) => a.name.localeCompare(b.name)).map(v => (
+                        <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Items Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Loading items...</div>
+                    <div style={{ textAlign: 'center', padding: 80, color: 'var(--muted)', background: 'var(--card-bg)', borderRadius: 12 }}>Loading items...</div>
                 ) : filteredItems.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>No items found.</div>
+                    <div style={{ textAlign: 'center', padding: 80, color: 'var(--muted)', background: 'var(--card-bg)', borderRadius: 12 }}>No items found.</div>
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table className="ui-table" style={{ margin: 0 }}>
-                            <thead>
-                                <tr>
-                                    <th>Image</th>
-                                    <th>Item Name</th>
-                                    <th>Vendor</th>
-                                    <th>Category</th>
-                                    <th>Price</th>
-                                    <th style={{ textAlign: 'right' }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredItems.map(item => (
-                                    <tr key={`${item.vendorId}-${item.id}`}>
-                                        <td style={{ width: 60 }}>
-                                            {item.imageUrl ? (
-                                                <img src={item.imageUrl} alt={item.name} style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }} />
-                                            ) : (
-                                                <div style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--muted)' }}>No Img</div>
-                                            )}
-                                        </td>
-                                        <td style={{ fontWeight: 500 }}>{item.name}</td>
-                                        <td>{item.vendorInfo?.businessName || item.vendorId}</td>
-                                        <td>{item.category || 'Uncategorized'}</td>
-                                        <td style={{ fontWeight: 600 }}>${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}</td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button
-                                                onClick={() => handleViewHistory(item)}
-                                                style={{
-                                                    padding: '6px 12px', background: 'rgba(77, 171, 247, 0.1)', color: '#4dabf7',
-                                                    border: '1px solid rgba(77, 171, 247, 0.2)', borderRadius: 6, cursor: 'pointer',
-                                                    fontSize: 13, fontWeight: 500
-                                                }}
-                                            >
-                                                View History
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                    <div className="admin-items-grid">
+                        {filteredItems.map(item => (
+                            <div
+                                key={`${item.vendorId}-${item.id}`}
+                                className="admin-item-card"
+                                onClick={() => handleViewAnalytics(item)}
+                            >
+                                <div className="admin-item-card__img-container">
+                                    {item.imageUrl ? (
+                                        <img src={item.imageUrl} alt={item.name} className="admin-item-card__img" />
+                                    ) : (
+                                        <div className="admin-item-card__no-img">No Img</div>
+                                    )}
+                                    <div className="admin-item-card__badges">
+                                        {item.disabled && <span className="badge red shadow">Disabled</span>}
+                                        {item.outOfStock && !item.disabled && <span className="badge amber shadow">Out of Stock</span>}
+                                    </div>
+                                </div>
+
+                                <div className="admin-item-card__content">
+                                    <div className="admin-item-card__header">
+                                        <h3 className="admin-item-card__title">{item.name}</h3>
+                                        <span className="admin-item-card__price">${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}</span>
+                                    </div>
+
+                                    <div className="admin-item-card__meta">
+                                        <span className="admin-item-card__vendor">🏬 {item.vendorName}</span>
+                                        <span className="badge gray sm">{item.category || 'Uncategorized'}</span>
+                                        {item.unit && <span className="badge ghost sm">{item.packQuantity || 1} {item.unit}</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
+
+            {/* Analytics Modal */}
+            {analyticsItem && (
+                <>
+                    <div className="modal-backdrop" onClick={() => setAnalyticsItem(null)} />
+                    <div className="modal-content analytics-modal">
+                        <div className="modal-header">
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 20 }}>Item Analytics</h3>
+                                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                                    {analyticsItem.name} — {analyticsItem.vendorName}
+                                </div>
+                            </div>
+                            <button className="modal-close" onClick={() => setAnalyticsItem(null)}>✕</button>
+                        </div>
+
+                        <div className="modal-body" style={{ padding: 24, overflowY: 'auto' }}>
+                            {loadingAnalytics ? (
+                                <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Loading analytics...</div>
+                            ) : analyticsData ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                                    {/* Stat Cards */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
+                                        <div className="ui-card stat-card" style={{ padding: 16 }}>
+                                            <div className="stat-label">Total Sold</div>
+                                            <div className="stat-value">{analyticsData.totalSold} <span style={{ fontSize: 14, fontWeight: 'normal' }}>{analyticsItem.unit || 'units'}</span></div>
+                                            <div className="stat-context">All-time quantity</div>
+                                        </div>
+                                        <div className="ui-card stat-card" style={{ padding: 16 }}>
+                                            <div className="stat-label">Total Revenue</div>
+                                            <div className="stat-value" style={{ color: '#4dabf7' }}>${analyticsData.totalRevenue.toFixed(2)}</div>
+                                            <div className="stat-context">Gross item sales</div>
+                                        </div>
+                                        <div className="ui-card stat-card" style={{ padding: 16 }}>
+                                            <div className="stat-label">Est. Commission</div>
+                                            <div className="stat-value" style={{ color: '#4ade80' }}>${analyticsData.estimatedCommission.toFixed(2)}</div>
+                                            <div className="stat-context">Based on {analyticsItem.vendorCommission || 15}% rate</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Monthly Price Trend Cars */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                                            <h4 style={{ margin: 0, fontSize: 16 }}>Monthly Price Trend</h4>
+                                            {analyticsData.priceTrend.length > 1 && (
+                                                <div style={{ fontSize: 14, fontWeight: 500 }}>
+                                                    Insight: Price {analyticsData.overallChange >= 0 ? 'increased' : 'decreased'} {' '}
+                                                    <span style={{ color: analyticsData.overallChange > 0 ? '#fa5252' : analyticsData.overallChange < 0 ? '#4ade80' : 'var(--muted)' }}>
+                                                        {Math.abs(analyticsData.overallChange).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
+                                            {analyticsData.priceTrend.map((pt, idx) => (
+                                                <div key={idx} className="ui-card" style={{ padding: 16, minWidth: 140, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
+                                                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{pt.month}</div>
+                                                    <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>${pt.price.toFixed(2)}</div>
+                                                    <div>
+                                                        {pt.percentChange === 0 ? (
+                                                            <span style={{ color: 'var(--muted)', fontSize: 13, fontWeight: 500 }}>—</span>
+                                                        ) : pt.percentChange > 0 ? (
+                                                            <span style={{ color: '#fa5252', fontSize: 13, fontWeight: 500 }}>↑ +{pt.percentChange.toFixed(1)}%</span>
+                                                        ) : (
+                                                            <span style={{ color: '#4ade80', fontSize: 13, fontWeight: 500 }}>↓ {Math.abs(pt.percentChange).toFixed(1)}%</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Legacy History Button */}
+                                    <div style={{ textAlign: 'right' }}>
+                                        <button
+                                            className="ui-btn ghost small"
+                                            onClick={() => {
+                                                setAnalyticsItem(null);
+                                                handleViewHistory(analyticsItem);
+                                            }}
+                                        >
+                                            View Raw Audit Log
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Price History Modal */}
             {historyItem && (

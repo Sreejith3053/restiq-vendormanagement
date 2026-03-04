@@ -279,6 +279,41 @@ export default function ItemDetailPage() {
         }
     };
 
+    // ─── Instant Toggles: Stock & Disable ───
+    const handleToggleStock = async () => {
+        setProcessingAction(true);
+        try {
+            const newVal = !item.outOfStock;
+            await updateDoc(doc(db, `vendors/${vendorId}/items`, itemId), { outOfStock: newVal });
+            setItem(prev => ({ ...prev, outOfStock: newVal }));
+            await logAudit(newVal ? 'marked_out_of_stock' : 'marked_in_stock', { itemName: item.name });
+            toast.success(newVal ? 'Item marked Out of Stock 🛑' : 'Item marked In Stock ✅');
+        } catch (err) {
+            console.error('Failed to toggle stock:', err);
+            toast.error('Failed to update stock status');
+        } finally {
+            setProcessingAction(false);
+        }
+    };
+
+    const handleToggleDisable = async () => {
+        const newVal = !item.disabled;
+        if (newVal && !window.confirm('Disable this item? It will be hidden from customers completely.')) return;
+
+        setProcessingAction(true);
+        try {
+            await updateDoc(doc(db, `vendors/${vendorId}/items`, itemId), { disabled: newVal });
+            setItem(prev => ({ ...prev, disabled: newVal }));
+            await logAudit(newVal ? 'disabled' : 'enabled', { itemName: item.name });
+            toast.success(newVal ? 'Item disabled and hidden 🚫' : 'Item enabled and visible ✅');
+        } catch (err) {
+            console.error('Failed to toggle disable:', err);
+            toast.error('Failed to update disable status');
+        } finally {
+            setProcessingAction(false);
+        }
+    };
+
     // ─── Approve review (super admin) ───
     const handleApprove = async () => {
         setProcessingAction(true);
@@ -395,7 +430,8 @@ export default function ItemDetailPage() {
         if (action.includes('edit')) return 'edited';
         if (action.includes('approv')) return 'approved';
         if (action.includes('reject')) return 'rejected';
-        if (action.includes('delet')) return 'deleted';
+        if (action.includes('delet') || action.includes('disable')) return 'deleted';
+        if (action.includes('stock')) return 'amber';
         return 'pending';
     };
 
@@ -497,6 +533,8 @@ export default function ItemDetailPage() {
                     <div className="idp-hero__info">
                         <h1 className="idp-hero__name">{item.name}</h1>
                         <div className="idp-hero__badges">
+                            {item.disabled && <span className="badge red" style={{ fontWeight: 800 }}>🚫 DISABLED</span>}
+                            {item.outOfStock && !item.disabled && <span className="badge amber" style={{ fontWeight: 800 }}>❌ OUT OF STOCK</span>}
                             <span className={`badge ${statusBadgeClass(item.status)}`}>{statusLabel(item.status || 'active')}</span>
                             <span className="badge blue">{item.category || 'Other'}</span>
                             {item.brand && <span className="badge gray">{item.brand}</span>}
@@ -540,7 +578,25 @@ export default function ItemDetailPage() {
                             </div>
                         </div>
                     </div>
-                    <div className="idp-hero__actions">
+                    <div className="idp-hero__actions" style={{ flexWrap: 'wrap' }}>
+                        {canEdit && (
+                            <>
+                                <button
+                                    className={`ui-btn small ${item.outOfStock ? 'amber' : 'ghost'}`}
+                                    onClick={handleToggleStock}
+                                    disabled={processingAction}
+                                >
+                                    {item.outOfStock ? '✅ Mark In Stock' : '❌ Mark Out of Stock'}
+                                </button>
+                                <button
+                                    className={`ui-btn small ${item.disabled ? 'primary' : 'ghost-danger'}`}
+                                    onClick={handleToggleDisable}
+                                    disabled={processingAction}
+                                >
+                                    {item.disabled ? '✅ Enable Item' : '🚫 Disable Item'}
+                                </button>
+                            </>
+                        )}
                         {canEdit && item.status !== 'in-review' && (
                             <button className="ui-btn primary small" onClick={() => { setEditForm({ ...item }); setEditing(true); }}>
                                 ✏️ Edit

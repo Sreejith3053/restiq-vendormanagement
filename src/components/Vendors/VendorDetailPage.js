@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { db } from '../../firebase';
-import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import { UserContext } from '../../contexts/UserContext';
 import { toast } from 'react-toastify';
 import EditItemModal from './EditItemModal';
@@ -33,6 +33,7 @@ export default function VendorDetailPage() {
 
     const [vendor, setVendor] = useState(null);
     const [items, setItems] = useState([]);
+    const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Filters
@@ -97,6 +98,23 @@ export default function VendorDetailPage() {
                 // Load items
                 const itemSnap = await getDocs(collection(db, `vendors/${vendorId}/items`));
                 setItems(itemSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+                // Load invoices
+                if (isSuperAdmin) {
+                    const invQ = query(
+                        collection(db, 'vendorInvoices'),
+                        where('vendorId', '==', vendorId)
+                    );
+                    const invSnap = await getDocs(invQ);
+                    const invList = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    // Sort descending by date locally
+                    invList.sort((a, b) => {
+                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+                        return dateB - dateA;
+                    });
+                    setInvoices(invList);
+                }
             } catch (err) {
                 console.error('Failed to load vendor:', err);
                 toast.error('Failed to load vendor');
@@ -411,14 +429,18 @@ export default function VendorDetailPage() {
                 <h2>{vendor.name}</h2>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="ui-btn ghost" onClick={() => navigate(isSuperAdmin ? '/vendors' : '/')}>← Back</button>
-                    {canEditProfile && !editing && (
-                        <button className="ui-btn small" onClick={() => setEditing(true)}>✏️ Edit</button>
-                    )}
                 </div>
             </div>
 
-            {/* Vendor Info Card */}
-            <div className="ui-card" style={{ marginBottom: 20 }}>
+            {/* Vendor Profile Section */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h3 style={{ margin: 0 }}>Vendor Profile</h3>
+                {canEditProfile && !editing && (
+                    <button className="ui-btn small" onClick={() => setEditing(true)}>✏️ Edit Profile</button>
+                )}
+            </div>
+
+            <div className="ui-card" style={{ marginBottom: 32 }}>
                 {editing ? (
                     <>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16 }}>
@@ -831,8 +853,68 @@ export default function VendorDetailPage() {
                             ))
                         )}
                     </div>
-                )
-            }
-        </div >
+                )}
+
+            {/* ── Vendor Invoices Section (Super Admin Only) ── */}
+            {isSuperAdmin && (
+                <div style={{ marginTop: 40, marginBottom: 40 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <h3 style={{ margin: 0 }}>Vendor Invoices</h3>
+                        <button className="ui-btn ghost small" onClick={() => navigate(`/admin/invoices?vendor=${vendorId}`)}>Manage All →</button>
+                    </div>
+
+                    {invoices.length === 0 ? (
+                        <div className="ui-card" style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
+                            No invoices generated for this vendor yet.
+                        </div>
+                    ) : (
+                        <div className="ui-table-wrap">
+                            <table className="ui-table">
+                                <thead>
+                                    <tr>
+                                        <th>Invoice #</th>
+                                        <th>Date</th>
+                                        <th>Order ID</th>
+                                        <th style={{ textAlign: 'right' }}>Gross Amount</th>
+                                        <th style={{ textAlign: 'right' }}>Commission</th>
+                                        <th style={{ textAlign: 'right' }}>Net Payout</th>
+                                        <th style={{ textAlign: 'center' }}>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {invoices.slice(0, 50).map(inv => {
+                                        const dateLabel = formatReviewDate(inv.createdAt);
+                                        const gross = Number(inv.subtotalVendorAmount || 0) + Number(inv.taxAmount || 0);
+                                        const commission = Number(inv.commissionAmount || 0);
+                                        const net = Number(inv.totalVendorAmount || gross - commission);
+
+                                        return (
+                                            <tr key={inv.id} className="is-row" onClick={() => navigate(`/admin/invoices/${inv.id}`)}>
+                                                <td style={{ fontWeight: 600 }}>{inv.invoiceNumber || '—'}</td>
+                                                <td>{dateLabel}</td>
+                                                <td style={{ color: 'var(--muted)' }}>{inv.orderId || '—'}</td>
+                                                <td style={{ textAlign: 'right' }}>${gross.toFixed(2)}</td>
+                                                <td style={{ textAlign: 'right', color: '#ff6b7a' }}>-${commission.toFixed(2)}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 600, color: '#4ade80' }}>${net.toFixed(2)}</td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <span className={`badge ${inv.paymentStatus === 'PAID' ? 'green' : 'yellow'}`}>
+                                                        {inv.paymentStatus || 'PENDING'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            {invoices.length > 50 && (
+                                <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--muted)', fontSize: 13 }}>
+                                    Showing latest 50 invoices. Click "Manage All" to view the rest.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }

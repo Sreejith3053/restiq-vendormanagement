@@ -52,6 +52,7 @@ export default function SuperAdminDashboard() {
     // Raw Data
     const [orders, setOrders] = useState([]);
     const [invoices, setInvoices] = useState([]);
+    const [restaurantInvoices, setRestaurantInvoices] = useState([]);
     const [vendors, setVendors] = useState([]);
 
     // ─── Data Fetching ───
@@ -79,12 +80,17 @@ export default function SuperAdminDashboard() {
                 const invSnap = await getDocs(collection(db, 'vendorInvoices'));
                 const allInvoices = invSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-                // 3. Fetch Vendors for names
+                // 3. Fetch Restaurant Invoices
+                const rInvSnap = await getDocs(collection(db, 'restaurantInvoices'));
+                const allRestaurantInvoices = rInvSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                // 4. Fetch Vendors for names
                 const vSnap = await getDocs(collection(db, 'vendors'));
                 const allVendors = vSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
                 setOrders(allOrders);
                 setInvoices(allInvoices);
+                setRestaurantInvoices(allRestaurantInvoices);
                 setVendors(allVendors);
 
             } catch (err) {
@@ -115,6 +121,7 @@ export default function SuperAdminDashboard() {
         // Filter valid orders and invoices
         const tfOrders = orders.filter(o => isWithinTimeframe(o.createdAt || o.orderDate));
         const tfInvoices = invoices.filter(i => isWithinTimeframe(i.createdAt || i.invoiceDate));
+        const tfRestaurantInvoices = restaurantInvoices.filter(i => isWithinTimeframe(i.createdAt || i.invoiceDate));
 
         // Metics
         let totalRevenue = 0; // grandTotalAfterTax of completed/fulfilled orders
@@ -126,16 +133,20 @@ export default function SuperAdminDashboard() {
 
         tfOrders.forEach(o => {
             const status = (o.status || '').toLowerCase();
+            const isCompleted = ['fulfilled', 'completed', 'delivered'].includes(status);
+
             // Count today's metrics
             const d = (o.createdAt || o.orderDate)?.toDate ? (o.createdAt || o.orderDate).toDate() : new Date(o.createdAt || o.orderDate);
             if (d && d >= todayStart) {
-                ordersToday++;
+                if (isCompleted) {
+                    ordersToday++;
+                }
                 if (['cancelled', 'rejected'].includes(status)) cancelledToday++;
             }
             if (['new', 'pending', 'pending_confirmation', 'pending_customer_approval', 'pending_fulfillment'].includes(status)) newOrdersCount++;
 
             // Revenue
-            if (['fulfilled', 'completed', 'accepted', 'delivery_in_route'].includes(status)) {
+            if (isCompleted) {
                 totalRevenue += Number(o.grandTotalAfterTax || o.total || 0);
             }
         });
@@ -149,33 +160,78 @@ export default function SuperAdminDashboard() {
         tfInvoices.forEach(inv => {
             totalCommission += Number(inv.commissionAmount || 0);
             totalVendorGross += Number(inv.grossVendorAmount || inv.subtotalVendorAmount || 0);
+        });
 
+        // Calculate pending payouts globally (all time)
+        invoices.forEach(inv => {
             if (inv.paymentStatus === 'PENDING') {
-                totalPendingPayout += Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                if (inv.commissionModel === 'VENDOR_FLAT_PERCENT') {
+                    totalPendingPayout += Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                } else {
+                    totalPendingPayout += Number(inv.totalVendorAmount || 0);
+                }
                 pendingInvoicesCount++;
+            }
+        });
+
+        // Restaurant Invoices Metrics
+        let totalRestaurantPending = 0;
+        let restaurantPendingCount = 0;
+        let totalRestaurantPaid = 0;
+        let restaurantPaidCount = 0;
+
+        // Global pending for Restaurants
+        restaurantInvoices.forEach(inv => {
+            if (inv.paymentStatus === 'PENDING') {
+                totalRestaurantPending += Number(inv.grandTotal || 0);
+                restaurantPendingCount++;
+            }
+        });
+
+        // Timeframe paid for Restaurants
+        tfRestaurantInvoices.forEach(inv => {
+            if (inv.paymentStatus === 'PAID') {
+                totalRestaurantPaid += Number(inv.grandTotal || 0);
+                restaurantPaidCount++;
             }
         });
 
         // Vendor Performance Data (Top 5)
         const vendorAgg = {};
         tfOrders.forEach(o => {
+            const status = (o.status || '').toLowerCase();
             if (!vendorAgg[o.vendorId]) {
                 vendorAgg[o.vendorId] = { id: o.vendorId, orders: 0, revenue: 0, cancelled: 0 };
             }
             vendorAgg[o.vendorId].orders++;
-            if (o.status === 'CANCELLED') vendorAgg[o.vendorId].cancelled++;
-            if (o.status === 'FULFILLED' || o.status === 'ACCEPTED') {
+            if (status === 'cancelled' || status === 'rejected') vendorAgg[o.vendorId].cancelled++;
+            if (['fulfilled', 'completed', 'delivered'].includes(status)) {
                 vendorAgg[o.vendorId].revenue += Number(o.grandTotalAfterTax || o.total || 0);
             }
         });
 
         tfInvoices.forEach(inv => {
             if (!vendorAgg[inv.vendorId]) {
-                vendorAgg[inv.vendorId] = { id: inv.vendorId, orders: 0, revenue: 0, cancelled: 0 };
+                vendorAgg[inv.vendorId] = { id: inv.vendorId, orders: 0, revenue: 0, cancelled: 0, pending: 0 };
             }
             vendorAgg[inv.vendorId].commission = (vendorAgg[inv.vendorId].commission || 0) + Number(inv.commissionAmount || 0);
+        });
+
+        // Global pending for Top Vendors (Outstanding liabilities never disappear)
+        invoices.forEach(inv => {
             if (inv.paymentStatus === 'PENDING') {
-                vendorAgg[inv.vendorId].pending = (vendorAgg[inv.vendorId].pending || 0) + Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                // Ensure we track this even if they had no orders this timeframe
+                if (!vendorAgg[inv.vendorId]) {
+                    vendorAgg[inv.vendorId] = { id: inv.vendorId, orders: 0, revenue: 0, cancelled: 0, commission: 0, pending: 0 };
+                }
+
+                let amount = 0;
+                if (inv.commissionModel === 'VENDOR_FLAT_PERCENT') {
+                    amount = Number(inv.netVendorPayable || 0) + Number(inv.totalTaxAmount || 0);
+                } else {
+                    amount = Number(inv.totalVendorAmount || 0);
+                }
+                vendorAgg[inv.vendorId].pending = (vendorAgg[inv.vendorId].pending || 0) + amount;
             }
         });
 
@@ -193,7 +249,8 @@ export default function SuperAdminDashboard() {
         const chartDataMap = {};
 
         tfOrders.forEach(o => {
-            if (o.status === 'FULFILLED' || o.status === 'ACCEPTED') {
+            const status = (o.status || '').toLowerCase();
+            if (['fulfilled', 'completed', 'delivered'].includes(status)) {
                 const dt = (o.createdAt || o.orderDate)?.toDate ? (o.createdAt || o.orderDate).toDate() : new Date(o.createdAt || o.orderDate);
                 if (!dt) return;
                 const dStr = dt.toISOString().split('T')[0];
@@ -288,6 +345,10 @@ export default function SuperAdminDashboard() {
             totalCommission,
             pendingInvoicesCount,
             totalVendorGross,
+            totalRestaurantPending,
+            restaurantPendingCount,
+            totalRestaurantPaid,
+            restaurantPaidCount,
             topVendors,
             chartData,
             commissionDetails,
@@ -383,6 +444,16 @@ export default function SuperAdminDashboard() {
                     <div className="stat-label">Vendor Payouts (Pending)</div>
                     <div className="stat-value" style={{ color: '#f59e0b' }}>${stats.totalPendingPayout.toFixed(2)}</div>
                     <div className="stat-context">{stats.pendingInvoicesCount} invoices waiting</div>
+                </div>
+                <div className="ui-card stat-card" style={{ padding: 20, cursor: 'pointer', borderLeft: '3px solid #f06595' }} onClick={() => navigate('/admin/restaurant-invoices?status=PENDING')}>
+                    <div className="stat-label">Restaurant Receivables</div>
+                    <div className="stat-value" style={{ color: '#f06595' }}>${stats.totalRestaurantPending.toFixed(2)}</div>
+                    <div className="stat-context">{stats.restaurantPendingCount} unpaid invoices (All Time)</div>
+                </div>
+                <div className="ui-card stat-card" style={{ padding: 20, cursor: 'pointer', borderLeft: '3px solid #845ef7' }} onClick={() => navigate('/admin/restaurant-invoices?status=PAID')}>
+                    <div className="stat-label">Restaurant Paid</div>
+                    <div className="stat-value" style={{ color: '#845ef7' }}>${stats.totalRestaurantPaid.toFixed(2)}</div>
+                    <div className="stat-context">{stats.restaurantPaidCount} paid in timeframe</div>
                 </div>
                 <div className="ui-card stat-card" style={{ padding: 20, cursor: 'pointer' }} onClick={() => setShowCommissionModal(true)}>
                     <div className="stat-label">Total Commission Earned</div>

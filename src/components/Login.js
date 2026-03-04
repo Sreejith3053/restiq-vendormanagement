@@ -105,11 +105,7 @@ export default function Login() {
             }
 
             // Route based on role
-            if (role === "superadmin") {
-                navigate("/vendors");
-            } else {
-                navigate("/");
-            }
+            navigate("/");
         } catch (e2) {
             console.error(e2);
             setErr("Something went wrong. Please try again.");

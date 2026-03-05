@@ -1,0 +1,495 @@
+[
+  {
+    "path": "vendors/0i1RLkC0nheC7RYE2hpD/items/XOScKsVIU08kbVFsa0AR/auditLog/IUIF7GLBUUsPDtiyo6gQ",
+    "data": {
+      "performedBy": "ONd3WQymFMHSrlEZMZqy",
+      "action": "edit_requested",
+      "proposedData": {
+        "taxable": false,
+        "sku": "",
+        "brand": "Sargent",
+        "notes": "",
+        "category": "Meat",
+        "price": 110,
+        "name": "Chicken Leg Quarter",
+        "itemSize": "50KG",
+        "unit": "box",
+        "packQuantity": 1
+      },
+      "originalData": {
+        "brand": "Sargent",
+        "sku": "",
+        "taxable": false,
+        "category": "Meat",
+        "notes": "",
+        "price": 110,
+        "name": "Chicken Leg Quarter",
+        "itemSize": "",
+        "unit": "box",
+        "packQuantity": 1
+      },
+      "performedByName": "freshfarm_admin",
+      "itemName": "Chicken Leg Quarter",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771967036,
+        "nanoseconds": 141000000
+      }
+    }
+  },
+  {
+    "path": "vendors/0i1RLkC0nheC7RYE2hpD/items/XOScKsVIU08kbVFsa0AR/auditLog/OfWTek4ZfDr28Q8IlPhH",
+    "data": {
+      "itemName": "Chicken Leg Quarter",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771967051,
+        "nanoseconds": 718000000
+      },
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "action": "approved",
+      "proposedData": {
+        "packQuantity": 1,
+        "itemSize": "50KG",
+        "name": "Chicken Leg Quarter",
+        "unit": "box",
+        "price": 110,
+        "category": "Meat",
+        "notes": "",
+        "sku": "",
+        "brand": "Sargent",
+        "taxable": false
+      },
+      "requestedBy": "freshfarm_admin",
+      "performedByName": "Dill_superAdmin"
+    }
+  },
+  {
+    "path": "vendors/0i1RLkC0nheC7RYE2hpD/items/XOScKsVIU08kbVFsa0AR/auditLog/q8Bb8dznoxtugDrfD9mc",
+    "data": {
+      "itemName": "Chicken Leg Quarter",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771917021,
+        "nanoseconds": 395000000
+      },
+      "action": "image_uploaded",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "performedByName": "Dill_superAdmin"
+    }
+  },
+  {
+    "path": "vendors/0i1RLkC0nheC7RYE2hpD/items/XOScKsVIU08kbVFsa0AR/auditLog/tdiKdx3IpqJBWandF6GS",
+    "data": {
+      "itemName": "Chicken Leg Quarter",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771917004,
+        "nanoseconds": 581000000
+      },
+      "action": "created_pending",
+      "performedBy": "ONd3WQymFMHSrlEZMZqy",
+      "performedByName": "freshfarm_admin"
+    }
+  },
+  {
+    "path": "vendors/0i1RLkC0nheC7RYE2hpD/items/XOScKsVIU08kbVFsa0AR/auditLog/zjdM14iVHEuoSXuhI2VI",
+    "data": {
+      "requestedBy": "freshfarm_admin",
+      "performedByName": "Dill_superAdmin",
+      "proposedData": {
+        "unit": "box",
+        "name": "Chicken Leg Quarter",
+        "createdAt": "2026-02-24T07:10:05.058Z",
+        "taxable": false,
+        "sku": "",
+        "brand": "Sargent",
+        "category": "Meat",
+        "notes": "",
+        "price": 110
+      },
+      "action": "approved",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "itemName": "Chicken Leg Quarter",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771917015,
+        "nanoseconds": 515000000
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/0oRdITqL5ljcEjC1lHpq",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771968702,
+        "nanoseconds": 407000000
+      },
+      "action": "edit_requested",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4",
+      "performedByName": "admin_taas",
+      "proposedData": {
+        "packQuantity": 1,
+        "itemSize": "250g",
+        "name": "coriander powder",
+        "unit": "packet",
+        "price": 10,
+        "category": "Spices",
+        "notes": "",
+        "sku": "",
+        "brand": "Eastern",
+        "taxable": true
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/42TFSzSvkuxl9xDxJcin",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771967867,
+        "nanoseconds": 644000000
+      },
+      "proposedData": {
+        "itemSize": "400g",
+        "name": "coriander powder",
+        "unit": "packet",
+        "packQuantity": 1,
+        "notes": "",
+        "category": "Spices",
+        "brand": "Eastern",
+        "taxable": true,
+        "sku": "",
+        "price": 10
+      },
+      "performedByName": "admin_taas",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4",
+      "action": "edit_requested"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/CvTYluM9e06OikMwWu9S",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771910044,
+        "nanoseconds": 724000000
+      },
+      "performedByName": "Dill_superAdmin",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "action": "image_uploaded"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/II7lHIeXMHIGQzWHQPv1",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771913661,
+        "nanoseconds": 503000000
+      },
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "action": "approved",
+      "proposedData": {
+        "price": 10,
+        "taxable": true,
+        "name": "coriander powder",
+        "brand": "Eastern",
+        "sku": "",
+        "notes": "",
+        "category": "Spices",
+        "unit": "kg"
+      },
+      "requestedBy": "admin_taas",
+      "performedByName": "Dill_superAdmin"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/MsEHbcLgjQS2V2bn1yBf",
+    "data": {
+      "proposedData": {
+        "packQuantity": 1,
+        "unit": "packet",
+        "name": "coriander powder",
+        "itemSize": "250g",
+        "price": 10,
+        "brand": "Eastern",
+        "taxable": true,
+        "sku": "",
+        "notes": "",
+        "category": "Spices"
+      },
+      "requestedBy": "admin_taas",
+      "performedByName": "Dill_superAdmin",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "action": "approved",
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771968757,
+        "nanoseconds": 149000000
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/NVzcRl5jmirNreqnArb4",
+    "data": {
+      "proposedData": {
+        "price": 10,
+        "notes": "",
+        "category": "Spices",
+        "sku": "",
+        "taxable": true,
+        "brand": "Eastern",
+        "packQuantity": 1,
+        "unit": "packet",
+        "itemSize": "400g",
+        "name": "coriander powder"
+      },
+      "requestedBy": "admin_taas",
+      "performedByName": "Dill_superAdmin",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "action": "approved",
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771967810,
+        "nanoseconds": 350000000
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/NZUG2MMENZDWTCIMq6JR",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1772668080,
+        "nanoseconds": 162000000
+      },
+      "action": "approved",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "requestedBy": "admin_taas",
+      "performedByName": "Dill_superAdmin",
+      "proposedData": {
+        "brand": "Eastern",
+        "sku": "",
+        "taxable": true,
+        "notes": "",
+        "category": "Spices",
+        "vendorPrice": 11,
+        "packQuantity": 1,
+        "name": "coriander powder",
+        "itemSize": "250g",
+        "unit": "packet"
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/NoRHvnxmm8Fucckq79Pw",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771913642,
+        "nanoseconds": 847000000
+      },
+      "proposedData": {
+        "unit": "kg",
+        "sku": "",
+        "taxable": true,
+        "brand": "Eastern",
+        "name": "coriander powder",
+        "category": "Spices",
+        "notes": "",
+        "price": 10
+      },
+      "performedByName": "admin_taas",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4",
+      "action": "edit_requested"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/cVoRrRBtQp8PVOeeLckx",
+    "data": {
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4",
+      "action": "edit_requested",
+      "proposedData": {
+        "packQuantity": 1,
+        "itemSize": "250g",
+        "name": "coriander powder",
+        "unit": "packet",
+        "notes": "",
+        "category": "Spices",
+        "sku": "",
+        "brand": "Eastern",
+        "taxable": true,
+        "vendorPrice": 11
+      },
+      "performedByName": "admin_taas",
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1772668046,
+        "nanoseconds": 884000000
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/cXZXh6LB0ZdIShxvOswH",
+    "data": {
+      "performedByName": "admin_taas",
+      "action": "created_pending",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4",
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771910012,
+        "nanoseconds": 897000000
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/ddneD6mEsCE5xqs32qS3",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771968074,
+        "nanoseconds": 30000000
+      },
+      "proposedData": {
+        "category": "Spices",
+        "notes": "",
+        "brand": "Eastern",
+        "sku": "",
+        "taxable": true,
+        "price": 10,
+        "unit": "packet",
+        "itemSize": "400g",
+        "name": "coriander powder",
+        "packQuantity": 1
+      },
+      "requestedBy": "admin_taas",
+      "performedByName": "Dill_superAdmin",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "action": "approved"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/gH22Rh9PAbN8nS3XqDmm",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1772653644,
+        "nanoseconds": 87000000
+      },
+      "performedByName": "admin_taas",
+      "action": "marked_out_of_stock",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/meuemXiuuCYk68YtswFm",
+    "data": {
+      "requestedBy": "admin_taas",
+      "performedByName": "Dill_superAdmin",
+      "proposedData": {
+        "unit": "kg",
+        "notes": "",
+        "category": "Spices",
+        "name": "coriander powder",
+        "sku": "",
+        "brand": "Eastern",
+        "price": 10
+      },
+      "action": "approved",
+      "performedBy": "fh20yrEki7xf5nMS9fBd",
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771910377,
+        "nanoseconds": 472000000
+      }
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/wYaZVY6KBxuXot5XNwcT",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771910026,
+        "nanoseconds": 146000000
+      },
+      "proposedData": {
+        "price": 10,
+        "notes": "",
+        "category": "Spices",
+        "sku": "",
+        "name": "coriander powder",
+        "createdAt": "2026-02-24T05:13:33.171Z",
+        "unit": "kg"
+      },
+      "performedByName": "Dill_superAdmin",
+      "requestedBy": "admin_taas",
+      "action": "approved",
+      "performedBy": "fh20yrEki7xf5nMS9fBd"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/whgWrB9I9qUwsM53qUdK",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771967786,
+        "nanoseconds": 574000000
+      },
+      "performedByName": "admin_taas",
+      "proposedData": {
+        "unit": "packet",
+        "itemSize": "400g",
+        "name": "coriander powder",
+        "packQuantity": 1,
+        "notes": "",
+        "category": "Spices",
+        "brand": "Eastern",
+        "sku": "",
+        "taxable": true,
+        "price": 10
+      },
+      "action": "edit_requested",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4"
+    }
+  },
+  {
+    "path": "vendors/g3sTYJTunu1Rv7uRytHP/items/97dYvcbDGNzQ5DfcHdAP/auditLog/zT3j8rnGqJzdnhsJOMqg",
+    "data": {
+      "itemName": "coriander powder",
+      "timestamp": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1771910367,
+        "nanoseconds": 945000000
+      },
+      "action": "edit_requested",
+      "performedBy": "6HsWJQHmCqTuWeyJqzr4",
+      "performedByName": "admin_taas",
+      "proposedData": {
+        "price": 10,
+        "unit": "kg",
+        "notes": "",
+        "category": "Spices",
+        "sku": "",
+        "brand": "Eastern",
+        "name": "coriander powder"
+      }
+    }
+  }
+]

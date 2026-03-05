@@ -4,16 +4,18 @@ import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { formatItemSize } from './VendorDetailPage';
+import AddItemModal from './AddItemModal';
 
 const CATEGORIES = ['All', 'Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 
 export default function ItemCatalogPage() {
     const navigate = useNavigate();
-    const { vendorId, vendorName, isSuperAdmin } = useContext(UserContext);
+    const { vendorId, vendorName, isSuperAdmin, userId, displayName } = useContext(UserContext);
     const [allItems, setAllItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -70,14 +72,25 @@ export default function ItemCatalogPage() {
         return matchSearch && matchCat;
     });
 
+    const handleItemAdded = (newItem) => {
+        setAllItems(prev => [...prev, newItem].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+    };
+
     return (
         <div>
-            <div className="page-header">
-                <h2>Item Catalog</h2>
-                <span className="muted">
-                    {allItems.length} item{allItems.length !== 1 ? 's' : ''}
-                    {!isSuperAdmin ? ` for ${vendorName || 'your vendor'}` : ' across all vendors'}
-                </span>
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    <h2>Item Catalog</h2>
+                    <span className="muted">
+                        {allItems.length} item{allItems.length !== 1 ? 's' : ''}
+                        {!isSuperAdmin ? ` for ${vendorName || 'your vendor'}` : ' across all vendors'}
+                    </span>
+                </div>
+                {vendorId && (
+                    <button className="ui-btn primary" onClick={() => setIsAddModalOpen(true)}>
+                        + Add Item
+                    </button>
+                )}
             </div>
 
             {/* Filters */}
@@ -133,7 +146,7 @@ export default function ItemCatalogPage() {
                                     <td data-label="Item" style={{ fontWeight: 600 }}>
                                         {item.name}
                                         {item.disabled && <span className="badge red" style={{ marginLeft: 8, fontSize: 10 }}>Disabled</span>}
-                                        {item.outOfStock && !item.disabled && <span className="badge amber" style={{ marginLeft: 8, fontSize: 10 }}>OOS</span>}
+                                        {item.outOfStock && !item.disabled && <span className="badge amber" style={{ marginLeft: 8, fontSize: 10 }}>Out of Stock</span>}
                                     </td>
                                     <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
                                     {isSuperAdmin && <td data-label="Vendor">{item.vendorName}</td>}
@@ -147,6 +160,31 @@ export default function ItemCatalogPage() {
                         </tbody>
                     </table>
                 </div>
+            )}
+
+            {isAddModalOpen && (
+                <AddItemModal
+                    vendorId={vendorId}
+                    isSuperAdmin={isSuperAdmin}
+                    userId={userId}
+                    displayName={displayName}
+                    onClose={() => setIsAddModalOpen(false)}
+                    onItemAdded={handleItemAdded}
+                    logAudit={async (vId, itemId, action, details) => {
+                        const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
+                        try {
+                            await addDoc(collection(db, `vendors/${vId}/items/${itemId}/auditLog`), {
+                                action,
+                                ...details,
+                                performedBy: userId,
+                                performedByName: displayName || 'Unknown',
+                                timestamp: serverTimestamp()
+                            });
+                        } catch (e) {
+                            console.error('Audit log failed', e);
+                        }
+                    }}
+                />
             )}
         </div>
     );

@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc, collection, getDocs, addDoc, deleteDoc, serverT
 import { UserContext } from '../../contexts/UserContext';
 import { toast } from 'react-toastify';
 import EditItemModal from './EditItemModal';
+import AddItemModal from './AddItemModal';
 import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
@@ -47,8 +48,6 @@ export default function VendorDetailPage() {
 
     // Add item modal
     const [itemModalOpen, setItemModalOpen] = useState(false);
-    const [itemForm, setItemForm] = useState({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '', taxable: false });
-    const [itemSaving, setItemSaving] = useState(false);
 
     // Edit item modal
     const [editingItem, setEditingItem] = useState(null);
@@ -168,66 +167,10 @@ export default function VendorDetailPage() {
         }
     };
 
-    // Add item
-    const handleAddItem = async () => {
-        if (!itemForm.name.trim()) { toast.warn('Item name is required'); return; }
-        if (!itemForm.brand.trim()) { toast.warn('Brand is required'); return; }
-        if (!itemForm.category) { toast.warn('Select a category'); return; }
-
-        setItemSaving(true);
-        try {
-            const itemData = {
-                name: itemForm.name.trim(),
-                brand: itemForm.brand.trim(),
-                category: itemForm.category,
-                unit: itemForm.unit,
-                packQuantity: Number(itemForm.packQuantity) || 1,
-                itemSize: itemForm.itemSize.trim(),
-                vendorPrice: Number(itemForm.price) || 0,
-                commissionPercent: 0,
-                sku: itemForm.sku.trim(),
-                notes: itemForm.notes.trim(),
-                taxable: !!itemForm.taxable,
-                createdAt: new Date().toISOString(),
-            };
-
-            if (isSuperAdmin) {
-                // Super admin → add directly as active
-                const docRef = await addDoc(collection(db, `vendors/${vendorId}/items`), {
-                    ...itemData,
-                    status: 'active',
-                });
-                setItems(prev => [...prev, { id: docRef.id, ...itemData, status: 'active' }]);
-                await logAudit(vendorId, docRef.id, 'created', { itemName: itemData.name });
-                toast.success('Item added!');
-            } else {
-                // Vendor user → create item as in-review with review data on the item
-                const reviewFields = {
-                    changeType: 'add',
-                    proposedData: itemData,
-                    originalData: null,
-                    requestedBy: userId,
-                    requestedByName: displayName || 'Unknown',
-                    requestedAt: serverTimestamp(),
-                };
-                const docRef = await addDoc(collection(db, `vendors/${vendorId}/items`), {
-                    ...itemData,
-                    status: 'in-review',
-                    ...reviewFields,
-                });
-                setItems(prev => [...prev, { id: docRef.id, ...itemData, status: 'in-review', ...reviewFields }]);
-                await logAudit(vendorId, docRef.id, 'created_pending', { itemName: itemData.name });
-                toast.info('✅ New item submitted for review!');
-            }
-
-            setItemModalOpen(false);
-            setItemForm({ name: '', brand: '', category: '', unit: 'kg', price: '', sku: '', notes: '', taxable: false });
-        } catch (err) {
-            console.error(err);
-            toast.error('Failed to add item');
-        } finally {
-            setItemSaving(false);
-        }
+    // Add item handling is now largely inside AddItemModal, but we need a callback 
+    // to update the local list when an item is added.
+    const handleItemAdded = (newItem) => {
+        setItems(prev => [...prev, newItem]);
     };
 
     // Delete item — super admin deletes directly, vendor admin/user submits for review
@@ -668,55 +611,17 @@ export default function VendorDetailPage() {
             }
 
             {/* Add Item Modal */}
-            {
-                itemModalOpen && (
-                    <div className="modalBackdrop" onClick={() => setItemModalOpen(false)}>
-                        <div className="modal" onClick={e => e.stopPropagation()}>
-                            <div className="modalHeader"><h3>Add Item to {vendor.name}</h3></div>
-                            <div className="modalBody">
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                                    <div><label className="ui-label">Item Name *</label><input className="ui-input" placeholder="e.g. Turmeric Powder" value={itemForm.name} onChange={e => setItemForm(p => ({ ...p, name: e.target.value }))} /></div>
-                                    <div><label className="ui-label">Brand *</label><input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={itemForm.brand} onChange={e => setItemForm(p => ({ ...p, brand: e.target.value }))} /></div>
-                                    <div><label className="ui-label">Category *</label>
-                                        <select className="ui-input" value={itemForm.category} onChange={e => setItemForm(p => ({ ...p, category: e.target.value }))}>
-                                            <option value="">Select...</option>
-                                            {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginTop: 16 }}>
-                                    <div><label className="ui-label">Pricing Unit</label>
-                                        <select className="ui-input" value={itemForm.unit} onChange={e => setItemForm(p => ({ ...p, unit: e.target.value }))}>
-                                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                                        </select>
-                                    </div>
-                                    <div><label className="ui-label">Qty per Unit</label><input className="ui-input" type="number" min="1" placeholder="e.g. 1" value={itemForm.packQuantity} onChange={e => setItemForm(p => ({ ...p, packQuantity: e.target.value }))} /></div>
-                                    <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={itemForm.itemSize} onChange={e => setItemForm(p => ({ ...p, itemSize: e.target.value }))} /></div>
-                                    <div><label className="ui-label">Price ($)</label><input className="ui-input" type="number" step="0.01" placeholder="0.00" value={itemForm.price} onChange={e => setItemForm(p => ({ ...p, price: e.target.value }))} /></div>
-                                </div>
-                                <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" placeholder="Optional SKU or product code" value={itemForm.sku} onChange={e => setItemForm(p => ({ ...p, sku: e.target.value }))} /></div>
-                                <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Optional notes" value={itemForm.notes} onChange={e => setItemForm(p => ({ ...p, notes: e.target.value }))} /></div>
-                                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
-                                    <div
-                                        className={`idp-toggle ${itemForm.taxable ? 'active' : ''}`}
-                                        onClick={() => setItemForm(p => ({ ...p, taxable: !p.taxable }))}
-                                        role="switch"
-                                        aria-checked={!!itemForm.taxable}
-                                    >
-                                        <div className="idp-toggle__knob" />
-                                    </div>
-                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{itemForm.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
-                                </div>
-                                <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                                    <button className="ui-btn ghost" onClick={() => setItemModalOpen(false)}>Cancel</button>
-                                    <button className="ui-btn primary" onClick={handleAddItem} disabled={itemSaving}>{itemSaving ? 'Saving...' : isSuperAdmin ? '💾 Save Item' : '📩 Submit for Review'}</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            {itemModalOpen && (
+                <AddItemModal
+                    vendorId={vendorId}
+                    isSuperAdmin={isSuperAdmin}
+                    userId={userId}
+                    displayName={displayName}
+                    onClose={() => setItemModalOpen(false)}
+                    onItemAdded={handleItemAdded}
+                    logAudit={logAudit}
+                />
+            )}
 
             {/* Edit Item Modal */}
             {

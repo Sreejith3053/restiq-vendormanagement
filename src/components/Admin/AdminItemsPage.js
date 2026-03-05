@@ -124,7 +124,7 @@ const AdminItemsPage = () => {
 
             // Group price by month (assuming logs sorted oldest to newest)
             logs.forEach(log => {
-                const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? log.newData?.vendorPrice ?? log.newData?.price;
+                const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? log.newData?.vendorPrice ?? log.newData?.price ?? log.newPrice;
                 if (newP !== undefined) {
                     const dt = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp?.seconds * 1000);
                     const monthKey = dt.toLocaleString('en-US', { month: 'short', year: 'numeric' });
@@ -202,12 +202,37 @@ const AdminItemsPage = () => {
                 return tB - tA;
             });
 
-            // Filter out logs that don't have price changes
-            const priceLogs = logs.filter(log => {
-                const oldP = log.originalData?.vendorPrice ?? log.originalData?.price;
-                const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price;
-                return oldP !== undefined && newP !== undefined && Number(oldP) !== Number(newP);
-            });
+            // Filter out logs that don't have price changes using chronological reconstruction
+            const priceLogs = [];
+            let lastKnownPrice = null;
+
+            [...logs]
+                .sort((a, b) => {
+                    const tA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || 0;
+                    const tB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || 0;
+                    return tA - tB;
+                })
+                .forEach(log => {
+                    const proposedPrice = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? log.newData?.vendorPrice ?? log.newData?.price ?? log.newPrice;
+                    const originalPrice = log.originalData?.vendorPrice ?? log.originalData?.price ?? log.oldData?.vendorPrice ?? log.oldData?.price ?? log.oldPrice;
+
+                    if (proposedPrice !== undefined) {
+                        const numericNewPrice = Number(proposedPrice);
+                        if (lastKnownPrice === null) {
+                            lastKnownPrice = numericNewPrice;
+                            if (originalPrice !== undefined && Number(originalPrice) !== numericNewPrice) {
+                                // Re-inject original data fields for the UI to read
+                                priceLogs.push({ ...log, originalData: { vendorPrice: Number(originalPrice) }, proposedData: { vendorPrice: numericNewPrice } });
+                            }
+                        } else if (numericNewPrice !== lastKnownPrice) {
+                            priceLogs.push({ ...log, originalData: { vendorPrice: lastKnownPrice }, proposedData: { vendorPrice: numericNewPrice } });
+                            lastKnownPrice = numericNewPrice;
+                        }
+                    }
+                });
+
+            // Reverse for display (newest first)
+            priceLogs.reverse();
 
             setHistoryLogs(priceLogs);
         } catch (error) {
@@ -447,8 +472,8 @@ const AdminItemsPage = () => {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                                     {historyLogs.map((log, idx) => {
                                         const dt = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp?.seconds * 1000);
-                                        const oldP = log.originalData?.vendorPrice ?? log.originalData?.price ?? 0;
-                                        const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? 0;
+                                        const oldP = log.originalData?.vendorPrice ?? log.originalData?.price ?? log.oldData?.vendorPrice ?? log.oldData?.price ?? log.oldPrice ?? 0;
+                                        const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? log.newData?.vendorPrice ?? log.newData?.price ?? log.newPrice ?? 0;
                                         const up = Number(newP) > Number(oldP);
 
                                         return (

@@ -122,12 +122,12 @@ export default function ItemDetailPage() {
         })();
     }, [vendorId, itemId, navigate]);
 
-    // ─── Load audit log on tab switch ───
+    // ─── Load audit log on mount so widgets have data ───
     useEffect(() => {
-        if ((activeTab === 'activity' || activeTab === 'price') && !auditLoaded) {
+        if (!auditLoaded && vendorId && itemId) {
             loadAuditLog();
         }
-    }, [activeTab]);
+    }, [vendorId, itemId, auditLoaded]);
 
     const loadAuditLog = async () => {
         setAuditLoading(true);
@@ -450,21 +450,62 @@ export default function ItemDetailPage() {
     };
 
     // ─── Price history from audit log ───
-    const priceHistory = auditLog
-        .filter(log => log.proposedData?.vendorPrice !== undefined || log.originalData?.vendorPrice !== undefined || log.proposedData?.price !== undefined)
-        .filter(log => {
-            const oldP = log.originalData?.vendorPrice ?? log.originalData?.price;
-            const newP = log.proposedData?.vendorPrice ?? log.proposedData?.price;
-            return oldP !== undefined && newP !== undefined && Number(oldP) !== Number(newP);
+    const priceHistory = [];
+    let lastKnownPrice = null;
+
+    // Logs are already sorted oldest to newest from the query in loadAuditLog() by the time we process them,
+    // wait, actually loadAuditLog sorts them NEWEST first: tB - tA. Let's process them oldest to newest.
+    [...auditLog]
+        .sort((a, b) => {
+            const tA = a.timestamp?.toMillis?.() || a.timestamp?.seconds * 1000 || 0;
+            const tB = b.timestamp?.toMillis?.() || b.timestamp?.seconds * 1000 || 0;
+            return tA - tB;
         })
-        .map(log => ({
-            id: log.id,
-            oldPrice: Number(log.originalData.vendorPrice ?? log.originalData.price ?? 0),
-            newPrice: Number(log.proposedData.vendorPrice ?? log.proposedData.price ?? 0),
-            timestamp: log.timestamp,
-            performedByName: log.performedByName,
-            action: log.action,
-        }));
+        .forEach(log => {
+            const proposedPrice = log.proposedData?.vendorPrice ?? log.proposedData?.price ?? log.newData?.vendorPrice ?? log.newData?.price ?? log.newPrice;
+            const originalPrice = log.originalData?.vendorPrice ?? log.originalData?.price ?? log.oldData?.vendorPrice ?? log.oldData?.price ?? log.oldPrice;
+
+            // Determine the price this log represents
+            let logNewPrice = proposedPrice;
+
+            // If the log is just an approval without proposedData (legacy), maybe it has originalPrice?
+            if (logNewPrice === undefined && originalPrice !== undefined) {
+                // well if there's no new price, we skip
+            }
+
+            if (logNewPrice !== undefined) {
+                const numericNewPrice = Number(logNewPrice);
+                // If it's the first price we see, just record it as baseline without an entry
+                if (lastKnownPrice === null) {
+                    lastKnownPrice = numericNewPrice;
+                    // If this log explicitely had a different original price, we can log it
+                    if (originalPrice !== undefined && Number(originalPrice) !== numericNewPrice) {
+                        priceHistory.push({
+                            id: log.id,
+                            oldPrice: Number(originalPrice),
+                            newPrice: numericNewPrice,
+                            timestamp: log.timestamp,
+                            performedByName: log.performedByName || log.changedBy || (log.adminAction ? 'Admin' : 'Unknown'),
+                            action: log.action,
+                        });
+                    }
+                } else if (numericNewPrice !== lastKnownPrice) {
+                    // Price changed
+                    priceHistory.push({
+                        id: log.id,
+                        oldPrice: lastKnownPrice,
+                        newPrice: numericNewPrice,
+                        timestamp: log.timestamp,
+                        performedByName: log.performedByName || log.changedBy || (log.adminAction ? 'Admin' : 'Unknown'),
+                        action: log.action,
+                    });
+                    lastKnownPrice = numericNewPrice;
+                }
+            }
+        });
+
+    // Reverse it back for display (newest first)
+    priceHistory.reverse();
 
     // ─── Loading ───
     if (loading) {
@@ -630,8 +671,23 @@ export default function ItemDetailPage() {
                 </div>
                 <div className="idp-stat">
                     <div className="idp-stat__icon">📊</div>
-                    <div className="idp-stat__label">Price Changes</div>
-                    <div className="idp-stat__value">{auditLoaded ? priceHistory.length : '—'}</div>
+                    <div className="idp-stat__label">Latest Price Change</div>
+                    <div className="idp-stat__value">
+                        {auditLoaded ? (
+                            priceHistory.length > 0 ? (
+                                <span style={{ fontSize: 14 }}>
+                                    <span style={{ color: 'var(--muted)', textDecoration: 'line-through', marginRight: 6 }}>
+                                        ${priceHistory[0].oldPrice.toFixed(2)}
+                                    </span>
+                                    <span style={{ color: '#4ade80' }}>
+                                        ${priceHistory[0].newPrice.toFixed(2)}
+                                    </span>
+                                </span>
+                            ) : (
+                                'None'
+                            )
+                        ) : '—'}
+                    </div>
                 </div>
                 <div className="idp-stat">
                     <div className="idp-stat__icon">🕐</div>

@@ -1,8 +1,9 @@
 // src/components/Vendors/EditItemModal.js
 import React, { useState, useContext } from 'react';
 import { UserContext } from '../../contexts/UserContext';
-import { db } from '../../firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, storage } from '../../firebase';
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
@@ -20,11 +21,32 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         itemSize: item.itemSize || '',
         vendorPrice: item.vendorPrice ?? item.price ?? '',
         sku: item.sku || '',
+        description: item.description || '',
         notes: item.notes || '',
         taxable: !!item.taxable,
     });
+
+    // New Actions
+    const [requestType, setRequestType] = useState('edit'); // 'edit' or 'deactivate'
+    const [proofFiles, setProofFiles] = useState([]);
+    const proofInputRef = React.useRef(null);
+
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    const handleProofChange = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+        const validFiles = [];
+        for (const file of files) {
+            if (!validTypes.includes(file.type)) { toast.warn(`${file.name} must be a PDF or Image`); continue; }
+            if (file.size > 10 * 1024 * 1024) { toast.warn(`${file.name} must be under 10MB`); continue; }
+            validFiles.push(file);
+        }
+        setProofFiles(prev => [...prev, ...validFiles]);
+    };
 
     const handleChange = (field, value) => {
         setForm(prev => ({ ...prev, [field]: value }));
@@ -32,6 +54,8 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
 
     // Check if anything actually changed
     const hasChanges = () => {
+        if (requestType !== 'edit') return true; // Deactivation is always a change
+
         return (
             form.name.trim() !== (item.name || '') ||
             form.brand.trim() !== (item.brand || '') ||
@@ -41,6 +65,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
             form.itemSize.trim() !== (item.itemSize || '') ||
             String(form.vendorPrice) !== String(item.vendorPrice ?? item.price ?? '') ||
             form.sku.trim() !== (item.sku || '') ||
+            form.description.trim() !== (item.description || '') ||
             form.notes.trim() !== (item.notes || '') ||
             form.taxable !== !!item.taxable
         );
@@ -50,13 +75,29 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         e.preventDefault();
         setError('');
 
-        if (!form.name.trim()) { setError('Item name is required.'); return; }
-        if (!form.brand.trim()) { setError('Brand is required.'); return; }
-        if (!form.category) { setError('Select a category.'); return; }
+        if (requestType === 'edit') {
+            if (!form.name.trim()) { setError('Item name is required.'); return; }
+            if (!form.category) { setError('Select a category.'); return; }
+        }
         if (!hasChanges()) { setError('No changes detected.'); return; }
 
         setSaving(true);
         try {
+            let uploadedProofUrls = [];
+            if (proofFiles.length > 0 && !isSuperAdmin) {
+                try {
+                    for (const file of proofFiles) {
+                        const ext = file.name.split('.').pop() || 'pdf';
+                        const storageRef = ref(storage, `proofs/${vendorId}/${item.id}_update_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
+                        await uploadBytes(storageRef, file);
+                        const url = await getDownloadURL(storageRef);
+                        uploadedProofUrls.push({ url, name: file.name });
+                    }
+                } catch (proofErr) {
+                    console.error('Proof upload failed:', proofErr);
+                    toast.warn('Some proof uploads failed, but continuing with request submission...');
+                }
+            }
             const proposedData = {
                 name: form.name.trim(),
                 brand: form.brand.trim(),
@@ -66,6 +107,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 itemSize: form.itemSize.trim(),
                 vendorPrice: Number(form.vendorPrice) || 0,
                 sku: form.sku.trim(),
+                description: form.description.trim(),
                 notes: form.notes.trim(),
                 taxable: !!form.taxable,
             };
@@ -79,51 +121,69 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 itemSize: item.itemSize || '',
                 vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
                 sku: item.sku || '',
+                description: item.description || '',
                 notes: item.notes || '',
                 taxable: !!item.taxable,
             };
 
             if (isSuperAdmin) {
-                // Super admin → direct update, always active
+                // Super admin → direct update, always active unless deactivating
+                const newStatus = requestType === 'deactivate' ? 'inactive' : 'active';
+                const payload = requestType === 'deactivate' ? { status: newStatus } : { ...proposedData, status: newStatus };
+
                 const itemRef = doc(db, `vendors/${vendorId}/items`, item.id);
                 await updateDoc(itemRef, {
-                    ...proposedData,
-                    status: 'active',
+                    ...payload,
                     rejectionComment: '',
                     updatedAt: new Date().toISOString(),
                 });
-                toast.success('Item updated!');
-                onItemUpdated({ ...item, ...proposedData, status: 'active', rejectionComment: '' });
+                toast.success(`Item ${requestType === 'deactivate' ? 'deactivated' : 'updated'}!`);
+                onItemUpdated({ ...item, ...payload, rejectionComment: '' });
                 // Audit log
                 if (logAudit) {
-                    await logAudit(vendorId, item.id, 'edited_direct', {
+                    await logAudit(vendorId, item.id, requestType === 'deactivate' ? 'deactivated_direct' : 'edited_direct', {
                         itemName: proposedData.name,
                         originalData,
-                        proposedData,
+                        proposedData: requestType === 'deactivate' ? { status: 'inactive' } : proposedData,
                     });
                 }
             } else {
                 // Vendor admin/user → store review data directly on the item
-                const itemRef = doc(db, `vendors/${vendorId}/items`, item.id);
-                await updateDoc(itemRef, {
+                const reviewFields = {
                     status: 'in-review',
                     rejectionComment: '',
-                    changeType: 'edit',
-                    proposedData,
+                    changeType: requestType === 'deactivate' ? 'deactivate' : 'edit',
+                    proposedData: requestType === 'deactivate' ? { status: 'inactive' } : proposedData,
                     originalData,
                     requestedBy: userId,
                     requestedByName: displayName || 'Unknown',
                     requestedAt: serverTimestamp(),
+                    ...(uploadedProofUrls.length > 0 && { proofUrls: uploadedProofUrls })
+                };
+
+                const itemRef = doc(db, `vendors/${vendorId}/items`, item.id);
+                await updateDoc(itemRef, reviewFields);
+
+                // Create Notification for Superadmins
+                await addDoc(collection(db, 'notifications'), {
+                    type: 'vendor_to_admin',
+                    entityId: 'superadmin', // target group
+                    title: requestType === 'deactivate' ? 'Deactivation Request' : 'Item Edit Request',
+                    message: `${displayName || 'Vendor'} requested to ${requestType === 'deactivate' ? 'deactivate' : 'edit'} item "${item.name}".`,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    metadata: { vendorId, itemId: item.id, changeType: requestType === 'deactivate' ? 'deactivate' : 'edit' }
                 });
 
-                toast.info('✅ Changes submitted for review!');
-                onItemUpdated({ ...item, status: 'in-review', rejectionComment: '', changeType: 'edit', proposedData, originalData, requestedBy: userId, requestedByName: displayName || 'Unknown' });
+                toast.info(`✅ ${requestType === 'deactivate' ? 'Deactivation request' : 'Changes'} submitted for review!`);
+                onItemUpdated({ ...item, ...reviewFields });
                 // Audit log
                 if (logAudit) {
-                    await logAudit(vendorId, item.id, 'edit_requested', {
+                    await logAudit(vendorId, item.id, requestType === 'deactivate' ? 'deactivate_requested' : 'edit_requested', {
                         itemName: item.name,
-                        proposedData,
+                        proposedData: reviewFields.proposedData,
                         originalData,
+                        ...(proofFiles.length > 0 && { proofFileCount: proofFiles.length })
                     });
                 }
             }
@@ -156,41 +216,97 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                             ℹ️ Changes will be submitted for super admin review before being applied.
                         </div>
                     )}
+
+                    <div style={{ marginBottom: 20, display: 'flex', gap: 12 }}>
+                        <button
+                            type="button"
+                            onClick={() => setRequestType('edit')}
+                            className={`ui-btn small ${requestType === 'edit' ? 'primary' : 'ghost'}`}
+                        >
+                            ✏️ Edit Details
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setRequestType('deactivate')}
+                            className={`ui-btn small ${requestType === 'deactivate' ? 'danger' : 'ghost'}`}
+                            style={requestType === 'deactivate' ? {} : { color: '#ef4444' }}
+                        >
+                            🚫 Request Deactivation
+                        </button>
+                    </div>
+
                     <form onSubmit={handleSubmit}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                            <div><label className="ui-label">Item Name *</label><input className="ui-input" value={form.name} onChange={e => handleChange('name', e.target.value)} placeholder="e.g. Turmeric Powder" /></div>
-                            <div><label className="ui-label">Brand *</label><input className="ui-input" value={form.brand} onChange={e => handleChange('brand', e.target.value)} placeholder="e.g. Eastern, Sakthi, MTR…" /></div>
-                            <div><label className="ui-label">Category *</label>
-                                <select className="ui-input" value={form.category} onChange={e => handleChange('category', e.target.value)}>
-                                    <option value="">Select...</option>
-                                    {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
+                        {requestType === 'edit' ? (
+                            <>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                                    <div><label className="ui-label">Item Name *</label><input className="ui-input" value={form.name} onChange={e => handleChange('name', e.target.value)} placeholder="e.g. Turmeric Powder" /></div>
+                                    <div><label className="ui-label">Brand</label><input className="ui-input" value={form.brand} onChange={e => handleChange('brand', e.target.value)} placeholder="e.g. Eastern, Sakthi, MTR…" /></div>
+                                    <div><label className="ui-label">Category *</label>
+                                        <select className="ui-input" value={form.category} onChange={e => handleChange('category', e.target.value)}>
+                                            <option value="">Select...</option>
+                                            {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginTop: 16 }}>
+                                    <div><label className="ui-label">Pricing Unit</label>
+                                        <select className="ui-input" value={form.unit} onChange={e => handleChange('unit', e.target.value)}>
+                                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                        </select>
+                                    </div>
+                                    <div><label className="ui-label">Qty per Unit</label><input className="ui-input" type="number" min="1" placeholder="e.g. 1" value={form.packQuantity} onChange={e => handleChange('packQuantity', e.target.value)} /></div>
+                                    <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={form.itemSize} onChange={e => handleChange('itemSize', e.target.value)} /></div>
+                                    <div><label className="ui-label">Vendor Price ($)</label><input className="ui-input" type="number" step="0.01" value={form.vendorPrice} onChange={e => handleChange('vendorPrice', e.target.value)} placeholder="0.00" /></div>
+                                </div>
+                                <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" value={form.sku} onChange={e => handleChange('sku', e.target.value)} placeholder="Optional SKU or product code" /></div>
+                                <div style={{ marginTop: 16 }}><label className="ui-label">Description</label><textarea className="ui-input" style={{ height: 60 }} value={form.description} onChange={e => handleChange('description', e.target.value)} placeholder="Public item description" /></div>
+                                <div style={{ marginTop: 16 }}><label className="ui-label">Private Notes</label><input className="ui-input" value={form.notes} onChange={e => handleChange('notes', e.target.value)} placeholder="Internal notes" /></div>
+                                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
+                                    <div
+                                        className={`idp-toggle ${form.taxable ? 'active' : ''}`}
+                                        onClick={() => handleChange('taxable', !form.taxable)}
+                                        role="switch"
+                                        aria-checked={!!form.taxable}
+                                    >
+                                        <div className="idp-toggle__knob" />
+                                    </div>
+                                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{form.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
+                                </div>
+
+                                {!isSuperAdmin && (
+                                    <div style={{ marginTop: 20, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                                        <label className="ui-label" style={{ marginBottom: 4 }}>Supporting Documents (Optional)</label>
+                                        <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px 0' }}>Upload invoices, quotations, product images, or packaging images.</p>
+                                        <input type="file" ref={proofInputRef} accept=".pdf,image/*" multiple style={{ display: 'none' }} onChange={handleProofChange} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            <div>
+                                                <button type="button" className="ui-btn small ghost" onClick={() => proofInputRef.current?.click()}>
+                                                    📄 {proofFiles.length > 0 ? 'Add More Files' : 'Select Files'}
+                                                </button>
+                                            </div>
+                                            {proofFiles.length > 0 && (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                    {proofFiles.map((f, i) => (
+                                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 4 }}>
+                                                            <span style={{ color: '#4ade80' }}>✓ {f.name}</span>
+                                                            <button type="button" onClick={() => setProofFiles(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: '#ff6b7a', cursor: 'pointer', padding: 0 }}>✕</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div style={{ padding: 24, textAlign: 'center', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 12 }}>
+                                <h4 style={{ margin: '0 0 12px 0', color: '#ef4444' }}>Deactivate this item?</h4>
+                                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13 }}>
+                                    This will hide the item from the marketplace. {isSuperAdmin ? 'The action will be immediate.' : 'The Superadmin will review your request.'}
+                                </p>
                             </div>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginTop: 16 }}>
-                            <div><label className="ui-label">Pricing Unit</label>
-                                <select className="ui-input" value={form.unit} onChange={e => handleChange('unit', e.target.value)}>
-                                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                                </select>
-                            </div>
-                            <div><label className="ui-label">Qty per Unit</label><input className="ui-input" type="number" min="1" placeholder="e.g. 1" value={form.packQuantity} onChange={e => handleChange('packQuantity', e.target.value)} /></div>
-                            <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={form.itemSize} onChange={e => handleChange('itemSize', e.target.value)} /></div>
-                            <div><label className="ui-label">Vendor Price ($)</label><input className="ui-input" type="number" step="0.01" value={form.vendorPrice} onChange={e => handleChange('vendorPrice', e.target.value)} placeholder="0.00" /></div>
-                        </div>
-                        <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" value={form.sku} onChange={e => handleChange('sku', e.target.value)} placeholder="Optional SKU or product code" /></div>
-                        <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><input className="ui-input" value={form.notes} onChange={e => handleChange('notes', e.target.value)} placeholder="Optional notes" /></div>
-                        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
-                            <div
-                                className={`idp-toggle ${form.taxable ? 'active' : ''}`}
-                                onClick={() => handleChange('taxable', !form.taxable)}
-                                role="switch"
-                                aria-checked={!!form.taxable}
-                            >
-                                <div className="idp-toggle__knob" />
-                            </div>
-                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{form.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
-                        </div>
+                        )}
 
                         {error && <div style={{ marginTop: 12, color: '#ff4d6a', fontSize: 13 }}>{error}</div>}
 

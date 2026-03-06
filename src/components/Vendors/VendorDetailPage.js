@@ -6,6 +6,7 @@ import { UserContext } from '../../contexts/UserContext';
 import { toast } from 'react-toastify';
 import EditItemModal from './EditItemModal';
 import AddItemModal from './AddItemModal';
+import ItemAnalyticsModal from './ItemAnalyticsModal';
 import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
@@ -48,6 +49,9 @@ export default function VendorDetailPage() {
 
     // Add item modal
     const [itemModalOpen, setItemModalOpen] = useState(false);
+
+    // Analytics Modal
+    const [analyticsItem, setAnalyticsItem] = useState(null);
 
     // Edit item modal
     const [editingItem, setEditingItem] = useState(null);
@@ -95,8 +99,14 @@ export default function VendorDetailPage() {
                 setEditForm(vData);
 
                 // Load items
+                // Load items, explicitly injecting vendorId and vendorName just in case the document lacks it
                 const itemSnap = await getDocs(collection(db, `vendors/${vendorId}/items`));
-                setItems(itemSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                setItems(itemSnap.docs.map(d => ({
+                    id: d.id,
+                    vendorId: vendorId,
+                    vendorName: vData.name,
+                    ...d.data()
+                })));
 
                 // Load invoices
                 if (isSuperAdmin) {
@@ -489,6 +499,7 @@ export default function VendorDetailPage() {
                             <option value="All">All Statuses</option>
                             <option value="active">Active</option>
                             <option value="in-review">In Review</option>
+                            <option value="needs-correction">Needs Correction</option>
                             <option value="rejected">Rejected</option>
                         </select>
                     </div>
@@ -516,22 +527,23 @@ export default function VendorDetailPage() {
                                     <th>Tax</th>
                                     <th>SKU</th>
                                     <th>Status</th>
+                                    <th>Analytics</th>
                                     {canEdit && <th>Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredItems.map(item => {
                                     const itemStatus = item.status || 'active';
-                                    const statusColor = itemStatus === 'active' ? 'green' : itemStatus === 'in-review' ? 'yellow' : 'red';
-                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : 'Rejected';
+                                    const statusColor = itemStatus === 'active' ? 'green' : (itemStatus === 'in-review' || itemStatus === 'needs-correction') ? 'yellow' : 'red';
+                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : itemStatus === 'needs-correction' ? 'Needs Correction' : 'Rejected';
                                     return (
                                         <React.Fragment key={item.id}>
                                             <tr className="is-row" onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)} style={{ cursor: 'pointer' }}>
                                                 <td data-label="Name" style={{ fontWeight: 600, color: '#4dabf7' }}>
                                                     {item.name}
-                                                    {itemStatus === 'rejected' && item.rejectionComment && (
-                                                        <div style={{ fontSize: 11, color: '#ff6b7a', fontWeight: 400, marginTop: 2 }}>
-                                                            ❌ {item.rejectionComment}
+                                                    {(itemStatus === 'rejected' || itemStatus === 'needs-correction') && item.rejectionComment && (
+                                                        <div style={{ fontSize: 11, color: itemStatus === 'rejected' ? '#ff6b7a' : '#f59e0b', fontWeight: 400, marginTop: 4, background: itemStatus === 'rejected' ? 'rgba(255,107,122,0.1)' : 'rgba(245,158,11,0.1)', padding: '4px 8px', borderRadius: 4 }}>
+                                                            {itemStatus === 'rejected' ? '❌' : '⚠️'} {item.rejectionComment}
                                                         </div>
                                                     )}
                                                 </td>
@@ -545,6 +557,9 @@ export default function VendorDetailPage() {
                                                 </td>
                                                 <td data-label="SKU">{item.sku || '—'}</td>
                                                 <td data-label="Status"><span className={`badge ${statusColor}`}>{statusLabel}</span></td>
+                                                <td data-label="Analytics" onClick={e => e.stopPropagation()}>
+                                                    <button className="ui-btn small ghost" onClick={() => setAnalyticsItem(item)} title="View Analytics">📊 Analytics</button>
+                                                </td>
                                                 {canEdit && (
                                                     <td onClick={e => e.stopPropagation()}>
                                                         <div style={{ display: 'flex', gap: 6 }}>
@@ -620,6 +635,14 @@ export default function VendorDetailPage() {
                     onClose={() => setItemModalOpen(false)}
                     onItemAdded={handleItemAdded}
                     logAudit={logAudit}
+                />
+            )}
+
+            {/* Analytics Modal */}
+            {analyticsItem && (
+                <ItemAnalyticsModal
+                    item={{ ...analyticsItem, vendorName: vendor?.name }}
+                    onClose={() => setAnalyticsItem(null)}
                 />
             )}
 

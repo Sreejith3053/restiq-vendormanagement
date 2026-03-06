@@ -139,7 +139,7 @@ export default function AdminRestaurantsPage() {
                                     key={r.id}
                                     className="is-row"
                                     style={{ cursor: 'pointer' }}
-                                    onClick={() => navigate(`/admin/restaurant-invoices?status=All&restaurantId=${encodeURIComponent(r.id)}`)}
+                                    onClick={() => navigate(`/admin/restaurants/${encodeURIComponent(r.id)}`)}
                                     title={`View invoices for ${r.id}`}
                                 >
                                     <td style={{ fontWeight: 600 }}>{r.id === 'Unknown' ? <em style={{ color: 'var(--muted)' }}>Unknown / Unassigned</em> : r.id}</td>

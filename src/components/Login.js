@@ -13,6 +13,7 @@ import {
     serverTimestamp,
 } from "firebase/firestore";
 
+import restiqLogo from "../assets/restiq-logo.png";
 import "./Login.css";
 
 export default function Login() {
@@ -118,9 +119,8 @@ export default function Login() {
         <div className="login-wrap">
             <div className="login-card">
                 <div className="login-brand">
-                    <div className="brand-icon">📦</div>
-                    <h1>Vendor Management</h1>
-                    <div className="brand-sub">Supplier & Inventory Portal</div>
+                    <img src={restiqLogo} alt="RestIQ" className="brand-logo" />
+                    <div className="brand-sub">Vendor Management Portal</div>
                 </div>
 
                 <form className="login-form" onSubmit={handleSubmit}>
@@ -176,7 +176,7 @@ export default function Login() {
                 </form>
 
                 <div className="login-footer">
-                    <span>© {new Date().getFullYear()} Vendor Management</span>
+                    <span>© {new Date().getFullYear()} RestIQ Solutions</span>
                 </div>
             </div>
         </div>

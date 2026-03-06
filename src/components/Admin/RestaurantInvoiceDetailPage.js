@@ -72,7 +72,7 @@ export default function RestaurantInvoiceDetailPage() {
             }
 
             // Generate PDF
-            const base64Pdf = generateInvoicePDF(invoice, restaurantInfo, 'restaurant');
+            const base64Pdf = await generateInvoicePDF(invoice, restaurantInfo, 'restaurant');
 
             // Save to Firestore subcollection
             await setDoc(doc(db, 'restaurantInvoices', invoiceId, 'pdfs', 'invoice'), {

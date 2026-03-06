@@ -96,7 +96,7 @@ export default function InvoiceDetailPage() {
                 }
             }
 
-            const base64Pdf = generateInvoicePDF(invoice, restaurantInfo, 'vendor');
+            const base64Pdf = await generateInvoicePDF(invoice, restaurantInfo, 'vendor');
 
             await setDoc(doc(db, 'vendorInvoices', invoiceId, 'pdfs', 'invoice'), {
                 pdfBase64: base64Pdf,

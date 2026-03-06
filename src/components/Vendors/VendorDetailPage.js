@@ -499,6 +499,7 @@ export default function VendorDetailPage() {
                             <option value="All">All Statuses</option>
                             <option value="active">Active</option>
                             <option value="in-review">In Review</option>
+                            <option value="needs-correction">Needs Correction</option>
                             <option value="rejected">Rejected</option>
                         </select>
                     </div>
@@ -533,16 +534,16 @@ export default function VendorDetailPage() {
                             <tbody>
                                 {filteredItems.map(item => {
                                     const itemStatus = item.status || 'active';
-                                    const statusColor = itemStatus === 'active' ? 'green' : itemStatus === 'in-review' ? 'yellow' : 'red';
-                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : 'Rejected';
+                                    const statusColor = itemStatus === 'active' ? 'green' : (itemStatus === 'in-review' || itemStatus === 'needs-correction') ? 'yellow' : 'red';
+                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : itemStatus === 'needs-correction' ? 'Needs Correction' : 'Rejected';
                                     return (
                                         <React.Fragment key={item.id}>
                                             <tr className="is-row" onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)} style={{ cursor: 'pointer' }}>
                                                 <td data-label="Name" style={{ fontWeight: 600, color: '#4dabf7' }}>
                                                     {item.name}
-                                                    {itemStatus === 'rejected' && item.rejectionComment && (
-                                                        <div style={{ fontSize: 11, color: '#ff6b7a', fontWeight: 400, marginTop: 2 }}>
-                                                            ❌ {item.rejectionComment}
+                                                    {(itemStatus === 'rejected' || itemStatus === 'needs-correction') && item.rejectionComment && (
+                                                        <div style={{ fontSize: 11, color: itemStatus === 'rejected' ? '#ff6b7a' : '#f59e0b', fontWeight: 400, marginTop: 4, background: itemStatus === 'rejected' ? 'rgba(255,107,122,0.1)' : 'rgba(245,158,11,0.1)', padding: '4px 8px', borderRadius: 4 }}>
+                                                            {itemStatus === 'rejected' ? '❌' : '⚠️'} {item.rejectionComment}
                                                         </div>
                                                     )}
                                                 </td>

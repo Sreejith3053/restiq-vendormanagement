@@ -8,11 +8,13 @@ const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grain
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
 
 export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayName, onClose, onItemAdded, logAudit }) {
-    const [itemForm, setItemForm] = useState({ name: '', brand: '', category: '', unit: 'kg', packQuantity: 1, itemSize: '', price: '', sku: '', notes: '', taxable: false });
+    const [itemForm, setItemForm] = useState({ name: '', brand: '', category: '', unit: 'kg', packQuantity: 1, itemSize: '', price: '', sku: '', description: '', notes: '', taxable: false });
     const [imageFile, setImageFile] = useState(null);
+    const [proofFiles, setProofFiles] = useState([]);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [itemSaving, setItemSaving] = useState(false);
     const fileInputRef = useRef(null);
+    const proofInputRef = useRef(null);
 
     const IMG_SIZE = 400;
 
@@ -45,9 +47,23 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
         setImageFile(file);
     };
 
+    const handleProofChange = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+        const validFiles = [];
+
+        for (const file of files) {
+            if (!validTypes.includes(file.type)) { toast.warn(`${file.name} must be a PDF or Image`); continue; }
+            if (file.size > 10 * 1024 * 1024) { toast.warn(`${file.name} must be under 10MB`); continue; }
+            validFiles.push(file);
+        }
+        setProofFiles(prev => [...prev, ...validFiles]);
+    };
+
     const handleAddItem = async () => {
         if (!itemForm.name.trim()) { toast.warn('Item name is required'); return; }
-        if (!itemForm.brand.trim()) { toast.warn('Brand is required'); return; }
         if (!itemForm.category) { toast.warn('Select a category'); return; }
         if (!itemForm.price || isNaN(itemForm.price)) { toast.warn('Valid price required'); return; }
 
@@ -63,6 +79,7 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                 vendorPrice: Number(itemForm.price) || 0,
                 commissionPercent: 0,
                 sku: itemForm.sku.trim(),
+                description: itemForm.description.trim(),
                 notes: itemForm.notes.trim(),
                 taxable: !!itemForm.taxable,
                 createdAt: new Date().toISOString(),
@@ -115,6 +132,44 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                 }
             }
 
+            // Upload proof documents if selected
+            if (proofFiles.length > 0 && docId) {
+                setUploadingImage(true);
+                const uploadedUrls = [];
+                try {
+                    for (const file of proofFiles) {
+                        const ext = file.name.split('.').pop() || 'pdf';
+                        const storageRef = ref(storage, `proofs/${vendorId}/${docId}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`);
+                        await uploadBytes(storageRef, file);
+                        const url = await getDownloadURL(storageRef);
+                        uploadedUrls.push({ url, name: file.name });
+                    }
+                    if (uploadedUrls.length > 0) {
+                        await updateDoc(doc(db, `vendors/${vendorId}/items`, docId), { proofUrls: uploadedUrls });
+                        finalItem.proofUrls = uploadedUrls;
+                        if (logAudit) await logAudit(vendorId, docId, 'proof_uploaded', { itemName: itemData.name, fileCount: uploadedUrls.length });
+                    }
+                } catch (proofErr) {
+                    console.error('Proof upload failed:', proofErr);
+                    toast.error('Item created, but some proofs failed to upload');
+                } finally {
+                    setUploadingImage(false);
+                }
+            }
+
+            // Create Notification for Superadmins
+            if (!isSuperAdmin) {
+                await addDoc(collection(db, 'notifications'), {
+                    type: 'vendor_to_admin',
+                    entityId: 'superadmin', // target group
+                    title: 'New Item Request',
+                    message: `${displayName || 'Vendor'} submitted a new item "${itemData.name}" for review.`,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    metadata: { vendorId, itemId: docId, changeType: 'add' }
+                });
+            }
+
             toast.success(isSuperAdmin ? 'Item added successfully!' : '✅ New item submitted for review!');
             if (onItemAdded) onItemAdded(finalItem);
             onClose();
@@ -160,7 +215,7 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                         <div><label className="ui-label">Item Name *</label><input className="ui-input" placeholder="e.g. Turmeric Powder" value={itemForm.name} onChange={e => setItemForm(p => ({ ...p, name: e.target.value }))} /></div>
-                        <div><label className="ui-label">Brand *</label><input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={itemForm.brand} onChange={e => setItemForm(p => ({ ...p, brand: e.target.value }))} /></div>
+                        <div><label className="ui-label">Brand</label><input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={itemForm.brand} onChange={e => setItemForm(p => ({ ...p, brand: e.target.value }))} /></div>
                         <div><label className="ui-label">Category *</label>
                             <select className="ui-input" value={itemForm.category} onChange={e => setItemForm(p => ({ ...p, category: e.target.value }))}>
                                 <option value="">Select...</option>
@@ -179,7 +234,8 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                         <div><label className="ui-label">Price ($) *</label><input className="ui-input" type="number" step="0.01" placeholder="0.00" value={itemForm.price} onChange={e => setItemForm(p => ({ ...p, price: e.target.value }))} /></div>
                     </div>
                     <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" placeholder="Optional SKU or product code" value={itemForm.sku} onChange={e => setItemForm(p => ({ ...p, sku: e.target.value }))} /></div>
-                    <div style={{ marginTop: 16 }}><label className="ui-label">Notes</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Optional notes" value={itemForm.notes} onChange={e => setItemForm(p => ({ ...p, notes: e.target.value }))} /></div>
+                    <div style={{ marginTop: 16 }}><label className="ui-label">Description</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Public item description shown to users" value={itemForm.description} onChange={e => setItemForm(p => ({ ...p, description: e.target.value }))} /></div>
+                    <div style={{ marginTop: 16 }}><label className="ui-label">Private Notes</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Internal notes" value={itemForm.notes} onChange={e => setItemForm(p => ({ ...p, notes: e.target.value }))} /></div>
                     <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
                         <label className="ui-label" style={{ margin: 0, cursor: 'pointer' }}>Taxable</label>
                         <div
@@ -192,6 +248,31 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                         </div>
                         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{itemForm.taxable ? 'This item is subject to tax' : 'Not taxable'}</span>
                     </div>
+
+                    {!isSuperAdmin && (
+                        <div style={{ marginTop: 20, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                            <label className="ui-label" style={{ marginBottom: 4 }}>Supporting Documents (Optional)</label>
+                            <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px 0' }}>Upload invoices, quotations, product images, or packaging images.</p>
+                            <input type="file" ref={proofInputRef} accept=".pdf,image/*" multiple style={{ display: 'none' }} onChange={handleProofChange} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div>
+                                    <button className="ui-btn small ghost" onClick={() => proofInputRef.current?.click()}>
+                                        📄 {proofFiles.length > 0 ? 'Add More Files' : 'Select Files'}
+                                    </button>
+                                </div>
+                                {proofFiles.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                        {proofFiles.map((f, i) => (
+                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 4 }}>
+                                                <span style={{ color: '#4ade80' }}>✓ {f.name}</span>
+                                                <button onClick={() => setProofFiles(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: '#ff6b7a', cursor: 'pointer', padding: 0 }}>✕</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                         <button className="ui-btn ghost" onClick={onClose} disabled={itemSaving || uploadingImage}>Cancel</button>

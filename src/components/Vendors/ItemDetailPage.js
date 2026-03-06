@@ -183,14 +183,13 @@ export default function ItemDetailPage() {
     // ─── Save edit ───
     const handleSave = async () => {
         if (!editForm.name?.trim()) { toast.warn('Name is required'); return; }
-        if (!editForm.brand?.trim()) { toast.warn('Brand is required'); return; }
         if (!editForm.vendorPrice || isNaN(editForm.vendorPrice)) { toast.warn('Valid vendor price required'); return; }
         if (!hasChanges()) { toast.info('No changes detected.'); setEditing(false); return; }
         setSaving(true);
         try {
             const proposedData = {
                 name: editForm.name.trim(),
-                brand: editForm.brand.trim(),
+                brand: (editForm.brand || '').trim(),
                 category: editForm.category || 'Other',
                 unit: editForm.unit || 'kg',
                 packQuantity: Number(editForm.packQuantity) || 1,
@@ -438,6 +437,7 @@ export default function ItemDetailPage() {
     const statusBadgeClass = (status) => {
         if (status === 'active') return 'green';
         if (status === 'in-review') return 'amber';
+        if (status === 'needs-correction') return 'amber';
         if (status === 'rejected') return 'red';
         return 'gray';
     };
@@ -445,6 +445,7 @@ export default function ItemDetailPage() {
     const statusLabel = (status) => {
         if (status === 'active') return 'Active';
         if (status === 'in-review') return 'In Review';
+        if (status === 'needs-correction') return 'Needs Correction';
         if (status === 'rejected') return 'Rejected';
         return status;
     };
@@ -792,7 +793,7 @@ export default function ItemDetailPage() {
                                     <input className="ui-input" value={editForm.name || ''} onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))} />
                                 </div>
                                 <div>
-                                    <label className="ui-label">Brand *</label>
+                                    <label className="ui-label">Brand</label>
                                     <input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={editForm.brand || ''} onChange={e => setEditForm(prev => ({ ...prev, brand: e.target.value }))} />
                                 </div>
                                 <div>

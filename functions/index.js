@@ -9,7 +9,9 @@ admin.initializeApp();
 const db = getFirestore();
 
 // 1. Weekly forecast generation job (Runs automatically Saturday night)
-exports.weeklyForecastJob = onSchedule("0 2 * * 0", async (event) => {
+exports.weeklyForecastJob = onSchedule({
+    schedule: "0 2 * * 0"
+}, async (event) => {
     console.log("Starting scheduled weekly forecast job...");
     await runDeterministicForecast(db);
     await aggregateForecasts(db);
@@ -17,7 +19,9 @@ exports.weeklyForecastJob = onSchedule("0 2 * * 0", async (event) => {
 });
 
 // 2. Accuracy reconciliation job (Runs automatically Monday morning to check previous week)
-exports.accuracyReconciliationJob = onSchedule("0 4 * * 1", async (event) => {
+exports.accuracyReconciliationJob = onSchedule({
+    schedule: "0 4 * * 1"
+}, async (event) => {
     console.log("Starting scheduled accuracy reconciliation job...");
     await checkForecastAccuracy(db);
 });

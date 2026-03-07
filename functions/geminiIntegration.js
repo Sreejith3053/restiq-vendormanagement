@@ -1,12 +1,18 @@
-const { GoogleGenAI } = require("@google/genai");
+const { getGenerativeModel, getVertexAI } = require("firebase/vertexai");
+const { initializeApp } = require("firebase-admin/app");
 
-// Initialize Gemini using Vertex AI (uses application default credentials from Firebase)
-const ai = new GoogleGenAI({
-    vertexai: {
-        project: process.env.GCLOUD_PROJECT || "restiq-vendormanagement",
-        location: "us-central1"
+// Initialize Vertex AI via Firebase — uses project credentials automatically, no API key needed
+let model;
+function getModel() {
+    if (!model) {
+        const vertexAI = getVertexAI();
+        model = getGenerativeModel(vertexAI, {
+            model: "gemini-2.0-flash",
+            generationConfig: { temperature: 0.3 }
+        });
     }
-});
+    return model;
+}
 
 /**
  * Generates an explanation for the predicted demand and Monday/Thursday split.
@@ -30,14 +36,9 @@ async function generateForecastReasoning(itemData) {
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: prompt,
-            config: {
-                temperature: 0.3
-            }
-        });
-        return response.text.trim();
+        const result = await getModel().generateContent(prompt);
+        const response = await result.response;
+        return response.text().trim();
     } catch (error) {
         console.error("Gemini reasoning failed:", error);
         return "Deterministic forecast generated successfully. (AI reasoning unavailable)";
@@ -63,14 +64,9 @@ async function generateVendorPlanningNote(vendorData) {
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash',
-            contents: prompt,
-            config: {
-                temperature: 0.3
-            }
-        });
-        return response.text.trim();
+        const result = await getModel().generateContent(prompt);
+        const response = await result.response;
+        return response.text().trim();
     } catch (error) {
         return "Please prepare stock according to predicted Monday and Thursday splits.";
     }

@@ -43,10 +43,9 @@
 
 /* Brand */
 .sidebar-brand {
-    padding: 10px 16px;
+    padding: 16px 16px 10px;
     border-bottom: 1px solid rgba(255, 255, 255, .06);
     text-align: center;
-    overflow: hidden;
 }
 
 .sidebar-brand h2 {
@@ -58,11 +57,12 @@
 }
 
 .sidebar-logo {
-    width: 160px;
-    height: 40px;
-    object-fit: cover;
-    margin: -4px 0 0;
-    mix-blend-mode: lighten;
+    width: 180px;
+    height: auto;
+    object-fit: contain;
+    margin: 0 auto;
+    display: block;
+    filter: brightness(1.1);
 }
 
 .sidebar-brand .brand-tag {

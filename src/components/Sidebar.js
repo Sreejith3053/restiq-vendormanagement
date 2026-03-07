@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
-import restiqLogo from '../assets/restiq-logo.png';
+import restiqLogo from '../assets/restiq-logo-sidebar.png';
 import './Sidebar.css';
 
 export default function Sidebar({ isOpen, onClose }) {

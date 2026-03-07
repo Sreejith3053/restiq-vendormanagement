@@ -1,8 +1,12 @@
 const { GoogleGenAI } = require("@google/genai");
 
-// Initialize Gemini
-// Ensure you set GOOGLE_GENAI_API_KEY in your cloud function environment variables
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY || "mock-api-key-to-prevent-sdk-crash" });
+// Initialize Gemini using Vertex AI (uses application default credentials from Firebase)
+const ai = new GoogleGenAI({
+    vertexai: {
+        project: process.env.GCLOUD_PROJECT || "restiq-vendormanagement",
+        location: "us-central1"
+    }
+});
 
 /**
  * Generates an explanation for the predicted demand and Monday/Thursday split.

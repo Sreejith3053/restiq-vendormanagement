@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import restiqLogo from '../assets/restiq-logo.png';
+import restiqLogo from '../assets/restiq-logo-white.png';
 
 // Helper: load an image as base64 for jsPDF
 function loadImageAsBase64(src) {
@@ -20,7 +20,7 @@ function loadImageAsBase64(src) {
 }
 
 /**
- * Generate a professional PDF invoice.
+ * Generate a premium PDF invoice / payout statement.
  * @param {Object} invoice - Invoice data from Firestore
  * @param {Object} restaurantInfo - Restaurant billing info from RMS
  * @param {'restaurant'|'vendor'} type - Invoice type
@@ -29,179 +29,235 @@ function loadImageAsBase64(src) {
 export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'restaurant') {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 20;
     const contentWidth = pageWidth - margin * 2;
-    let y = margin;
+    const rightEdge = margin + contentWidth;
+    let y = 0;
 
-    // Colors
-    const primary = [22, 78, 99];      // Dark teal
-    const accent = [14, 165, 233];     // Sky blue
-    const darkText = [30, 30, 30];
-    const mutedText = [120, 120, 120];
-    const lineColor = [220, 220, 220];
+    // ─── COLOR PALETTE ───────────────────────────
+    const navy = [15, 22, 32];           // #0F1620
+    const skyBlue = [14, 165, 233];      // #0EA5E9
+    const darkText = [25, 25, 30];
+    const mediumText = [80, 85, 95];
+    const mutedText = [140, 145, 155];
+    const lineColor = [215, 218, 225];
+    const lightBg = [245, 247, 250];     // #F5F7FA
+    const white = [255, 255, 255];
 
-    // ─── HEADER ───────────────────────────────────
-    doc.setFillColor(...primary);
-    doc.rect(0, 0, pageWidth, 40, 'F');
+    // No accent bar — clean white header with logo and title
 
-    // Logo in header
+    y = 14;
+
+    // ─── HEADER: Logo + Document Title ───────────
+    // Logo
     try {
         const logoBase64 = await loadImageAsBase64(restiqLogo);
         if (logoBase64) {
-            doc.addImage(logoBase64, 'PNG', margin, 5, 30, 30);
+            // Render oversized to crop the whitespace padding in the source image
+            const logoSize = 70;
+            const logoOffsetX = margin - 14;
+            const logoOffsetY = y - 18;
+            doc.addImage(logoBase64, 'PNG', logoOffsetX, logoOffsetY, logoSize, logoSize);
+            // White clip rects to hide overflow
+            doc.setFillColor(255, 255, 255);
+            doc.rect(0, 0, Math.max(0, logoOffsetX), 50, 'F');   // left edge
+            doc.rect(0, y + 24, margin + 60, 30, 'F');           // bottom overflow
         }
-    } catch (e) {
-        // Silently skip logo if it fails to load
-    }
+    } catch (e) { /* skip logo */ }
 
-    const textStartX = margin + 34;
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
+    // Document title and invoice number (right side)
+    doc.setTextColor(...navy);
+    doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(type === 'restaurant' ? 'CUSTOMER INVOICE' : 'VENDOR INVOICE', textStartX, 18);
+    const title = type === 'restaurant' ? 'CUSTOMER INVOICE' : 'VENDOR PAYOUT STATEMENT';
+    doc.text(title, rightEdge, y + 4, { align: 'right' });
 
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(invoice.invoiceNumber || 'N/A', textStartX, 28);
+    doc.setTextColor(...mediumText);
+    doc.text(invoice.invoiceNumber || 'N/A', rightEdge, y + 11, { align: 'right' });
 
     // Status badge
     const isPaid = invoice.paymentStatus === 'PAID';
     const statusText = isPaid ? 'PAID' : 'PENDING';
-    const statusWidth = doc.getTextWidth(statusText) + 12;
-    const statusX = pageWidth - margin - statusWidth;
-    doc.setFillColor(isPaid ? 74 : 245, isPaid ? 222 : 158, isPaid ? 128 : 11);
-    doc.roundedRect(statusX, 10, statusWidth, 10, 2, 2, 'F');
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(isPaid ? 0 : 30, isPaid ? 60 : 30, isPaid ? 30 : 0);
-    doc.text(statusText, statusX + 6, 17);
+    const badgeW = doc.getTextWidth(statusText) + 10;
+    const badgeX = rightEdge - badgeW;
+    const badgeY = y + 15;
+    if (isPaid) {
+        doc.setFillColor(220, 252, 231);  // light green
+        doc.roundedRect(badgeX, badgeY, badgeW, 7, 1.5, 1.5, 'F');
+        doc.setTextColor(22, 101, 52);    // dark green text
+    } else {
+        doc.setFillColor(254, 243, 199);  // light amber
+        doc.roundedRect(badgeX, badgeY, badgeW, 7, 1.5, 1.5, 'F');
+        doc.setTextColor(146, 64, 14);    // dark amber text
+    }
+    doc.text(statusText, badgeX + 5, badgeY + 5);
 
-    y = 52;
+    y = 46;
 
-    // ─── INVOICE META ─────────────────────────────
-    const formatDate = (val) => {
-        if (!val) return 'N/A';
-        const d = val.toDate ? val.toDate() : new Date(val);
-        return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    };
+    // ─── METADATA BAND ───────────────────────────
+    doc.setFillColor(...lightBg);
+    doc.rect(0, y, pageWidth, 14, 'F');
 
-    doc.setTextColor(...mutedText);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
+    // Thin top/bottom border lines
+    doc.setDrawColor(...lineColor);
+    doc.setLineWidth(0.3);
+    doc.line(0, y, pageWidth, y);
+    doc.line(0, y + 14, pageWidth, y + 14);
 
-    const metaLeft = [
-        ['Invoice Date', formatDate(invoice.invoiceDate)],
-        ['Due Date', formatDate(invoice.dueDate)],
+    const metaItems = [
+        [type === 'restaurant' ? 'Invoice Date' : 'Statement Date', formatDate(invoice.invoiceDate)],
+        [type === 'restaurant' ? 'Due Date' : 'Payout Date', formatDate(invoice.dueDate)],
         ['Order ID', invoice.orderGroupId || invoice.orderId?.slice(-8)?.toUpperCase() || 'N/A'],
     ];
 
-    metaLeft.forEach(([label, value], i) => {
-        const metaY = y + i * 7;
-        doc.setTextColor(...mutedText);
-        doc.text(label + ':', margin, metaY);
-        doc.setTextColor(...darkText);
-        doc.setFont('helvetica', 'bold');
-        doc.text(value, margin + 32, metaY);
+    const metaColWidth = contentWidth / 3;
+    metaItems.forEach(([label, value], i) => {
+        const mx = margin + i * metaColWidth;
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...mutedText);
+        doc.text(label, mx, y + 5.5);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...darkText);
+        doc.text(value, mx, y + 11);
     });
 
-    y += 30;
+    y = 68;
 
-    // ─── BILL TO / FROM ───────────────────────────
+    // ─── BILL TO / PAY TO + FROM ─────────────────
     const colWidth = contentWidth / 2;
 
-    // Bill To
-    doc.setFillColor(245, 247, 250);
-    doc.roundedRect(margin, y, colWidth - 5, 45, 3, 3, 'F');
+    // Left section: TO
+    // Accent left border
+    doc.setDrawColor(...skyBlue);
+    doc.setLineWidth(0.8);
+    doc.line(margin, y, margin, y + 30);
 
-    doc.setFontSize(8);
-    doc.setTextColor(...accent);
+    doc.setFontSize(7);
+    doc.setTextColor(...skyBlue);
     doc.setFont('helvetica', 'bold');
-    doc.text('BILL TO', margin + 6, y + 8);
+    const toLabel = type === 'restaurant' ? 'BILL TO' : 'PAY TO';
+    doc.text(toLabel, margin + 4, y + 4);
 
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setTextColor(...darkText);
-    doc.text(restaurantInfo.businessName || invoice.restaurantId || 'Restaurant', margin + 6, y + 16);
+    doc.setFont('helvetica', 'bold');
+
+    if (type === 'restaurant') {
+        doc.text(restaurantInfo.businessName || invoice.restaurantId || 'Restaurant', margin + 4, y + 11);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...mediumText);
+        let detY = y + 16;
+        if (restaurantInfo.legalName) {
+            doc.text(`Legal: ${restaurantInfo.legalName}`, margin + 4, detY);
+            detY += 4.5;
+        }
+        if (restaurantInfo.hstNumber) {
+            doc.text(`HST#: ${restaurantInfo.hstNumber}`, margin + 4, detY);
+            detY += 4.5;
+        }
+        if (restaurantInfo.phone) {
+            doc.text(`Phone: ${restaurantInfo.phone}`, margin + 4, detY);
+            detY += 4.5;
+        }
+        if (restaurantInfo.email) {
+            doc.text(`Email: ${restaurantInfo.email}`, margin + 4, detY);
+        }
+    } else {
+        doc.text(invoice.vendorName || 'Vendor', margin + 4, y + 11);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...mediumText);
+        doc.text('Marketplace Vendor', margin + 4, y + 16);
+    }
+
+    // Right section: FROM
+    const fromX = margin + colWidth + 8;
+
+    // Accent left border
+    doc.setDrawColor(...skyBlue);
+    doc.setLineWidth(0.8);
+    doc.line(fromX, y, fromX, y + 30);
+
+    doc.setFontSize(7);
+    doc.setTextColor(...skyBlue);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FROM', fromX + 4, y + 4);
+
+    doc.setFontSize(11);
+    doc.setTextColor(...darkText);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RestIQ Solutions', fromX + 4, y + 11);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...mutedText);
-    let billY = y + 22;
-    if (restaurantInfo.legalName) {
-        doc.text(`Legal: ${restaurantInfo.legalName}`, margin + 6, billY);
-        billY += 5;
-    }
-    if (restaurantInfo.hstNumber) {
-        doc.text(`HST#: ${restaurantInfo.hstNumber}`, margin + 6, billY);
-        billY += 5;
-    }
-    if (restaurantInfo.phone) {
-        doc.text(`Phone: ${restaurantInfo.phone}`, margin + 6, billY);
-        billY += 5;
-    }
-    if (restaurantInfo.email) {
-        doc.text(`Email: ${restaurantInfo.email}`, margin + 6, billY);
-    }
+    doc.setTextColor(...mediumText);
+    doc.text('1278 Northmount Street', fromX + 4, y + 16);
+    doc.text('Oshawa, ON, M1J 1E4', fromX + 4, y + 20.5);
+    doc.text('Ph: 437 297 1321', fromX + 4, y + 25);
 
-    // From
-    const fromX = margin + colWidth + 5;
-    doc.setFillColor(245, 247, 250);
-    doc.roundedRect(fromX, y, colWidth - 5, 45, 3, 3, 'F');
+    y += 40;
 
-    doc.setFontSize(8);
-    doc.setTextColor(...accent);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FROM', fromX + 6, y + 8);
-
-    doc.setFontSize(10);
-    doc.setTextColor(...darkText);
-    doc.text(invoice.vendorName || 'Vendor', fromX + 6, y + 16);
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...mutedText);
-    doc.text('RestIQ Vendor Platform', fromX + 6, y + 22);
-
-    y += 55;
-
-    // ─── ITEMS TABLE ──────────────────────────────
+    // ─── ITEMS TABLE ─────────────────────────────
     const cols = [
-        { label: 'Item', width: 60, align: 'left' },
+        { label: 'Description', width: 58, align: 'left' },
         { label: 'Unit', width: 22, align: 'left' },
-        { label: 'Qty', width: 15, align: 'center' },
-        { label: 'Price', width: 25, align: 'right' },
+        { label: 'Qty', width: 16, align: 'center' },
+        { label: 'Unit Price', width: 26, align: 'right' },
         { label: 'Tax', width: 22, align: 'right' },
         { label: 'Total', width: 26, align: 'right' },
     ];
 
-    // Table header
-    doc.setFillColor(...primary);
-    doc.rect(margin, y, contentWidth, 8, 'F');
+    const rowH = 9;
+    const pad = 4;
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
+    // Table header
+    doc.setFillColor(...lightBg);
+    doc.rect(margin, y, contentWidth, rowH, 'F');
+
+    // Header borders
+    doc.setDrawColor(...lineColor);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, rightEdge, y);
+    doc.line(margin, y + rowH, rightEdge, y + rowH);
+
+    doc.setTextColor(...navy);
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
 
-    let colX = margin + 3;
+    let colX = margin + pad;
     cols.forEach(col => {
-        const textX = col.align === 'right' ? colX + col.width - 3 : col.align === 'center' ? colX + col.width / 2 : colX;
-        doc.text(col.label, textX, y + 5.5, { align: col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left' });
+        const textX = col.align === 'right' ? colX + col.width - pad
+            : col.align === 'center' ? colX + col.width / 2
+                : colX;
+        doc.text(col.label, textX, y + 6, { align: col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left' });
         colX += col.width;
     });
 
-    y += 8;
+    y += rowH;
 
     // Table rows
     const items = invoice.items || [];
     items.forEach((item, idx) => {
-        const rowY = y + idx * 8;
+        const rowY = y + idx * rowH;
 
-        // Alternating row background
+        // Alternating row tint
         if (idx % 2 === 0) {
-            doc.setFillColor(250, 250, 252);
-            doc.rect(margin, rowY, contentWidth, 8, 'F');
+            doc.setFillColor(250, 251, 253);
+            doc.rect(margin, rowY, contentWidth, rowH, 'F');
         }
+
+        // Bottom border for each row
+        doc.setDrawColor(...lineColor);
+        doc.setLineWidth(0.15);
+        doc.line(margin, rowY + rowH, rightEdge, rowY + rowH);
 
         doc.setTextColor(...darkText);
         doc.setFontSize(8);
@@ -217,41 +273,38 @@ export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'r
 
         const rowData = [
             item.itemName || 'Unknown',
-            (item.unit || 'unit'),
+            item.unit || 'unit',
             String(item.qty || 1),
             `$${price.toFixed(2)}`,
-            item.isTaxable ? `$${tax.toFixed(2)}` : '—',
+            item.isTaxable ? `$${tax.toFixed(2)}` : '\u2014',
             `$${lineTotal.toFixed(2)}`,
         ];
 
-        colX = margin + 3;
+        colX = margin + pad;
         rowData.forEach((text, ci) => {
             const col = cols[ci];
-            const textX = col.align === 'right' ? colX + col.width - 3 : col.align === 'center' ? colX + col.width / 2 : colX;
-            // Truncate long names
+            const textX = col.align === 'right' ? colX + col.width - pad
+                : col.align === 'center' ? colX + col.width / 2
+                    : colX;
+            // Truncate long item names
             const displayText = ci === 0 && text.length > 28 ? text.substring(0, 26) + '...' : text;
-            doc.text(displayText, textX, rowY + 5.5, { align: col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left' });
+            doc.text(displayText, textX, rowY + 6.2, { align: col.align === 'center' ? 'center' : col.align === 'right' ? 'right' : 'left' });
             colX += col.width;
         });
     });
 
-    y += items.length * 8 + 5;
+    y += items.length * rowH + 8;
 
-    // Bottom line
-    doc.setDrawColor(...lineColor);
-    doc.setLineWidth(0.3);
-    doc.line(margin, y, margin + contentWidth, y);
-    y += 8;
-
-    // ─── SUMMARY ──────────────────────────────────
-    const summaryX = margin + contentWidth - 80;
-    const valX = margin + contentWidth;
+    // ─── SUMMARY ─────────────────────────────────
+    const summaryW = 80;
+    const summaryX = rightEdge - summaryW;
+    const valX = rightEdge;
 
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
 
     // Subtotal
-    doc.setTextColor(...mutedText);
+    doc.setTextColor(...mediumText);
     doc.text('Subtotal', summaryX, y);
     doc.setTextColor(...darkText);
     const subtotal = type === 'restaurant'
@@ -262,13 +315,13 @@ export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'r
 
     // Commission (vendor only)
     if (type === 'vendor' && invoice.commissionModel === 'VENDOR_FLAT_PERCENT') {
-        doc.setTextColor(...mutedText);
+        doc.setTextColor(...mediumText);
         doc.text(`Commission (${invoice.commissionPercent || 10}%)`, summaryX, y);
         doc.setTextColor(220, 50, 50);
         doc.text(`- $${Number(invoice.commissionAmount || 0).toFixed(2)}`, valX, y, { align: 'right' });
         y += 7;
 
-        doc.setTextColor(...mutedText);
+        doc.setTextColor(...mediumText);
         doc.text('Net Payable', summaryX, y);
         doc.setTextColor(...darkText);
         doc.text(`$${Number(invoice.netVendorPayable || 0).toFixed(2)}`, valX, y, { align: 'right' });
@@ -276,46 +329,66 @@ export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'r
     }
 
     // Tax
-    doc.setTextColor(...mutedText);
+    doc.setTextColor(...mediumText);
     doc.text('Tax', summaryX, y);
-    doc.setTextColor(245, 158, 11);
+    doc.setTextColor(...skyBlue);
     const taxAmount = type === 'restaurant'
         ? Number(invoice.totalTax || 0)
         : Number(invoice.totalTaxAmount || 0);
     doc.text(`+ $${taxAmount.toFixed(2)}`, valX, y, { align: 'right' });
-    y += 4;
+    y += 5;
 
-    // Divider
+    // Divider line
     doc.setDrawColor(...lineColor);
+    doc.setLineWidth(0.3);
     doc.line(summaryX, y, valX, y);
     y += 7;
 
-    // Grand Total
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...primary);
-    doc.text(type === 'restaurant' ? 'Grand Total' : 'Total Payout', summaryX, y);
-
+    // Grand Total — highlighted box
+    const totalLabel = type === 'restaurant' ? 'Grand Total' : 'Total Payout';
     const total = type === 'restaurant'
         ? Number(invoice.grandTotal || 0)
         : (invoice.commissionModel === 'VENDOR_FLAT_PERCENT'
             ? Number((invoice.netVendorPayable || 0) + taxAmount)
             : Number(invoice.totalVendorAmount || 0));
-    doc.text(`$${total.toFixed(2)}`, valX, y, { align: 'right' });
+    const totalStr = `$${total.toFixed(2)}`;
 
-    y += 15;
+    // Navy background box for total
+    const totalBoxH = 10;
+    doc.setFillColor(...navy);
+    doc.roundedRect(summaryX - 2, y - 5, summaryW + 2, totalBoxH, 2, 2, 'F');
 
-    // ─── FOOTER ───────────────────────────────────
-    doc.setDrawColor(...lineColor);
-    doc.line(margin, y, margin + contentWidth, y);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...white);
+    doc.text(totalLabel, summaryX + 3, y + 1.5);
+    doc.text(totalStr, valX - 3, y + 1.5, { align: 'right' });
+
+    y += 20;
+
+    // ─── FOOTER ──────────────────────────────────
+    // Thin accent line
+    doc.setDrawColor(...skyBlue);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, rightEdge, y);
     y += 8;
 
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...mutedText);
+    doc.setTextColor(...mediumText);
     doc.text('Thank you for your business!', pageWidth / 2, y, { align: 'center' });
-    doc.text('Generated by RestIQ Solutions — Vendor Management Platform', pageWidth / 2, y + 5, { align: 'center' });
+
+    doc.setFontSize(7);
+    doc.setTextColor(...mutedText);
+    doc.text('Generated by RestIQ Solutions \u2014 Vendor Management Platform', pageWidth / 2, y + 5, { align: 'center' });
 
     // Return as base64
     return doc.output('datauristring');
+}
+
+// Helper: format Firestore timestamp or ISO string
+function formatDate(val) {
+    if (!val) return 'N/A';
+    const d = val.toDate ? val.toDate() : new Date(val);
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }

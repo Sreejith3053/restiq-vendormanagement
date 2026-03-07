@@ -10,8 +10,7 @@ const db = getFirestore();
 
 // 1. Weekly forecast generation job (Runs automatically Saturday night)
 exports.weeklyForecastJob = onSchedule({
-    schedule: "0 2 * * 0",
-    secrets: ["GOOGLE_GENAI_API_KEY"]
+    schedule: "0 2 * * 0"
 }, async (event) => {
     console.log("Starting scheduled weekly forecast job...");
     await runDeterministicForecast(db);
@@ -21,17 +20,14 @@ exports.weeklyForecastJob = onSchedule({
 
 // 2. Accuracy reconciliation job (Runs automatically Monday morning to check previous week)
 exports.accuracyReconciliationJob = onSchedule({
-    schedule: "0 4 * * 1",
-    secrets: ["GOOGLE_GENAI_API_KEY"]
+    schedule: "0 4 * * 1"
 }, async (event) => {
     console.log("Starting scheduled accuracy reconciliation job...");
     await checkForecastAccuracy(db);
 });
 
 // Callable wrapper for Super Admin manual trigger from frontend
-exports.triggerForecastEngine = onCall({
-    secrets: ["GOOGLE_GENAI_API_KEY"]
-}, async (request) => {
+exports.triggerForecastEngine = onCall(async (request) => {
     // Basic auth check if needed
     if (!request.auth) {
         throw new Error("Unauthorized");

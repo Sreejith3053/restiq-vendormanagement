@@ -25,7 +25,17 @@ import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 import AdminItemsPage from './components/Admin/AdminItemsPage';
 import AdminRestaurantsPage from './components/Admin/AdminRestaurantsPage';
-import AdminRequestsPage from './components/Admin/AdminRequestsPage'; // Added import
+import AdminRequestsPage from './components/Admin/AdminRequestsPage';
+
+// Forecast Module (Super Admin Only)
+import ForecastOverviewPage from './components/Forecast/ForecastOverviewPage';
+import RestaurantForecastPage from './components/Forecast/RestaurantForecastPage';
+import CombinedDemandPage from './components/Forecast/CombinedDemandPage';
+import VendorPlanningPage from './components/Forecast/VendorPlanningPage';
+import FestivalSeasonalityPage from './components/Forecast/FestivalSeasonalityPage';
+import ForecastAccuracyPage from './components/Forecast/ForecastAccuracyPage';
+import ForecastAlertsPage from './components/Forecast/ForecastAlertsPage';
+import ForecastSettingsPage from './components/Forecast/ForecastSettingsPage';
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -96,6 +106,17 @@ function App() {
                                 <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
                                 <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />
                                 <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
+
+                                {/* AI Forecast Sub-routes */}
+                                <Route path="/admin/forecast" element={<ForecastOverviewPage />} />
+                                <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />
+                                <Route path="/admin/forecast/combined" element={<CombinedDemandPage />} />
+                                <Route path="/admin/forecast/vendors" element={<VendorPlanningPage />} />
+                                <Route path="/admin/forecast/festivals" element={<FestivalSeasonalityPage />} />
+                                <Route path="/admin/forecast/accuracy" element={<ForecastAccuracyPage />} />
+                                <Route path="/admin/forecast/alerts" element={<ForecastAlertsPage />} />
+                                <Route path="/admin/forecast/settings" element={<ForecastSettingsPage />} />
+
                                 <Route path="/" element={<Navigate to="/admin/dashboard" />} />
                             </>
                         )}

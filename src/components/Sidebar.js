@@ -79,6 +79,33 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <span className="link-icon">🧾</span> Restaurant Invoices
                             </NavLink>
                         </div>
+                        <div className="sidebar-section">
+                            <div className="sidebar-section-title">AI Forecast & Planning</div>
+                            <NavLink to="/admin/forecast" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🤖</span> AI Overview
+                            </NavLink>
+                            <NavLink to="/admin/forecast/restaurants" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🏪</span> Location Limits
+                            </NavLink>
+                            <NavLink to="/admin/forecast/combined" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🛒</span> Combined Demand
+                            </NavLink>
+                            <NavLink to="/admin/forecast/vendors" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🚚</span> Vendor Dispatch
+                            </NavLink>
+                            <NavLink to="/admin/forecast/alerts" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🚨</span> Opportunity Alerts
+                            </NavLink>
+                            <NavLink to="/admin/forecast/festivals" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🎉</span> Festival Uplift
+                            </NavLink>
+                            <NavLink to="/admin/forecast/accuracy" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🎯</span> Accuracy Tracker
+                            </NavLink>
+                            <NavLink to="/admin/forecast/settings" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">⚙️</span> Engine Settings
+                            </NavLink>
+                        </div>
                     </>
                 ) : (
                     <>

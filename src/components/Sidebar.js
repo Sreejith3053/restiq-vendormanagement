@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
+import restiqLogo from '../assets/restiq-logo.png';
 import './Sidebar.css';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -28,7 +29,7 @@ export default function Sidebar({ isOpen, onClose }) {
             <div className={`sidebar-container ${isOpen ? '' : 'closed'}`}>
                 {/* Brand */}
                 <div className="sidebar-brand">
-                    <h2>📦 Vendor Mgmt</h2>
+                    <img src={restiqLogo} alt="RestIQ Solutions" className="sidebar-logo" />
                     {isSuperAdmin ? (
                         <div className="brand-tag">Platform Administration</div>
                     ) : (

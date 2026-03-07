@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UserContext } from '../../contexts/UserContext';
-import { db } from '../../firebase';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, storage } from '../../firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import { generateInvoicePDF } from '../../utils/generateInvoicePDF';
 
@@ -15,7 +16,7 @@ export default function RestaurantInvoiceDetailPage() {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [generatingPdf, setGeneratingPdf] = useState(false);
-    const [pdfData, setPdfData] = useState(null); // base64 PDF
+    const [pdfUrl, setPdfUrl] = useState(null); // Storage download URL
 
     useEffect(() => {
         const fetchInvoice = async () => {
@@ -39,10 +40,17 @@ export default function RestaurantInvoiceDetailPage() {
 
                 setInvoice({ id: snap.id, ...data });
 
-                // Check if PDF already exists in subcollection
-                const pdfSnap = await getDoc(doc(db, 'restaurantInvoices', invoiceId, 'pdfs', 'invoice'));
-                if (pdfSnap.exists()) {
-                    setPdfData(pdfSnap.data().pdfBase64);
+                // Check if PDF URL exists on the invoice doc (new approach)
+                if (data.pdfUrl) {
+                    setPdfUrl(data.pdfUrl);
+                } else {
+                    // Legacy fallback: check subcollection
+                    try {
+                        const pdfSnap = await getDoc(doc(db, 'restaurantInvoices', invoiceId, 'pdfs', 'invoice'));
+                        if (pdfSnap.exists() && pdfSnap.data().pdfBase64) {
+                            setPdfUrl(pdfSnap.data().pdfBase64);
+                        }
+                    } catch (_) { /* ignore legacy check errors */ }
                 }
             } catch (err) {
                 console.error('Failed to load restaurant invoice:', err);
@@ -71,17 +79,30 @@ export default function RestaurantInvoiceDetailPage() {
                 }
             }
 
-            // Generate PDF
-            const base64Pdf = generateInvoicePDF(invoice, restaurantInfo, 'restaurant');
+            // Generate PDF (returns base64 data URI)
+            const base64Pdf = await generateInvoicePDF(invoice, restaurantInfo, 'restaurant');
 
-            // Save to Firestore subcollection
-            await setDoc(doc(db, 'restaurantInvoices', invoiceId, 'pdfs', 'invoice'), {
-                pdfBase64: base64Pdf,
-                generatedAt: serverTimestamp(),
-                generatedBy: displayName || 'Admin'
+            // Convert data URI to Blob for Storage upload
+            const byteString = atob(base64Pdf.split(',')[1]);
+            const mimeString = base64Pdf.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+            const blob = new Blob([ab], { type: mimeString });
+
+            // Upload to Firebase Storage
+            const storageRef = ref(storage, `invoices/restaurant/${invoiceId}.pdf`);
+            await uploadBytes(storageRef, blob, { contentType: 'application/pdf' });
+            const downloadUrl = await getDownloadURL(storageRef);
+
+            // Save URL reference on the invoice document
+            await updateDoc(doc(db, 'restaurantInvoices', invoiceId), {
+                pdfUrl: downloadUrl,
+                pdfGeneratedAt: serverTimestamp(),
+                pdfGeneratedBy: displayName || 'Admin'
             });
 
-            setPdfData(base64Pdf);
+            setPdfUrl(downloadUrl);
             toast.success('Invoice PDF generated successfully!');
         } catch (err) {
             console.error('Failed to generate PDF:', err);
@@ -92,10 +113,15 @@ export default function RestaurantInvoiceDetailPage() {
     };
 
     const handleViewPDF = () => {
-        if (!pdfData) return;
-        const newWindow = window.open();
-        newWindow.document.write(`<iframe src="${pdfData}" style="width:100%;height:100%;border:none;" title="Invoice PDF"></iframe>`);
-        newWindow.document.title = `Invoice ${invoice?.invoiceNumber || ''}`;
+        if (!pdfUrl) return;
+        // If it's a data URI (legacy), open in iframe; if it's a URL, open directly
+        if (pdfUrl.startsWith('data:')) {
+            const newWindow = window.open();
+            newWindow.document.write(`<iframe src="${pdfUrl}" style="width:100%;height:100%;border:none;" title="Invoice PDF"></iframe>`);
+            newWindow.document.title = `Invoice ${invoice?.invoiceNumber || ''}`;
+        } else {
+            window.open(pdfUrl, '_blank');
+        }
     };
 
     const handleMarkPaid = async () => {
@@ -168,20 +194,19 @@ export default function RestaurantInvoiceDetailPage() {
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                    {pdfData ? (
+                    {pdfUrl && (
                         <button className="ui-btn" onClick={handleViewPDF} style={{ background: 'rgba(74, 222, 128, 0.12)', color: '#4ade80', border: '1px solid rgba(74, 222, 128, 0.3)' }}>
                             📄 View Invoice PDF
                         </button>
-                    ) : (
-                        <button
-                            className="ui-btn"
-                            onClick={handleGeneratePDF}
-                            disabled={generatingPdf}
-                            style={{ background: 'rgba(14, 165, 233, 0.12)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.3)' }}
-                        >
-                            {generatingPdf ? '⏳ Generating...' : '📄 Generate PDF'}
-                        </button>
                     )}
+                    <button
+                        className="ui-btn"
+                        onClick={handleGeneratePDF}
+                        disabled={generatingPdf}
+                        style={{ background: 'rgba(14, 165, 233, 0.12)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.3)' }}
+                    >
+                        {generatingPdf ? '⏳ Generating...' : pdfUrl ? '🔄 Regenerate PDF' : '📄 Generate PDF'}
+                    </button>
                     {isSuperAdmin && isPending && (
                         <button
                             className="ui-btn primary"

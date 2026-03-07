@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { db } from '../../firebase';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { UserContext } from '../../contexts/UserContext';
+import { getTaxRate } from '../../constants/taxRates';
 import './OrdersPage.css';
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -318,13 +319,53 @@ export default function OrdersPage() {
             const grandTotalAfterTax = round2(subtotalBeforeTax + totalTax);
 
             const now = new Date();
-            const auditEntry = {
+
+            // Build granular per-item audit entries for any changes
+            const originalItems = selectedOrder.items || [];
+            const itemAuditEntries = [];
+            resolutionItems.forEach((item, idx) => {
+                const orig = originalItems[idx];
+                if (!orig) return;
+
+                const origQty = orig.qty || 0;
+                const newQty = item.qty || 0;
+                const origPrice = Number(orig.vendorPrice ?? orig.price ?? 0);
+                const newPrice = Number(item.vendorPrice ?? item.price ?? 0);
+                const itemName = item.name || item.itemName || 'Unknown Item';
+
+                if (newQty === 0 && origQty > 0) {
+                    itemAuditEntries.push({
+                        action: `Item "${itemName}" removed (qty ${origQty} → 0)`,
+                        timestamp: now.toISOString(),
+                        user: displayName || 'SuperAdmin'
+                    });
+                } else if (newQty !== origQty) {
+                    itemAuditEntries.push({
+                        action: `Item "${itemName}" qty adjusted from ${origQty} to ${newQty}`,
+                        timestamp: now.toISOString(),
+                        user: displayName || 'SuperAdmin'
+                    });
+                }
+
+                if (newPrice !== origPrice && newQty > 0) {
+                    itemAuditEntries.push({
+                        action: `Item "${itemName}" price adjusted from $${origPrice.toFixed(2)} to $${newPrice.toFixed(2)}`,
+                        timestamp: now.toISOString(),
+                        user: displayName || 'SuperAdmin'
+                    });
+                }
+            });
+
+            // Summary audit entry
+            const resolutionEntry = {
                 action: `Issue resolved — ${resolutionAction.replace(/_/g, ' ')}`,
                 reason: resolutionNotes || 'Resolved by admin',
                 timestamp: now.toISOString(),
                 user: displayName || 'SuperAdmin'
             };
-            const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
+
+            // Combine: item-level changes first, then the resolution summary
+            const updatedAuditLog = [...(selectedOrder.auditLog || []), ...itemAuditEntries, resolutionEntry];
 
             await updateDoc(orderRef, {
                 status: 'fulfilled',
@@ -345,6 +386,80 @@ export default function OrdersPage() {
             });
 
             toast.success('Issue resolved. Order finalized and invoice will be generated.');
+
+            // ── Sync existing invoices with recalculated totals ──
+            try {
+                // Fetch vendor info for tax rate (needed for per-item invoice formatting)
+                const vendorSnap = await getDoc(doc(db, 'vendors', selectedOrder.vendorId));
+                const vData = vendorSnap.exists() ? vendorSnap.data() : {};
+                const invoiceTaxRate = getTaxRate(vData.country || 'Canada', vData.province);
+                const vendorCommissionPercent = Number(vData.commissionPercent ?? 10);
+
+                // Build formatted items for invoices
+                let invSubtotal = 0;
+                let invTotalTax = 0;
+                const invoiceItems = resolutionItems.map(item => {
+                    const price = Number(item.vendorPrice ?? item.price ?? 0);
+                    const qty = item.qty || 1;
+                    const lineTotal = item.lineSubtotal || round2(price * qty);
+                    const isTaxable = !!item.taxable;
+                    const lineTax = isTaxable ? round2(lineTotal * (invoiceTaxRate / 100)) : 0;
+                    invSubtotal += lineTotal;
+                    invTotalTax += lineTax;
+                    return {
+                        itemId: item.itemId,
+                        itemName: item.itemName || item.name || 'Unknown Item',
+                        unit: item.unit || 'unit',
+                        qty,
+                        price,
+                        vendorPrice: price,
+                        lineTotal,
+                        lineTotalVendor: lineTotal,
+                        isTaxable,
+                        lineTax
+                    };
+                });
+                invSubtotal = round2(invSubtotal);
+                invTotalTax = round2(invTotalTax);
+                const invGrandTotal = round2(invSubtotal + invTotalTax);
+
+                // Update Restaurant Invoice (uses orderId as doc ID)
+                const restInvRef = doc(db, 'restaurantInvoices', selectedOrder.id);
+                const restInvSnap = await getDoc(restInvRef);
+                if (restInvSnap.exists()) {
+                    await updateDoc(restInvRef, {
+                        items: invoiceItems,
+                        subtotal: invSubtotal,
+                        totalTax: invTotalTax,
+                        grandTotal: invGrandTotal,
+                        updatedAt: serverTimestamp(),
+                        adminNotes: 'Updated after issue resolution'
+                    });
+                }
+
+                // Update Vendor Invoice (uses orderId as doc ID)
+                const vendorInvRef = doc(db, 'vendorInvoices', selectedOrder.id);
+                const vendorInvSnap = await getDoc(vendorInvRef);
+                if (vendorInvSnap.exists()) {
+                    const commissionAmount = round2(invSubtotal * (vendorCommissionPercent / 100));
+                    const netVendorPayable = round2(invSubtotal - commissionAmount);
+                    await updateDoc(vendorInvRef, {
+                        items: invoiceItems,
+                        subtotalVendorAmount: invSubtotal,
+                        grossVendorAmount: invSubtotal,
+                        totalTaxAmount: invTotalTax,
+                        totalVendorAmount: invGrandTotal,
+                        commissionAmount,
+                        netVendorPayable,
+                        updatedAt: serverTimestamp(),
+                        adminNotes: 'Updated after issue resolution'
+                    });
+                }
+            } catch (invoiceErr) {
+                console.error('Failed to sync invoices after resolution:', invoiceErr);
+                // Don't block the resolution — invoices can be manually regenerated
+            }
+
             setSelectedOrder(prev => prev ? {
                 ...prev,
                 status: 'fulfilled',

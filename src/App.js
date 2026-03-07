@@ -26,6 +26,7 @@ import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 import AdminItemsPage from './components/Admin/AdminItemsPage';
 import AdminRestaurantsPage from './components/Admin/AdminRestaurantsPage';
 import AdminRequestsPage from './components/Admin/AdminRequestsPage';
+import AdminRestaurantDetailPage from './components/Admin/AdminRestaurantDetailPage';
 
 // Forecast Module (Super Admin Only)
 import ForecastOverviewPage from './components/Forecast/ForecastOverviewPage';
@@ -101,7 +102,8 @@ function App() {
                                 <Route path="/settings/permissions" element={<RolePermissionsPage />} />
                                 <Route path="/admin/items" element={<AdminItemsPage />} />
                                 <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
-                                <Route path="/admin/requests" element={<AdminRequestsPage />} /> {/* Added Route */}
+                                <Route path="/admin/restaurants/:restaurantId" element={<AdminRestaurantDetailPage />} />
+                                <Route path="/admin/requests" element={<AdminRequestsPage />} />
                                 <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
                                 <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
                                 <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />

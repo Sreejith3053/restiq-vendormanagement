@@ -11,11 +11,21 @@ export default function RestaurantForecastPage() {
     const [expandedIds, setExpandedIds] = useState(new Set());
 
     useEffect(() => {
-        // Load active restaurants to populate the dropdown filter
+        // Load active restaurants from the forecasts that were just generated
         const loadRests = async () => {
-            const snap = await getDocs(collection(db, 'restaurants'));
-            const list = [];
-            snap.forEach(d => list.push({ id: d.id, name: d.data().name || d.data().businessName || 'Unknown' }));
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() + ((1 + 7 - d.getDay()) % 7));
+            const weekKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+            const q = query(collection(db, 'restaurantItemForecasts'), where('weekStart', '==', weekKey));
+            const snap = await getDocs(q);
+            const unique = new Set();
+            snap.forEach(docSnap => {
+                const restId = docSnap.data().restaurantId;
+                if (restId) unique.add(restId);
+            });
+            const list = Array.from(unique).map(id => ({ id, name: id }));
             setRestaurants(list);
             if (list.length > 0) {
                 setSelectedRestId(list[0].id);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { collection, query, where, getDocs, orderBy, limit, addDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { db, app, auth } from '../../firebase';
+import { toast } from 'react-toastify';
 import { TrendBadge, ForecastSummaryCard } from './ForecastComponents';
 import { runClientSideMockSeeder } from './mockSeeder';
 import {
@@ -75,6 +77,44 @@ export default function ForecastOverviewPage() {
         window.location.reload();
     };
 
+    const handleRunEngine = async () => {
+        if (!window.confirm("Manually trigger the forecast engine? This might take a minute and populate the actual projections based on live order history.")) return;
+        setLoading(true);
+        try {
+            toast.info("Starting Background Forecast Engine...", { autoClose: 3000 });
+
+            // Create a trigger document that the Cloud Function will listen to securely
+            const triggerRef = await addDoc(collection(db, 'engineTriggers'), {
+                status: 'pending',
+                initiatedAt: serverTimestamp()
+            });
+
+            // Listen efficiently for the cloud function to update the document's status
+            const unsubscribe = onSnapshot(triggerRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.status === 'completed') {
+                        toast.success("Forecast Engine executed successfully!");
+                        fetchOverview();
+                        unsubscribe();
+                        setLoading(false);
+                    } else if (data.status === 'error') {
+                        toast.error("Engine Data Error: " + data.error);
+                        unsubscribe();
+                        setLoading(false);
+                    }
+                }
+            });
+
+            // Return early so we don't clear the loading state prematurely
+            return;
+        } catch (err) {
+            console.error(err);
+            toast.error("Trigger Failed: " + err.message);
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="forecast-dashboard fade-in">
             <div className="flex-between" style={{ marginBottom: 24 }}>
@@ -86,8 +126,11 @@ export default function ForecastOverviewPage() {
                     {/* <button className="ui-btn secondary" onClick={handleSeedData}>
                         <span className="link-icon">⚙️</span> Run Mock Seeder
                     </button> */}
-                    <button className="ui-btn primary ghost" onClick={fetchOverview}>
+                    <button className="ui-btn secondary" onClick={fetchOverview} disabled={loading}>
                         <span className="link-icon">↻</span> Refresh Data
+                    </button>
+                    <button className="ui-btn primary" onClick={handleRunEngine} disabled={loading}>
+                        <span className="link-icon">⚙️</span> Run Engine Now
                     </button>
                 </div>
             </div>

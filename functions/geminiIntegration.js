@@ -1,17 +1,18 @@
-const { getGenerativeModel, getVertexAI } = require("firebase/vertexai");
-const { initializeApp } = require("firebase-admin/app");
+const { VertexAI } = require('@google-cloud/vertexai');
 
-// Initialize Vertex AI via Firebase — uses project credentials automatically, no API key needed
-let model;
+let generativeModel;
+
 function getModel() {
-    if (!model) {
-        const vertexAI = getVertexAI();
-        model = getGenerativeModel(vertexAI, {
-            model: "gemini-2.0-flash",
-            generationConfig: { temperature: 0.3 }
+    if (!generativeModel) {
+        const vertex_ai = new VertexAI({ project: 'restiq-vendormanagement', location: 'us-central1' });
+        generativeModel = vertex_ai.preview.getGenerativeModel({
+            model: 'gemini-1.5-flash-001',
+            generationConfig: {
+                temperature: 0.3
+            }
         });
     }
-    return model;
+    return generativeModel;
 }
 
 /**
@@ -36,9 +37,12 @@ async function generateForecastReasoning(itemData) {
     `;
 
     try {
-        const result = await getModel().generateContent(prompt);
-        const response = await result.response;
-        return response.text().trim();
+        const request = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        };
+        const resp = await getModel().generateContent(request);
+        const response = await resp.response;
+        return response.candidates[0].content.parts[0].text.trim();
     } catch (error) {
         console.error("Gemini reasoning failed:", error);
         return "Deterministic forecast generated successfully. (AI reasoning unavailable)";
@@ -64,9 +68,12 @@ async function generateVendorPlanningNote(vendorData) {
     `;
 
     try {
-        const result = await getModel().generateContent(prompt);
-        const response = await result.response;
-        return response.text().trim();
+        const request = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
+        };
+        const resp = await getModel().generateContent(request);
+        const response = await resp.response;
+        return response.candidates[0].content.parts[0].text.trim();
     } catch (error) {
         return "Please prepare stock according to predicted Monday and Thursday splits.";
     }

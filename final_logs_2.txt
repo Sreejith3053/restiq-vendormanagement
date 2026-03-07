@@ -1,0 +1,71 @@
+﻿2026-03-07T08:09:04.124718Z E weeklyforecastjob: Error: 5 NOT_FOUND: 
+    at entryFromArgs (/workspace/node_modules/firebase-functions/lib/logger/index.js:120:13)
+    at Object.error (/workspace/node_modules/firebase-functions/lib/logger/index.js:109:8)
+    at httpFunc (/workspace/node_modules/firebase-functions/lib/v2/providers/scheduler.js:53:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-07T08:10:08.645453Z E weeklyforecastjob: 
+2026-03-07T08:10:08.667878Z ? weeklyforecastjob: Starting scheduled weekly forecast job...
+
+2026-03-07T08:10:08.668049Z ? weeklyforecastjob: Starting Deterministic Forecast...
+
+2026-03-07T08:10:08.715446Z E weeklyforecastjob: Error: 5 NOT_FOUND: 
+    at entryFromArgs (/workspace/node_modules/firebase-functions/lib/logger/index.js:120:13)
+    at Object.error (/workspace/node_modules/firebase-functions/lib/logger/index.js:109:8)
+    at httpFunc (/workspace/node_modules/firebase-functions/lib/v2/providers/scheduler.js:53:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-07T08:10:46.890307078Z N weeklyForecastJob: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","authenticationInfo":{"principalEmail":"admin@orumadiner.com","principalSubject":"user:admin@orumadiner.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"callerIp":"2607:fea8:79d3:c800:1823:d1cf:e472:e55","callerSuppliedUserAgent":"FirebaseCLI/15.9.0 agent-name/antigravity,gzip(gfe),gzip(gfe)","requestAttributes":{"time":"2026-03-07T08:10:45.962176552Z","auth":{}},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","authorizationInfo":[{"resource":"projects/restiq-vendormanagement/locations/us-central1/functions/weeklyForecastJob","permission":"cloudfunctions.functions.update","granted":true,"resourceAttributes":{"service":"cloudfunctions.googleapis.com","name":"projects/restiq-vendormanagement/locations/us-central1/functions/weeklyForecastJob","type":"cloudfunctions.googleapis.com/Function"},"permissionType":"ADMIN_WRITE"}],"resourceName":"projects/restiq-vendormanagement/locations/us-central1/functions/weeklyForecastJob","request":{"update_mask":{"paths":["name","build_config.runtime","build_config.entry_point","build_config.source.storage_source.bucket","build_config.source.storage_source.object","build_config.environment_variables","build_config.source_token","service_config.environment_variables","service_config.ingress_settings","service_config.timeout_seconds","service_config.service_account_email","service_config.available_memory","service_config.min_instance_count","service_config.max_instance_count","service_config.max_instance_request_concurrency","service_config.available_cpu","service_config.vpc_connector","service_config.vpc_connector_egress_settings","labels"]},"function":{"labels":{"deployment-scheduled":"true","deployment-tool":"cli-firebase","firebase-functions-hash":"4d3e2403c7dda32edf57f075370ce6bdec7f1ee6"},"build_config":{"entry_point":"weeklyForecastJob","runtime":"nodejs20","source":{}},"name":"projects/restiq-vendormanagement/locations/us-central1/functions/weeklyForecastJob","service_config":{"available_cpu":"1","available_memory":"256Mi","max_instance_request_concurrency":80}},"@type":"type.googleapis.com/google.cloud.functions.v2.UpdateFunctionRequest"},"response":{"@type":"type.googleapis.com/google.longrunning.Operation"},"resourceLocation":{"currentLocations":["us-central1"]}}
+2026-03-07T08:11:03.488713Z E weeklyforecastjob: 
+2026-03-07T08:11:03.523996Z ? weeklyforecastjob: Starting scheduled weekly forecast job...
+
+2026-03-07T08:11:03.530596Z ? weeklyforecastjob: Starting Deterministic Forecast...
+
+2026-03-07T08:11:03.599852Z E weeklyforecastjob: Error: 5 NOT_FOUND: 
+    at entryFromArgs (/workspace/node_modules/firebase-functions/lib/logger/index.js:120:13)
+    at Object.error (/workspace/node_modules/firebase-functions/lib/logger/index.js:109:8)
+    at httpFunc (/workspace/node_modules/firebase-functions/lib/v2/providers/scheduler.js:53:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-07T08:12:01.951174Z I weeklyforecastjob: Starting new instance. Reason: DEPLOYMENT_ROLLOUT - Instance started due to traffic shifting between revisions due to deployment, traffic split adjustment, or deployment health check.
+2026-03-07T08:12:03.564518Z E weeklyforecastjob: 
+2026-03-07T08:12:03.588140Z ? weeklyforecastjob: Starting scheduled weekly forecast job...
+
+2026-03-07T08:12:03.588397Z ? weeklyforecastjob: Starting Deterministic Forecast...
+
+2026-03-07T08:12:03.640451Z E weeklyforecastjob: Error: 5 NOT_FOUND: 
+    at entryFromArgs (/workspace/node_modules/firebase-functions/lib/logger/index.js:120:13)
+    at Object.error (/workspace/node_modules/firebase-functions/lib/logger/index.js:109:8)
+    at httpFunc (/workspace/node_modules/firebase-functions/lib/v2/providers/scheduler.js:53:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-07T08:12:04.697965Z I weeklyforecastjob: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2026-03-07T08:12:05.242382Z I weeklyforecastjob: Starting new instance. Reason: AUTOSCALING - Instance started due to configured scaling factors (e.g. CPU utilization, request throughput, etc.) or no existing capacity for current traffic.
+2026-03-07T08:12:06.597251Z I weeklyforecastjob: Default STARTUP TCP probe succeeded after 1 attempt for container "worker" on port 8080.
+2026-03-07T08:12:06.932444846Z N weeklyForecastJob: {"@type":"type.googleapis.com/google.cloud.audit.AuditLog","status":{},"authenticationInfo":{"principalEmail":"admin@orumadiner.com","principalSubject":"user:admin@orumadiner.com","oauthInfo":{"oauthClientId":"563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com"}},"requestMetadata":{"requestAttributes":{},"destinationAttributes":{}},"serviceName":"cloudfunctions.googleapis.com","methodName":"google.cloud.functions.v2.FunctionService.UpdateFunction","resourceName":"projects/restiq-vendormanagement/locations/us-central1/functions/weeklyForecastJob","response":{"environment":"GEN_2","labels":{"deployment-tool":"cli-firebase","deployment-scheduled":"true","firebase-functions-hash":"4d3e2403c7dda32edf57f075370ce6bdec7f1ee6"},"state":"ACTIVE","updateTime":"2026-03-07T08:10:46.879395015Z","createTime":"2026-03-07T06:03:33.008767974Z","@type":"type.googleapis.com/google.cloud.functions.v2.Function","url":"https://us-central1-restiq-vendormanagement.cloudfunctions.net/weeklyForecastJob","name":"projects/restiq-vendormanagement/locations/us-central1/functions/weeklyForecastJob","buildConfig":{"dockerRepository":"projects/restiq-vendormanagement/locations/us-central1/repositories/gcf-artifacts","dockerRegistry":"ARTIFACT_REGISTRY","runtime":"nodejs20","source":{},"serviceAccount":"projects/restiq-vendormanagement/serviceAccounts/110986028184-compute@developer.gserviceaccount.com","automaticUpdatePolicy":{},"entryPoint":"weeklyForecastJob"},"satisfiesPzi":true,"serviceConfig":{"timeoutSeconds":60,"serviceAccountEmail":"110986028184-compute@developer.gserviceaccount.com","maxInstanceCount":20,"uri":"https://weeklyforecastjob-yc45pnle3a-uc.a.run.app","revision":"weeklyforecastjob-00007-hol","availableCpu":"1","availableMemory":"256Mi","ingressSettings":"ALLOW_ALL","allTrafficOnLatestRevision":true,"maxInstanceRequestConcurrency":80}},"resourceLocation":{"currentLocations":["us-central1"]}}
+2026-03-07T08:13:00.792297Z I weeklyforecastjob: 
+2026-03-07T08:13:00.818357Z ? weeklyforecastjob: Starting scheduled weekly forecast job...
+
+2026-03-07T08:13:00.819240Z ? weeklyforecastjob: Starting Deterministic Forecast...
+
+2026-03-07T08:13:01.694168Z ? weeklyforecastjob: Deterministic Forecast Saved.
+
+2026-03-07T08:13:01.694589Z ? weeklyforecastjob: Aggregating Forecasts...
+
+2026-03-07T08:13:01.880675Z ? weeklyforecastjob: Aggregations Built.
+
+2026-03-07T08:13:01.880956Z ? weeklyforecastjob: Generating Vendor Rollups...
+
+2026-03-07T08:13:02.153697Z ? weeklyforecastjob: Vendor Rollups Generated.
+
+2026-03-07T08:14:04.084931Z I weeklyforecastjob: 
+2026-03-07T08:14:04.107810Z ? weeklyforecastjob: Starting scheduled weekly forecast job...
+
+2026-03-07T08:14:04.107930Z ? weeklyforecastjob: Starting Deterministic Forecast...
+
+2026-03-07T08:14:04.237251Z ? weeklyforecastjob: Deterministic Forecast Saved.
+
+2026-03-07T08:14:04.237327Z ? weeklyforecastjob: Aggregating Forecasts...
+
+2026-03-07T08:14:04.353917Z ? weeklyforecastjob: Aggregations Built.
+
+2026-03-07T08:14:04.354218Z ? weeklyforecastjob: Generating Vendor Rollups...
+
+2026-03-07T08:14:04.515277Z ? weeklyforecastjob: Vendor Rollups Generated.
+

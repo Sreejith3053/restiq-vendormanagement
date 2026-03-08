@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { db } from '../../firebase';
+import { db, app } from '../../firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { UserContext } from '../../contexts/UserContext';
@@ -208,6 +209,37 @@ export default function OrdersPage() {
 
             await updateDoc(orderRef, updatePayload);
             toast.success(hasModifications ? 'Changes submitted for customer approval!' : 'Order accepted with scheduled pickup!');
+
+            // Send order confirmation email via Cloud Function
+            try {
+                // Fetch restaurant email from RMS API (same endpoint used by invoices)
+                let toEmail = '';
+                let restaurantName = selectedOrder.restaurantId;
+                try {
+                    const res = await fetch(`/api/restaurant-info/${selectedOrder.restaurantId}`);
+                    if (res.ok) {
+                        const info = await res.json();
+                        toEmail = info.email || '';
+                        restaurantName = info.businessName || selectedOrder.restaurantId;
+                    } else {
+                        console.warn('Restaurant info API returned:', res.status);
+                    }
+                } catch (fetchErr) {
+                    console.warn('Could not fetch restaurant info for email:', fetchErr);
+                }
+
+                if (toEmail) {
+                    const functions = getFunctions(app);
+                    const sendEmail = httpsCallable(functions, 'sendOrderConfirmationEmailFn');
+                    await sendEmail({ orderId: selectedOrder.id, toEmail, restaurantName });
+                    toast.info(`📧 Confirmation email sent to ${toEmail}`);
+                } else {
+                    toast.warn('No restaurant email found — email notification skipped.');
+                }
+            } catch (emailError) {
+                console.error('Email notification failed:', emailError);
+                toast.warn('Email notification failed (order still accepted).');
+            }
 
             setSelectedOrder(prev => prev ? {
                 ...prev,

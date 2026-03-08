@@ -4,6 +4,8 @@ import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { formatItemSize } from './VendorDetailPage';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import AddItemModal from './AddItemModal';
 
 const CATEGORIES = ['All', 'Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
@@ -76,6 +78,58 @@ export default function ItemCatalogPage() {
         setAllItems(prev => [...prev, newItem].sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     };
 
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+
+        doc.setFontSize(18);
+        doc.text('Item Catalog', 14, 22);
+
+        doc.setFontSize(11);
+        doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+        if (!isSuperAdmin) {
+            doc.text(`Vendor: ${vendorName || 'My Vendor'}`, 14, 36);
+        }
+
+        const tableColumn = ["Item Name", "Category", "Unit", "Price", "Status", "SKU"];
+        if (isSuperAdmin) {
+            tableColumn.splice(2, 0, "Vendor");
+        }
+
+        const tableRows = [];
+
+        filtered.forEach(item => {
+            const statusText = item.disabled ? 'Disabled' : item.outOfStock ? 'Out of Stock' : item.status === 'in-review' ? 'In Review' : 'Active';
+            const priceText = `$${Number(item.vendorPrice || item.price || 0).toFixed(2)}`;
+            const unitText = formatItemSize(item.unit, item.packQuantity, item.itemSize);
+
+            const rowData = [
+                item.name,
+                item.category || '—',
+                unitText,
+                priceText,
+                statusText,
+                item.sku || '—'
+            ];
+
+            if (isSuperAdmin) {
+                rowData.splice(2, 0, item.vendorName || '—');
+            }
+
+            tableRows.push(rowData);
+        });
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: isSuperAdmin ? 40 : 44,
+            theme: 'grid',
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [11, 18, 32] }
+        });
+
+        doc.save(`${vendorName ? vendorName.replace(/\s+/g, '_') + '_' : ''}Item_Catalog.pdf`);
+    };
+
     return (
         <div>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -86,11 +140,16 @@ export default function ItemCatalogPage() {
                         {!isSuperAdmin ? ` for ${vendorName || 'your vendor'}` : ' across all vendors'}
                     </span>
                 </div>
-                {vendorId && (
-                    <button className="ui-btn primary" onClick={() => setIsAddModalOpen(true)}>
-                        + Add Item
+                <div style={{ display: 'flex', gap: 12 }}>
+                    <button className="ui-btn secondary" onClick={handleExportPDF}>
+                        📄 Export PDF
                     </button>
-                )}
+                    {vendorId && (
+                        <button className="ui-btn primary" onClick={() => setIsAddModalOpen(true)}>
+                            + Add Item
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Filters */}
@@ -128,11 +187,13 @@ export default function ItemCatalogPage() {
                     <table className="ui-table">
                         <thead>
                             <tr>
+                                <th style={{ width: 60 }}>Image</th>
                                 <th>Item Name</th>
                                 <th>Category</th>
                                 {isSuperAdmin && <th>Vendor</th>}
                                 <th>Unit</th>
                                 <th>Price</th>
+                                <th>Status</th>
                                 <th>SKU</th>
                             </tr>
                         </thead>
@@ -143,17 +204,38 @@ export default function ItemCatalogPage() {
                                     className="is-row"
                                     onClick={() => navigate(`/vendors/${item.vendorId}/items/${item.id}`)}
                                 >
+                                    <td data-label="Image">
+                                        <div style={{
+                                            width: 40, height: 40, borderRadius: 6,
+                                            backgroundColor: 'var(--bg-lighter)',
+                                            backgroundImage: item.imageUrl ? `url(${item.imageUrl})` : 'none',
+                                            backgroundSize: 'cover', backgroundPosition: 'center',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            flexShrink: 0
+                                        }}>
+                                            {!item.imageUrl && <span style={{ fontSize: 16 }}>📦</span>}
+                                        </div>
+                                    </td>
                                     <td data-label="Item" style={{ fontWeight: 600 }}>
                                         {item.name}
-                                        {item.disabled && <span className="badge red" style={{ marginLeft: 8, fontSize: 10 }}>Disabled</span>}
-                                        {item.outOfStock && !item.disabled && <span className="badge amber" style={{ marginLeft: 8, fontSize: 10 }}>Out of Stock</span>}
                                     </td>
                                     <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
                                     {isSuperAdmin && <td data-label="Vendor">{item.vendorName}</td>}
                                     <td data-label="Unit" style={{ textTransform: 'capitalize' }}>
                                         {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
                                     </td>
-                                    <td data-label="Price">${Number(item.price || 0).toFixed(2)}</td>
+                                    <td data-label="Price">${Number(item.vendorPrice || item.price || 0).toFixed(2)}</td>
+                                    <td data-label="Status">
+                                        {item.disabled ? (
+                                            <span className="badge red" style={{ fontSize: 11 }}>Disabled</span>
+                                        ) : item.outOfStock ? (
+                                            <span className="badge amber" style={{ fontSize: 11 }}>Out of Stock</span>
+                                        ) : item.status === 'in-review' ? (
+                                            <span className="badge purple" style={{ fontSize: 11 }}>In Review</span>
+                                        ) : (
+                                            <span className="badge green" style={{ fontSize: 11 }}>Active</span>
+                                        )}
+                                    </td>
                                     <td data-label="SKU">{item.sku || '—'}</td>
                                 </tr>
                             ))}

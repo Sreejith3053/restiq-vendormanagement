@@ -390,8 +390,13 @@ export default function ItemDetailPage() {
             };
 
             if ((item.changeType === 'edit' || item.changeType === 'add') && item.proposedData) {
-                await updateDoc(itemRef, { ...item.proposedData, ...clearFields });
-                setItem(prev => ({ ...prev, ...item.proposedData, ...clearFields }));
+                const finalData = { ...item.proposedData, ...clearFields };
+                // Preserve dynamically uploaded assets that live on the root document
+                if (item.imageUrl) finalData.imageUrl = item.imageUrl;
+                if (item.proofUrls) finalData.proofUrls = item.proofUrls;
+
+                await updateDoc(itemRef, finalData);
+                setItem(prev => ({ ...prev, ...finalData }));
             } else if (item.changeType === 'delete') {
                 await deleteDoc(itemRef);
                 toast.success('✅ Deletion approved!');

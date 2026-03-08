@@ -82,6 +82,12 @@ export default function Sidebar({ isOpen, onClose }) {
                         </div>
                         <div className="sidebar-section">
                             <div className="sidebar-section-title">AI Forecast & Planning</div>
+                            <NavLink to="/admin/container-prediction-test" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🧪</span> Container Prediction
+                            </NavLink>
+                            <NavLink to="/admin/vegetable-prediction-test" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🥗</span> Vegetable Prediction
+                            </NavLink>
                             <NavLink to="/admin/forecast" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🤖</span> AI Overview
                             </NavLink>

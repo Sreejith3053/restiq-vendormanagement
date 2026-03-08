@@ -38,6 +38,10 @@ import ForecastAccuracyPage from './components/Forecast/ForecastAccuracyPage';
 import ForecastAlertsPage from './components/Forecast/ForecastAlertsPage';
 import ForecastSettingsPage from './components/Forecast/ForecastSettingsPage';
 
+// New Container Prediction Test
+import ContainerPredictionTestPage from './components/Forecast/ContainerPredictionTestPage';
+import VegetablePredictionTestPage from './components/Forecast/VegetablePredictionTestPage';
+
 // Toasts
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -110,6 +114,8 @@ function App() {
                                 <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
 
                                 {/* AI Forecast Sub-routes */}
+                                <Route path="/admin/container-prediction-test" element={<ContainerPredictionTestPage />} />
+                                <Route path="/admin/vegetable-prediction-test" element={<VegetablePredictionTestPage />} />
                                 <Route path="/admin/forecast" element={<ForecastOverviewPage />} />
                                 <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />
                                 <Route path="/admin/forecast/combined" element={<CombinedDemandPage />} />

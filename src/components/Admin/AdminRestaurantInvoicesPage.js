@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, setDoc, addDoc, serverTimestamp, getDocs, getDoc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getTaxRate } from '../../constants/taxRates';
@@ -22,17 +22,21 @@ export default function AdminRestaurantInvoicesPage() {
     const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'All');
     const [search, setSearch] = useState('');
 
+    // Payment modal state
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [selectedInvoice, setSelectedInvoice] = useState(null);
+    const [paymentMethod, setPaymentMethod] = useState('');
+    const [paymentFields, setPaymentFields] = useState({});
+
     useEffect(() => {
         if (!isSuperAdmin) return;
 
-        // Load Vendors
         const loadVendors = async () => {
             const vSnap = await getDocs(collection(db, 'vendors'));
             setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         };
         loadVendors();
 
-        // Listen to Restaurant Invoices
         const q = query(collection(db, 'restaurantInvoices'), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setInvoices(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -50,13 +54,11 @@ export default function AdminRestaurantInvoicesPage() {
         setScanning(true);
         let createdCount = 0;
         try {
-            // 1. Fetch all FULFILLED orders
             const ordersReq = await getDocs(collection(db, 'marketplaceOrders'));
             const eligibleOrders = ordersReq.docs
                 .map(d => ({ id: d.id, ...d.data() }))
                 .filter(o => o.status === 'fulfilled');
 
-            // 2. Check which orders are missing restaurant invoices
             const missingOrders = [];
             for (const order of eligibleOrders) {
                 const invSnap = await getDoc(doc(db, 'restaurantInvoices', order.id));
@@ -71,13 +73,11 @@ export default function AdminRestaurantInvoicesPage() {
                 return;
             }
 
-            // 3. Create missing invoices
             const now = new Date();
 
             for (let i = 0; i < missingOrders.length; i++) {
                 const order = missingOrders[i];
 
-                // Fetch Vendor for tax rate
                 const vendorSnap = await getDoc(doc(db, 'vendors', order.vendorId));
                 const vData = vendorSnap.exists() ? vendorSnap.data() : {};
                 const taxRate = getTaxRate(vData.country || 'Canada', vData.province);
@@ -140,21 +140,81 @@ export default function AdminRestaurantInvoicesPage() {
         }
     };
 
-    const handleMarkPaid = async (invoiceId) => {
-        if (!window.confirm('Mark this restaurant invoice as PAID?')) return;
+    // Open payment modal instead of direct mark-paid
+    const handleMarkPaidClick = (inv, e) => {
+        e.stopPropagation();
+        setSelectedInvoice(inv);
+        setPaymentMethod('');
+        setPaymentFields({});
+        setShowPaymentModal(true);
+    };
 
-        setProcessingId(invoiceId);
+    const handlePaymentFieldChange = (field, value) => {
+        setPaymentFields(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleConfirmPayment = async () => {
+        if (!paymentMethod) {
+            toast.error('Please select a payment method.');
+            return;
+        }
+
+        // Validate required fields per method
+        if (paymentMethod === 'Card Terminal') {
+            if (!paymentFields.transactionNumber || !paymentFields.collectedBy || !paymentFields.paymentDate) {
+                toast.error('Please fill in all required Card Terminal fields.');
+                return;
+            }
+        } else if (paymentMethod === 'Cheque') {
+            if (!paymentFields.chequeNumber || !paymentFields.collectedBy || !paymentFields.chequeDepositDate) {
+                toast.error('Please fill in all required Cheque fields.');
+                return;
+            }
+        } else if (paymentMethod === 'E-Transfer') {
+            if (!paymentFields.validatedBy || !paymentFields.paymentDate) {
+                toast.error('Please fill in all required E-Transfer fields.');
+                return;
+            }
+        } else if (paymentMethod === 'Cash') {
+            if (!paymentFields.receivedBy || !paymentFields.paymentDate) {
+                toast.error('Please fill in all required Cash fields.');
+                return;
+            }
+        }
+
+        setProcessingId(selectedInvoice.id);
         try {
-            await updateDoc(doc(db, 'restaurantInvoices', invoiceId), {
+            // 1. Save to RestaurantPaymentHistory collection
+            await addDoc(collection(db, 'RestaurantPaymentHistory'), {
+                invoiceId: selectedInvoice.id,
+                invoiceNumber: selectedInvoice.invoiceNumber || '',
+                orderId: selectedInvoice.orderId || '',
+                orderGroupId: selectedInvoice.orderGroupId || '',
+                restaurantId: selectedInvoice.restaurantId || '',
+                restaurantName: selectedInvoice.restaurantName || selectedInvoice.restaurantId || '',
+                vendorName: selectedInvoice.vendorName || '',
+                amount: Number(selectedInvoice.grandTotal || 0),
+                paymentMethod: paymentMethod,
+                ...paymentFields,
+                recordedBy: displayName || 'Admin',
+                createdAt: serverTimestamp()
+            });
+
+            // 2. Update the invoice status to PAID
+            await updateDoc(doc(db, 'restaurantInvoices', selectedInvoice.id), {
                 paymentStatus: 'PAID',
+                paymentMethod: paymentMethod,
                 paidAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 paidByAdminName: displayName || 'Admin'
             });
-            toast.success('Restaurant invoice marked as PAID.');
+
+            toast.success('Payment recorded & invoice marked as PAID.');
+            setShowPaymentModal(false);
+            setSelectedInvoice(null);
         } catch (err) {
-            console.error('Failed to update restaurant invoice status:', err);
-            toast.error('Failed to mark invoice as paid.');
+            console.error('Failed to record payment:', err);
+            toast.error('Failed to record payment.');
         } finally {
             setProcessingId(null);
         }
@@ -166,7 +226,6 @@ export default function AdminRestaurantInvoicesPage() {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
-    // Unique restaurants for filter
     const uniqueRestaurants = useMemo(() => {
         return [...new Set(invoices.map(inv => inv.restaurantId).filter(Boolean))].sort();
     }, [invoices]);
@@ -186,6 +245,15 @@ export default function AdminRestaurantInvoicesPage() {
     if (!isSuperAdmin) {
         return <div style={{ padding: 40, textAlign: 'center' }}>Access Denied.</div>;
     }
+
+    // Shared modal styles
+    const inputStyle = {
+        width: '100%', padding: '10px 12px', borderRadius: 8,
+        border: '1px solid var(--border)', background: 'var(--bg-card)',
+        color: 'var(--text)', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box'
+    };
+    const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px' };
+    const fieldGroup = { marginBottom: 16 };
 
     return (
         <div>
@@ -293,7 +361,7 @@ export default function AdminRestaurantInvoicesPage() {
                                             {isPending && (
                                                 <button
                                                     className="ui-btn small primary"
-                                                    onClick={(e) => { e.stopPropagation(); handleMarkPaid(inv.id); }}
+                                                    onClick={(e) => handleMarkPaidClick(inv, e)}
                                                     disabled={processingId === inv.id}
                                                 >
                                                     {processingId === inv.id ? 'Saving...' : 'Mark Paid'}
@@ -307,6 +375,175 @@ export default function AdminRestaurantInvoicesPage() {
                     </tbody>
                 </table>
             </div>
+
+            {/* ─── Payment Collection Modal ─── */}
+            {showPaymentModal && selectedInvoice && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(4px)'
+                }} onClick={() => setShowPaymentModal(false)}>
+                    <div style={{
+                        background: 'var(--bg-card)', borderRadius: 16, padding: 32,
+                        width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
+                        border: '1px solid var(--border)',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
+                    }} onClick={e => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>💳 Record Payment</h3>
+                                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                                    {selectedInvoice.invoiceNumber} • <span style={{ color: '#4ade80', fontWeight: 600 }}>${Number(selectedInvoice.grandTotal || 0).toFixed(2)}</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowPaymentModal(false)} style={{
+                                background: 'none', border: 'none', color: 'var(--muted)',
+                                fontSize: 20, cursor: 'pointer', padding: 4
+                            }}>✕</button>
+                        </div>
+
+                        {/* Payment Method Selector */}
+                        <div style={fieldGroup}>
+                            <label style={labelStyle}>Payment Method *</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                {['Card Terminal', 'Cheque', 'E-Transfer', 'Cash'].map(method => (
+                                    <button
+                                        key={method}
+                                        onClick={() => { setPaymentMethod(method); setPaymentFields({}); }}
+                                        style={{
+                                            padding: '12px 16px', borderRadius: 10,
+                                            border: paymentMethod === method ? '2px solid #4dabf7' : '1px solid var(--border)',
+                                            background: paymentMethod === method ? 'rgba(77, 171, 247, 0.1)' : 'var(--bg)',
+                                            color: paymentMethod === method ? '#4dabf7' : 'var(--text)',
+                                            fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                                            transition: 'all .15s ease', fontFamily: 'inherit'
+                                        }}
+                                    >
+                                        {method === 'Card Terminal' && '💳 '}
+                                        {method === 'Cheque' && '📝 '}
+                                        {method === 'E-Transfer' && '📲 '}
+                                        {method === 'Cash' && '💵 '}
+                                        {method}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Conditional Fields */}
+                        {paymentMethod === 'Card Terminal' && (
+                            <div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Transaction # *</label>
+                                    <input type="text" placeholder="Enter transaction number" style={inputStyle}
+                                        value={paymentFields.transactionNumber || ''}
+                                        onChange={e => handlePaymentFieldChange('transactionNumber', e.target.value)} />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Collected By *</label>
+                                    <input type="text" placeholder="Name of person who collected payment" style={inputStyle}
+                                        value={paymentFields.collectedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('collectedBy', e.target.value)} />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Payment Date *</label>
+                                    <input type="date" style={inputStyle}
+                                        value={paymentFields.paymentDate || ''}
+                                        onChange={e => handlePaymentFieldChange('paymentDate', e.target.value)} />
+                                </div>
+                            </div>
+                        )}
+
+                        {paymentMethod === 'Cheque' && (
+                            <div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Cheque Number *</label>
+                                    <input type="text" placeholder="Enter cheque number" style={inputStyle}
+                                        value={paymentFields.chequeNumber || ''}
+                                        onChange={e => handlePaymentFieldChange('chequeNumber', e.target.value)} />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Collected By *</label>
+                                    <input type="text" placeholder="Name of person who collected cheque" style={inputStyle}
+                                        value={paymentFields.collectedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('collectedBy', e.target.value)} />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Cheque Date to Deposit *</label>
+                                    <input type="date" style={inputStyle}
+                                        value={paymentFields.chequeDepositDate || ''}
+                                        onChange={e => handlePaymentFieldChange('chequeDepositDate', e.target.value)} />
+                                </div>
+                            </div>
+                        )}
+
+                        {paymentMethod === 'E-Transfer' && (
+                            <div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Validated By *</label>
+                                    <input type="text" placeholder="Name of person who validated the e-transfer" style={inputStyle}
+                                        value={paymentFields.validatedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('validatedBy', e.target.value)} />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Payment Date *</label>
+                                    <input type="date" style={inputStyle}
+                                        value={paymentFields.paymentDate || ''}
+                                        onChange={e => handlePaymentFieldChange('paymentDate', e.target.value)} />
+                                </div>
+                            </div>
+                        )}
+
+                        {paymentMethod === 'Cash' && (
+                            <div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Received By *</label>
+                                    <input type="text" placeholder="Name of person who received cash" style={inputStyle}
+                                        value={paymentFields.receivedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('receivedBy', e.target.value)} />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Payment Date *</label>
+                                    <input type="date" style={inputStyle}
+                                        value={paymentFields.paymentDate || ''}
+                                        onChange={e => handlePaymentFieldChange('paymentDate', e.target.value)} />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Confirm / Cancel */}
+                        {paymentMethod && (
+                            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                                <button
+                                    onClick={() => setShowPaymentModal(false)}
+                                    style={{
+                                        flex: 1, padding: '12px', borderRadius: 10,
+                                        border: '1px solid var(--border)', background: 'var(--bg)',
+                                        color: 'var(--muted)', fontWeight: 600, fontSize: 14,
+                                        cursor: 'pointer', fontFamily: 'inherit'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmPayment}
+                                    disabled={processingId === selectedInvoice.id}
+                                    style={{
+                                        flex: 2, padding: '12px', borderRadius: 10,
+                                        border: 'none', background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+                                        color: '#fff', fontWeight: 700, fontSize: 14,
+                                        cursor: processingId ? 'not-allowed' : 'pointer',
+                                        opacity: processingId ? 0.7 : 1, fontFamily: 'inherit',
+                                        boxShadow: '0 4px 16px rgba(74, 222, 128, 0.3)'
+                                    }}
+                                >
+                                    {processingId === selectedInvoice.id ? '⏳ Recording...' : `✅ Confirm Payment — $${Number(selectedInvoice.grandTotal || 0).toFixed(2)}`}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UserContext } from '../../contexts/UserContext';
 import { db, storage } from '../../firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import { generateInvoicePDF } from '../../utils/generateInvoicePDF';
@@ -16,7 +16,12 @@ export default function RestaurantInvoiceDetailPage() {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [generatingPdf, setGeneratingPdf] = useState(false);
-    const [pdfUrl, setPdfUrl] = useState(null); // Storage download URL
+    const [pdfUrl, setPdfUrl] = useState(null);
+
+    // Payment modal state
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState('');
+    const [paymentFields, setPaymentFields] = useState({});
 
     useEffect(() => {
         const fetchInvoice = async () => {
@@ -40,17 +45,15 @@ export default function RestaurantInvoiceDetailPage() {
 
                 setInvoice({ id: snap.id, ...data });
 
-                // Check if PDF URL exists on the invoice doc (new approach)
                 if (data.pdfUrl) {
                     setPdfUrl(data.pdfUrl);
                 } else {
-                    // Legacy fallback: check subcollection
                     try {
                         const pdfSnap = await getDoc(doc(db, 'restaurantInvoices', invoiceId, 'pdfs', 'invoice'));
                         if (pdfSnap.exists() && pdfSnap.data().pdfBase64) {
                             setPdfUrl(pdfSnap.data().pdfBase64);
                         }
-                    } catch (_) { /* ignore legacy check errors */ }
+                    } catch (_) { }
                 }
             } catch (err) {
                 console.error('Failed to load restaurant invoice:', err);
@@ -66,7 +69,6 @@ export default function RestaurantInvoiceDetailPage() {
     const handleGeneratePDF = async () => {
         setGeneratingPdf(true);
         try {
-            // Fetch restaurant info from RMS via server API
             let restaurantInfo = {};
             if (invoice.restaurantId) {
                 try {
@@ -79,10 +81,8 @@ export default function RestaurantInvoiceDetailPage() {
                 }
             }
 
-            // Generate PDF (returns base64 data URI)
             const base64Pdf = await generateInvoicePDF(invoice, restaurantInfo, 'restaurant');
 
-            // Convert data URI to Blob for Storage upload
             const byteString = atob(base64Pdf.split(',')[1]);
             const mimeString = base64Pdf.split(',')[0].split(':')[1].split(';')[0];
             const ab = new ArrayBuffer(byteString.length);
@@ -90,12 +90,10 @@ export default function RestaurantInvoiceDetailPage() {
             for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
             const blob = new Blob([ab], { type: mimeString });
 
-            // Upload to Firebase Storage
             const storageRef = ref(storage, `invoices/restaurant/${invoiceId}.pdf`);
             await uploadBytes(storageRef, blob, { contentType: 'application/pdf' });
             const downloadUrl = await getDownloadURL(storageRef);
 
-            // Save URL reference on the invoice document
             await updateDoc(doc(db, 'restaurantInvoices', invoiceId), {
                 pdfUrl: downloadUrl,
                 pdfGeneratedAt: serverTimestamp(),
@@ -114,7 +112,6 @@ export default function RestaurantInvoiceDetailPage() {
 
     const handleViewPDF = () => {
         if (!pdfUrl) return;
-        // If it's a data URI (legacy), open in iframe; if it's a URL, open directly
         if (pdfUrl.startsWith('data:')) {
             const newWindow = window.open();
             newWindow.document.write(`<iframe src="${pdfUrl}" style="width:100%;height:100%;border:none;" title="Invoice PDF"></iframe>`);
@@ -124,28 +121,85 @@ export default function RestaurantInvoiceDetailPage() {
         }
     };
 
-    const handleMarkPaid = async () => {
-        if (!isSuperAdmin) return;
-        if (!window.confirm('Mark this restaurant invoice as PAID? This action is permanent.')) return;
+    // Open payment collection modal instead of directly marking as paid
+    const handleMarkPaidClick = () => {
+        setPaymentMethod('');
+        setPaymentFields({});
+        setShowPaymentModal(true);
+    };
+
+    const handlePaymentFieldChange = (field, value) => {
+        setPaymentFields(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleConfirmPayment = async () => {
+        if (!paymentMethod) {
+            toast.error('Please select a payment method.');
+            return;
+        }
+
+        // Validate required fields per method
+        if (paymentMethod === 'Card Terminal') {
+            if (!paymentFields.transactionNumber || !paymentFields.collectedBy || !paymentFields.paymentDate) {
+                toast.error('Please fill in all required Card Terminal fields.');
+                return;
+            }
+        } else if (paymentMethod === 'Cheque') {
+            if (!paymentFields.chequeNumber || !paymentFields.collectedBy || !paymentFields.chequeDepositDate) {
+                toast.error('Please fill in all required Cheque fields.');
+                return;
+            }
+        } else if (paymentMethod === 'E-Transfer') {
+            if (!paymentFields.validatedBy || !paymentFields.paymentDate) {
+                toast.error('Please fill in all required E-Transfer fields.');
+                return;
+            }
+        } else if (paymentMethod === 'Cash') {
+            if (!paymentFields.receivedBy || !paymentFields.paymentDate) {
+                toast.error('Please fill in all required Cash fields.');
+                return;
+            }
+        }
 
         setProcessing(true);
         try {
+            // 1. Save to RestaurantPaymentHistory collection
+            await addDoc(collection(db, 'RestaurantPaymentHistory'), {
+                invoiceId: invoiceId,
+                invoiceNumber: invoice.invoiceNumber || '',
+                orderId: invoice.orderId || '',
+                orderGroupId: invoice.orderGroupId || '',
+                restaurantId: invoice.restaurantId || '',
+                restaurantName: invoice.restaurantName || invoice.restaurantId || '',
+                vendorName: invoice.vendorName || '',
+                amount: Number(invoice.grandTotal || 0),
+                paymentMethod: paymentMethod,
+                ...paymentFields,
+                recordedBy: displayName || 'Admin',
+                createdAt: serverTimestamp()
+            });
+
+            // 2. Update the invoice status to PAID
             await updateDoc(doc(db, 'restaurantInvoices', invoiceId), {
                 paymentStatus: 'PAID',
+                paymentMethod: paymentMethod,
                 paidAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 paidByAdminName: displayName || 'Admin'
             });
-            toast.success('Restaurant invoice marked as PAID.');
+
+            toast.success('Payment recorded & invoice marked as PAID.');
+            setShowPaymentModal(false);
 
             setInvoice(prev => ({
                 ...prev,
                 paymentStatus: 'PAID',
+                paymentMethod: paymentMethod,
                 paidAt: new Date()
             }));
         } catch (err) {
-            console.error('Failed to mark paid:', err);
-            toast.error('Failed to update invoice status.');
+            console.error('Failed to record payment:', err);
+            toast.error('Failed to record payment.');
         } finally {
             setProcessing(false);
         }
@@ -161,6 +215,15 @@ export default function RestaurantInvoiceDetailPage() {
         const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
         return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     };
+
+    // Shared modal input style
+    const inputStyle = {
+        width: '100%', padding: '10px 12px', borderRadius: 8,
+        border: '1px solid var(--border)', background: 'var(--bg-card)',
+        color: 'var(--text)', fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box'
+    };
+    const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.5px' };
+    const fieldGroup = { marginBottom: 16 };
 
     return (
         <div>
@@ -210,7 +273,7 @@ export default function RestaurantInvoiceDetailPage() {
                     {isSuperAdmin && isPending && (
                         <button
                             className="ui-btn primary"
-                            onClick={handleMarkPaid}
+                            onClick={handleMarkPaidClick}
                             disabled={processing}
                         >
                             {processing ? 'Processing...' : '💳 Mark as Paid'}
@@ -282,6 +345,9 @@ export default function RestaurantInvoiceDetailPage() {
                         <div className="idp-field" style={{ padding: '8px 12px', background: 'rgba(74, 222, 128, 0.08)', borderRadius: 8, border: '1px solid rgba(74, 222, 128, 0.2)' }}>
                             <div className="idp-field__label" style={{ color: '#4ade80' }}>Paid On</div>
                             <div className="idp-field__value" style={{ fontSize: 14 }}>{formatDate(invoice.paidAt)}</div>
+                            {invoice.paymentMethod && (
+                                <div className="idp-field__value" style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>via {invoice.paymentMethod}</div>
+                            )}
                         </div>
                     )}
 
@@ -305,6 +371,211 @@ export default function RestaurantInvoiceDetailPage() {
                     </div>
                 </div>
             </div>
+
+            {/* ─── Payment Collection Modal ─── */}
+            {showPaymentModal && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backdropFilter: 'blur(4px)'
+                }} onClick={() => setShowPaymentModal(false)}>
+                    <div style={{
+                        background: 'var(--bg-card)', borderRadius: 16, padding: 32,
+                        width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
+                        border: '1px solid var(--border)',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
+                    }} onClick={e => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>💳 Record Payment</h3>
+                                <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                                    {invoice.invoiceNumber} • <span style={{ color: '#4ade80', fontWeight: 600 }}>${Number(invoice.grandTotal || 0).toFixed(2)}</span>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowPaymentModal(false)} style={{
+                                background: 'none', border: 'none', color: 'var(--muted)',
+                                fontSize: 20, cursor: 'pointer', padding: 4
+                            }}>✕</button>
+                        </div>
+
+                        {/* Payment Method Selector */}
+                        <div style={fieldGroup}>
+                            <label style={labelStyle}>Payment Method *</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                {['Card Terminal', 'Cheque', 'E-Transfer', 'Cash'].map(method => (
+                                    <button
+                                        key={method}
+                                        onClick={() => { setPaymentMethod(method); setPaymentFields({}); }}
+                                        style={{
+                                            padding: '12px 16px', borderRadius: 10,
+                                            border: paymentMethod === method ? '2px solid #4dabf7' : '1px solid var(--border)',
+                                            background: paymentMethod === method ? 'rgba(77, 171, 247, 0.1)' : 'var(--bg)',
+                                            color: paymentMethod === method ? '#4dabf7' : 'var(--text)',
+                                            fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                                            transition: 'all .15s ease', fontFamily: 'inherit'
+                                        }}
+                                    >
+                                        {method === 'Card Terminal' && '💳 '}
+                                        {method === 'Cheque' && '📝 '}
+                                        {method === 'E-Transfer' && '📲 '}
+                                        {method === 'Cash' && '💵 '}
+                                        {method}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Conditional Fields based on Payment Method */}
+                        {paymentMethod === 'Card Terminal' && (
+                            <div style={{ animation: 'fadeIn .2s ease' }}>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Transaction # *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter transaction number"
+                                        style={inputStyle}
+                                        value={paymentFields.transactionNumber || ''}
+                                        onChange={e => handlePaymentFieldChange('transactionNumber', e.target.value)}
+                                    />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Collected By *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Name of person who collected payment"
+                                        style={inputStyle}
+                                        value={paymentFields.collectedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('collectedBy', e.target.value)}
+                                    />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Payment Date *</label>
+                                    <input
+                                        type="date"
+                                        style={inputStyle}
+                                        value={paymentFields.paymentDate || ''}
+                                        onChange={e => handlePaymentFieldChange('paymentDate', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {paymentMethod === 'Cheque' && (
+                            <div style={{ animation: 'fadeIn .2s ease' }}>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Cheque Number *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter cheque number"
+                                        style={inputStyle}
+                                        value={paymentFields.chequeNumber || ''}
+                                        onChange={e => handlePaymentFieldChange('chequeNumber', e.target.value)}
+                                    />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Collected By *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Name of person who collected cheque"
+                                        style={inputStyle}
+                                        value={paymentFields.collectedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('collectedBy', e.target.value)}
+                                    />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Cheque Date to Deposit *</label>
+                                    <input
+                                        type="date"
+                                        style={inputStyle}
+                                        value={paymentFields.chequeDepositDate || ''}
+                                        onChange={e => handlePaymentFieldChange('chequeDepositDate', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {paymentMethod === 'E-Transfer' && (
+                            <div style={{ animation: 'fadeIn .2s ease' }}>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Validated By *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Name of person who validated the e-transfer"
+                                        style={inputStyle}
+                                        value={paymentFields.validatedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('validatedBy', e.target.value)}
+                                    />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Payment Date *</label>
+                                    <input
+                                        type="date"
+                                        style={inputStyle}
+                                        value={paymentFields.paymentDate || ''}
+                                        onChange={e => handlePaymentFieldChange('paymentDate', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {paymentMethod === 'Cash' && (
+                            <div style={{ animation: 'fadeIn .2s ease' }}>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Received By *</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Name of person who received cash"
+                                        style={inputStyle}
+                                        value={paymentFields.receivedBy || ''}
+                                        onChange={e => handlePaymentFieldChange('receivedBy', e.target.value)}
+                                    />
+                                </div>
+                                <div style={fieldGroup}>
+                                    <label style={labelStyle}>Payment Date *</label>
+                                    <input
+                                        type="date"
+                                        style={inputStyle}
+                                        value={paymentFields.paymentDate || ''}
+                                        onChange={e => handlePaymentFieldChange('paymentDate', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Confirm / Cancel */}
+                        {paymentMethod && (
+                            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                                <button
+                                    onClick={() => setShowPaymentModal(false)}
+                                    style={{
+                                        flex: 1, padding: '12px', borderRadius: 10,
+                                        border: '1px solid var(--border)', background: 'var(--bg)',
+                                        color: 'var(--muted)', fontWeight: 600, fontSize: 14,
+                                        cursor: 'pointer', fontFamily: 'inherit'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmPayment}
+                                    disabled={processing}
+                                    style={{
+                                        flex: 2, padding: '12px', borderRadius: 10,
+                                        border: 'none', background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+                                        color: '#fff', fontWeight: 700, fontSize: 14,
+                                        cursor: processing ? 'not-allowed' : 'pointer',
+                                        opacity: processing ? 0.7 : 1, fontFamily: 'inherit',
+                                        boxShadow: '0 4px 16px rgba(74, 222, 128, 0.3)'
+                                    }}
+                                >
+                                    {processing ? '⏳ Recording...' : `✅ Confirm Payment — $${Number(invoice.grandTotal || 0).toFixed(2)}`}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

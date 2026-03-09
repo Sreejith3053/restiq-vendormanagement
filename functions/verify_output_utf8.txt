@@ -1,0 +1,35 @@
+﻿=== DIAGNOSTICS ===
+History Loaded: 3146 rows
+Catalog Loaded: 28 items
+Tomato Found In History: Yes
+Tomato Forecasted: Yes
+Suggested Additions: 0
+
+Corrected Active Prices:
+Tomato: $49.00
+Onion - Cooking: $19.00
+Cabbage: $24.99
+Coriander Leaves: $1.50
+Okra: $5.00
+Leeks: $5.98
+Potatoes: $24.98
+Peeled Garlic: $32.00
+Ginger: $54.00
+Carrot: $31.99
+Capsicum Green: $3.25
+Onion - Red: $18.00
+Mint Leaves: $1.50
+Lime: $0.75
+Capsicum Red: $3.25
+Lemon: $44.00
+French Beans: $4.00
+Celery: $4.00
+Green Onion: $2.00
+Capsicum Yellow: $3.25
+Pepper Mix: $3.25
+Curry Leaves: $54.00
+Plantain Green: $1.50
+Long Beans: $3.75
+Beets: $1.23
+
+Missing Mappings (Fail Safe Triggered):

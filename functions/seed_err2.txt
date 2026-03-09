@@ -1,0 +1,22 @@
+1. Seeding Festival Calendar...
+Seeding 5 records into [festivalCalendar]...
+Error during seeding: Error: Unable to detect a Project Id in the current environment. 
+To learn more about authentication and Google APIs, visit: 
+https://cloud.google.com/docs/authentication/getting-started
+    at GoogleAuth.findAndCacheProjectId (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\google-gax\node_modules\google-auth-library\build\src\auth\googleauth.js:170:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Firestore.initializeIfNeeded (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@google-cloud\firestore\build\src\index.js:1201:35)
+    at async WriteBatch._commit (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@google-cloud\firestore\build\src\write-batch.js:469:9)
+    at async commitInBatches (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js:58:9)
+    at async run (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js:72:9)
+Caused by: Error
+    at _firestore._traceUtil.startActiveSpan (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@google-cloud\firestore\build\src\write-batch.js:438:27)
+    at C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@google-cloud\firestore\build\src\telemetry\enabled-trace-util.js:110:30
+    at NoopContextManager.with (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@opentelemetry\api\build\src\context\NoopContextManager.js:25:19)
+    at ContextAPI.with (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@opentelemetry\api\build\src\api\context.js:60:46)
+    at NoopTracer.startActiveSpan (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@opentelemetry\api\build\src\trace\NoopTracer.js:65:31)
+    at ProxyTracer.startActiveSpan (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@opentelemetry\api\build\src\trace\ProxyTracer.js:36:24)
+    at EnabledTraceUtil.startActiveSpan (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@google-cloud\firestore\build\src\telemetry\enabled-trace-util.js:102:28)
+    at WriteBatch.commit (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\@google-cloud\firestore\build\src\write-batch.js:436:43)
+    at commitInBatches (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js:58:21)
+    at run (C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js:72:15)

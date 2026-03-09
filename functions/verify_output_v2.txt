@@ -1,0 +1,27 @@
+﻿Okra | Med4: 9 | Med8: 3 | Forecast: 6.6 | Pack Size: 1 | Packs Needed: 7
+Peeled Garlic | Med4: 7 | Med8: 7 | Forecast: 7 | Pack Size: 18 | Packs Needed: 1
+Lemon | Med4: 3 | Med8: 3 | Forecast: 3 | Pack Size: 100 | Packs Needed: 1
+Onion - Red | Med4: 7 | Med8: 8 | Forecast: 7.4 | Pack Size: 25 | Packs Needed: 1
+Cauliflower | Med4: 8 | Med8: 10 | Forecast: 8.8 | Pack Size: 1 | Packs Needed: 9
+Onion - Cooking | Med4: 9 | Med8: 11.5 | Forecast: 10 | Pack Size: 50 | Packs Needed: 1
+Curry Leaves | Med4: 5 | Med8: 5 | Forecast: 5 | Pack Size: 1 | Packs Needed: 5
+Cabbage | Med4: 1.5 | Med8: 4 | Forecast: 2.5 | Pack Size: 50 | Packs Needed: 1
+Capsicum Yellow | Med4: 9 | Med8: 9 | Forecast: 9 | Pack Size: 1 | Packs Needed: 9
+Beets | Med4: 4 | Med8: 4 | Forecast: 4 | Pack Size: 1 | Packs Needed: 4
+Carrot | Med4: 7.5 | Med8: 9.5 | Forecast: 8.3 | Pack Size: 50 | Packs Needed: 1
+Capsicum Red | Med4: 0 | Med8: 8 | Forecast: 3.2 | Pack Size: 1 | Packs Needed: 4
+Coriander Leaves | Med4: 0 | Med8: 8 | Forecast: 3.2 | Pack Size: 1 | Packs Needed: 4
+Mint Leaves | Med4: 8 | Med8: 8 | Forecast: 8 | Pack Size: 1 | Packs Needed: 8
+Green Onion | Med4: 7 | Med8: 4.5 | Forecast: 6 | Pack Size: 1 | Packs Needed: 6
+Ginger | Med4: 0 | Med8: 3 | Forecast: 1.2000000000000002 | Pack Size: 30 | Packs Needed: 1
+Capsicum Green | Med4: 15 | Med8: 11 | Forecast: 13.4 | Pack Size: 1 | Packs Needed: 14
+Lime | Med4: 0 | Med8: 5.5 | Forecast: 2.2 | Pack Size: 1 | Packs Needed: 3
+Pepper Mix | Med4: 5 | Med8: 5 | Forecast: 5 | Pack Size: 1 | Packs Needed: 5
+French Beans | Med4: 5.5 | Med8: 8 | Forecast: 6.5 | Pack Size: 1 | Packs Needed: 7
+Potatoes | Med4: 5 | Med8: 1 | Forecast: 3.4 | Pack Size: 50 | Packs Needed: 1
+Celery | Med4: 0 | Med8: 4.5 | Forecast: 1.8 | Pack Size: 1 | Packs Needed: 2
+Long Beans | Med4: 2 | Med8: 2.5 | Forecast: 2.2 | Pack Size: 1 | Packs Needed: 3
+Ash Guard | Med4: 8 | Med8: 8 | Forecast: 8 | Pack Size: 1 | Packs Needed: 8
+Thai Chilli | Med4: 3 | Med8: 3 | Forecast: 3 | Pack Size: 30 | Packs Needed: 1
+Plantain Green | Med4: 3 | Med8: 3 | Forecast: 3 | Pack Size: 1 | Packs Needed: 3
+Leeks | Med4: 0 | Med8: 3 | Forecast: 1.2000000000000002 | Pack Size: 1 | Packs Needed: 2

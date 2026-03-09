@@ -1,0 +1,29 @@
+﻿Okra | Pred Base: 7packet | Pack Size: 1 | Packs Needed: 7 | Est: $35.00
+Peeled Garlic | Pred Base: 7lb | Pack Size: 18 | Packs Needed: 1 | Est: $32.00
+Lemon | Pred Base: 3unit | Pack Size: 100 | Packs Needed: 1 | Est: $44.00
+Onion - Red | Pred Base: 8lb | Pack Size: 25 | Packs Needed: 1 | Est: $18.00
+Cauliflower | Pred Base: 9lb | Pack Size: 25 | Packs Needed: 1 | Est: $54.00
+Onion - Cooking | Pred Base: 10lb | Pack Size: 50 | Packs Needed: 1 | Est: $19.00
+Curry Leaves | Pred Base: 5unit | Pack Size: 1 | Packs Needed: 5 | Est: $270.00
+Cabbage | Pred Base: 3lb | Pack Size: 50 | Packs Needed: 1 | Est: $24.99
+Capsicum Yellow | Pred Base: 9lb | Pack Size: 1 | Packs Needed: 9 | Est: $29.25
+Beets | Pred Base: 4lb | Pack Size: 1 | Packs Needed: 4 | Est: $4.92
+Carrot | Pred Base: 9lb | Pack Size: 50 | Packs Needed: 1 | Est: $31.99
+Capsicum Red | Pred Base: 4lb | Pack Size: 1 | Packs Needed: 4 | Est: $13.00
+Coriander Leaves | Pred Base: 4bundle | Pack Size: 1 | Packs Needed: 4 | Est: $6.00
+Mint Leaves | Pred Base: 8bundle | Pack Size: 1 | Packs Needed: 8 | Est: $12.00
+Green Onion | Pred Base: 6bundle | Pack Size: 1 | Packs Needed: 6 | Est: $12.00
+Ginger | Pred Base: 2lb | Pack Size: 30 | Packs Needed: 1 | Est: $54.00
+Capsicum Green | Pred Base: 14lb | Pack Size: 1 | Packs Needed: 14 | Est: $45.50
+Lime | Pred Base: 3unit | Pack Size: 1 | Packs Needed: 3 | Est: $2.25
+Pepper Mix | Pred Base: 5lb | Pack Size: 1 | Packs Needed: 5 | Est: $16.25
+French Beans | Pred Base: 7bag | Pack Size: 1 | Packs Needed: 7 | Est: $28.00
+Potatoes | Pred Base: 4lb | Pack Size: 50 | Packs Needed: 1 | Est: $24.98
+Celery | Pred Base: 2bag | Pack Size: 1 | Packs Needed: 2 | Est: $8.00
+Long Beans | Pred Base: 3bundle | Pack Size: 1 | Packs Needed: 3 | Est: $11.25
+Ash Guard | Pred Base: 8lb | Pack Size: 1 | Packs Needed: 8 | Est: $12.56
+Thai Chilli | Pred Base: 3lbs | Pack Size: 30 | Packs Needed: 1 | Est: $156.00
+Plantain Green | Pred Base: 3unit | Pack Size: 1 | Packs Needed: 3 | Est: $4.50
+Leeks | Pred Base: 2bundle | Pack Size: 1 | Packs Needed: 2 | Est: $11.96
+
+Total Estimated Weekly Cost: $981.40

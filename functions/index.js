@@ -3,6 +3,8 @@ const { getFirestore } = require("firebase-admin/firestore");
 const admin = require("firebase-admin");
 const { runDeterministicForecast, aggregateForecasts, generateVendorRollups } = require("./forecastEngine");
 const { checkForecastAccuracy } = require("./forecastAccuracy");
+const { updateCatalogPrices } = require("./updatePrices");
+const { onCall } = require("firebase-functions/v2/https");
 
 const app = admin.initializeApp();
 const db = getFirestore(app, "restiq-vendormanagement");
@@ -66,4 +68,10 @@ exports.forecastEngineQueueWorker = onSchedule("* * * * *", async (event) => {
         } catch (e) { } // ignore fallback error
         return { success: false, error: err.message };
     }
+});
+
+exports.triggerPriceUpdate = onCall(async (request) => {
+    console.log("Triggering price ingestion batch script...");
+    await updateCatalogPrices(db);
+    return { success: true };
 });

@@ -1,0 +1,26 @@
+﻿=== MAIN ORDER ===
+Capsicum Green | Medium | M:4 + T:2 = 6
+Okra | Medium | M:3 + T:2 = 5
+French Beans | Medium | M:3 + T:2 = 5
+Curry Leaves | Slow | M:2 + T:1 = 3
+Beets | Slow | M:2 + T:1 = 3
+Green Onion | Medium | M:2 + T:1 = 3
+Ash Guard | Slow | M:2 + T:1 = 3
+Mint Leaves | Medium | M:1 + T:1 = 2
+Pepper Mix | Slow | M:1 + T:1 = 2
+Peeled Garlic | Medium | M:1 + T:0 = 1
+Lemon | Medium | M:1 + T:0 = 1
+Onion - Red | Medium | M:1 + T:0 = 1
+Cauliflower | Medium | M:1 + T:0 = 1
+Onion - Cooking | Fast | M:1 + T:0 = 1
+Cabbage | Medium | M:1 + T:0 = 1
+Carrot | Medium | M:1 + T:0 = 1
+Potatoes | Medium | M:1 + T:0 = 1
+
+=== AI SUGGESTIONS ===
+Capsicum Yellow | Score: 13.4 | Qty: 1 | Reason: Recent add-on item
+Thai Chilli | Score: 12.3 | Qty: 1 | Reason: Recent add-on item
+Coriander Leaves | Score: 11.1 | Qty: 1 | Reason: Common supporting ingredient in past orders
+Ginger | Score: 10.3 | Qty: 1 | Reason: Frequently bought with main predicted items
+Lime | Score: 9.4 | Qty: 1 | Reason: Frequently bought with main predicted items
+Celery | Score: 9.4 | Qty: 1 | Reason: Frequently bought with main predicted items

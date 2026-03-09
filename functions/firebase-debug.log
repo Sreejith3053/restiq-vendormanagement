@@ -783,3 +783,1864 @@
 [debug] [2026-03-07T08:53:31.502Z] [functions[us-central1-forecastEngineQueueWorker]] function ignored because the pubsub emulator does not exist or is not running.
 [debug] [2026-03-07T08:53:31.513Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
 [debug] [2026-03-07T08:53:31.514Z] [functions[us-central1-forecastEngineQueueWorker]] function ignored because the pubsub emulator does not exist or is not running.
+[debug] [2026-03-08T13:29:53.523Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_vendors.js changed, reloading triggers
+[debug] [2026-03-08T13:29:53.532Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_vendors.js changed, reloading triggers
+[debug] [2026-03-08T13:29:54.610Z] Validating nodejs source
+[debug] [2026-03-08T13:29:54.665Z] Validating nodejs source
+[debug] [2026-03-08T13:29:57.138Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T13:29:57.139Z] Building nodejs source
+[debug] [2026-03-08T13:29:57.140Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T13:29:57.189Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T13:29:57.191Z] Building nodejs source
+[debug] [2026-03-08T13:29:57.197Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T13:29:57.158Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T13:29:57.189Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T13:29:57.218Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T13:29:57.268Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8798
+
+[info] Serving at port 8290
+
+[debug] [2026-03-08T13:29:58.420Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T13:29:58.422Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T13:30:02.470Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T13:30:02.486Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T13:33:19.373Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_vendors_v2.js changed, reloading triggers
+[debug] [2026-03-08T13:33:19.389Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_vendors_v2.js changed, reloading triggers
+[debug] [2026-03-08T13:33:20.386Z] Validating nodejs source
+[debug] [2026-03-08T13:33:20.413Z] Validating nodejs source
+[debug] [2026-03-08T13:33:22.423Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T13:33:22.424Z] Building nodejs source
+[debug] [2026-03-08T13:33:22.424Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T13:33:22.436Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T13:33:22.437Z] Building nodejs source
+[debug] [2026-03-08T13:33:22.437Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T13:33:22.428Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T13:33:22.438Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T13:33:22.439Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T13:33:22.452Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8394
+
+[info] Serving at port 8123
+
+[debug] [2026-03-08T13:33:23.538Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T13:33:23.527Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T13:33:27.586Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T13:33:27.601Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:11:11.066Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:11:11.073Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:11:12.077Z] Validating nodejs source
+[debug] [2026-03-08T22:11:12.124Z] Validating nodejs source
+[debug] [2026-03-08T22:11:14.840Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:11:14.841Z] Building nodejs source
+[debug] [2026-03-08T22:11:14.841Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:11:14.844Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:11:14.854Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:11:14.864Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:11:14.865Z] Building nodejs source
+[debug] [2026-03-08T22:11:14.867Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:11:14.880Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:11:14.901Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8382
+
+[info] Serving at port 8559
+
+[debug] [2026-03-08T22:11:16.174Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:11:16.174Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:11:20.217Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:11:20.219Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:49:19.916Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:49:19.925Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:49:20.954Z] Validating nodejs source
+[debug] [2026-03-08T22:49:20.973Z] Validating nodejs source
+[debug] [2026-03-08T22:49:22.919Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:49:22.920Z] Building nodejs source
+[debug] [2026-03-08T22:49:22.921Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:49:22.930Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:49:22.933Z] Building nodejs source
+[debug] [2026-03-08T22:49:22.935Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:49:22.931Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:49:22.950Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:49:22.952Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:49:22.975Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8408
+
+[info] Serving at port 8895
+
+[debug] [2026-03-08T22:49:23.994Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:49:24.002Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:49:28.047Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:49:28.055Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:50:44.074Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err.txt changed, reloading triggers
+[debug] [2026-03-08T22:50:44.074Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err.txt changed, reloading triggers
+[debug] [2026-03-08T22:50:45.084Z] Validating nodejs source
+[debug] [2026-03-08T22:50:45.084Z] Validating nodejs source
+[debug] [2026-03-08T22:50:47.394Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:50:47.394Z] Building nodejs source
+[debug] [2026-03-08T22:50:47.394Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:50:47.406Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:50:47.406Z] Building nodejs source
+[debug] [2026-03-08T22:50:47.406Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:50:47.395Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:50:47.403Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:50:47.407Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:50:47.417Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8061
+
+[info] Serving at port 8627
+
+[debug] [2026-03-08T22:50:48.038Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:50:48.038Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:50:52.069Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:50:52.084Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:51:03.332Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err.txt changed, reloading triggers
+[debug] [2026-03-08T22:51:03.332Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err.txt changed, reloading triggers
+[debug] [2026-03-08T22:51:04.340Z] Validating nodejs source
+[debug] [2026-03-08T22:51:04.340Z] Validating nodejs source
+[debug] [2026-03-08T22:51:05.360Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:51:05.360Z] Building nodejs source
+[debug] [2026-03-08T22:51:05.360Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:51:05.368Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:51:05.369Z] Building nodejs source
+[debug] [2026-03-08T22:51:05.369Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:51:05.361Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:51:05.368Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:51:05.369Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:51:05.379Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8812
+
+[info] Serving at port 8246
+
+[debug] [2026-03-08T22:51:06.153Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:51:06.153Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:51:10.195Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:51:10.196Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:51:18.130Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err.txt changed, reloading triggers
+[debug] [2026-03-08T22:51:18.130Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err.txt changed, reloading triggers
+[debug] [2026-03-08T22:51:19.146Z] Validating nodejs source
+[debug] [2026-03-08T22:51:19.146Z] Validating nodejs source
+[debug] [2026-03-08T22:51:20.262Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:51:20.262Z] Building nodejs source
+[debug] [2026-03-08T22:51:20.262Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:51:20.268Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:51:20.268Z] Building nodejs source
+[debug] [2026-03-08T22:51:20.268Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:51:20.263Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:51:20.270Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:51:20.269Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:51:20.277Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8415
+
+[info] Serving at port 8545
+
+[debug] [2026-03-08T22:51:20.900Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:51:20.906Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:51:24.922Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:51:24.939Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:52:14.595Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err2.txt changed, reloading triggers
+[debug] [2026-03-08T22:52:14.595Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err2.txt changed, reloading triggers
+[debug] [2026-03-08T22:52:15.596Z] Validating nodejs source
+[debug] [2026-03-08T22:52:15.611Z] Validating nodejs source
+[debug] [2026-03-08T22:52:16.601Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:52:16.601Z] Building nodejs source
+[debug] [2026-03-08T22:52:16.601Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:52:16.602Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:52:16.609Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:52:16.637Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:52:16.637Z] Building nodejs source
+[debug] [2026-03-08T22:52:16.637Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:52:16.638Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:52:16.649Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8893
+
+[info] Serving at port 8567
+
+[debug] [2026-03-08T22:52:17.488Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:52:17.533Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:52:21.522Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:52:21.572Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:52:29.049Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err2.txt changed, reloading triggers
+[debug] [2026-03-08T22:52:29.050Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_err2.txt changed, reloading triggers
+[debug] [2026-03-08T22:52:30.054Z] Validating nodejs source
+[debug] [2026-03-08T22:52:30.054Z] Validating nodejs source
+[debug] [2026-03-08T22:52:31.046Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:52:31.046Z] Building nodejs source
+[debug] [2026-03-08T22:52:31.047Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:52:31.047Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:52:31.053Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:52:31.057Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:52:31.057Z] Building nodejs source
+[debug] [2026-03-08T22:52:31.057Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:52:31.058Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:52:31.066Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8797
+
+[info] Serving at port 8899
+
+[debug] [2026-03-08T22:52:31.789Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:52:31.808Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:52:35.823Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:52:35.848Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:52:47.289Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:52:47.289Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:52:48.291Z] Validating nodejs source
+[debug] [2026-03-08T22:52:48.291Z] Validating nodejs source
+[debug] [2026-03-08T22:52:49.313Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:52:49.313Z] Building nodejs source
+[debug] [2026-03-08T22:52:49.313Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:52:49.314Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:52:49.323Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:52:49.343Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:52:49.344Z] Building nodejs source
+[debug] [2026-03-08T22:52:49.344Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:52:49.345Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:52:49.357Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8978
+
+[info] Serving at port 8555
+
+[debug] [2026-03-08T22:52:50.064Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:52:50.082Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:52:54.106Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:52:54.121Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:53:47.560Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:53:47.561Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:53:48.567Z] Validating nodejs source
+[debug] [2026-03-08T22:53:48.567Z] Validating nodejs source
+[debug] [2026-03-08T22:53:49.641Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:53:49.641Z] Building nodejs source
+[debug] [2026-03-08T22:53:49.641Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:53:49.645Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:53:49.645Z] Building nodejs source
+[debug] [2026-03-08T22:53:49.645Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:53:49.646Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:53:49.654Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:53:49.642Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:53:49.653Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8723
+
+[info] Serving at port 8541
+
+[debug] [2026-03-08T22:53:50.299Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:53:50.300Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:53:54.329Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:53:54.347Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:57:43.456Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:57:43.456Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_veggies.js changed, reloading triggers
+[debug] [2026-03-08T22:57:44.462Z] Validating nodejs source
+[debug] [2026-03-08T22:57:44.463Z] Validating nodejs source
+[debug] [2026-03-08T22:57:45.556Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:57:45.557Z] Building nodejs source
+[debug] [2026-03-08T22:57:45.557Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:57:45.559Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T22:57:45.559Z] Building nodejs source
+[debug] [2026-03-08T22:57:45.559Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T22:57:45.560Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:57:45.570Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T22:57:45.558Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T22:57:45.572Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8811
+
+[info] Serving at port 8995
+
+[debug] [2026-03-08T22:57:46.213Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:57:46.225Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T22:57:50.273Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T22:57:50.275Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:00:03.303Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_price.js changed, reloading triggers
+[debug] [2026-03-08T23:00:03.303Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_price.js changed, reloading triggers
+[debug] [2026-03-08T23:00:04.313Z] Validating nodejs source
+[debug] [2026-03-08T23:00:04.312Z] Validating nodejs source
+[debug] [2026-03-08T23:00:05.781Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:00:05.782Z] Building nodejs source
+[debug] [2026-03-08T23:00:05.782Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:00:05.794Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:00:05.794Z] Building nodejs source
+[debug] [2026-03-08T23:00:05.795Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:00:05.785Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:00:05.810Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:00:05.797Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:00:05.816Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8512
+
+[info] Serving at port 8270
+
+[debug] [2026-03-08T23:00:06.585Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:00:06.590Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:00:10.649Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:00:10.666Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:00:49.565Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_price.js changed, reloading triggers
+[debug] [2026-03-08T23:00:49.566Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_price.js changed, reloading triggers
+[debug] [2026-03-08T23:00:50.574Z] Validating nodejs source
+[debug] [2026-03-08T23:00:50.575Z] Validating nodejs source
+[debug] [2026-03-08T23:00:51.806Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:00:51.806Z] Building nodejs source
+[debug] [2026-03-08T23:00:51.806Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:00:51.818Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:00:51.818Z] Building nodejs source
+[debug] [2026-03-08T23:00:51.818Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:00:51.807Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:00:51.817Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:00:51.819Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:00:51.829Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8850
+
+[info] Serving at port 8285
+
+[debug] [2026-03-08T23:00:52.501Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:00:52.502Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:00:56.559Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:00:56.563Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:01:11.219Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_price.out changed, reloading triggers
+[debug] [2026-03-08T23:01:11.219Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_price.out changed, reloading triggers
+[debug] [2026-03-08T23:01:12.221Z] Validating nodejs source
+[debug] [2026-03-08T23:01:12.221Z] Validating nodejs source
+[debug] [2026-03-08T23:01:13.342Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:01:13.343Z] Building nodejs source
+[debug] [2026-03-08T23:01:13.343Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:01:13.346Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:01:13.346Z] Building nodejs source
+[debug] [2026-03-08T23:01:13.346Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:01:13.344Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:01:13.352Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:01:13.347Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:01:13.353Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8204
+
+[info] Serving at port 8140
+
+[debug] [2026-03-08T23:01:14.132Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:01:14.150Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:01:18.173Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:01:18.191Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker.
+[debug] [2026-03-08T23:03:45.273Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\updatePrices.js changed, reloading triggers
+[debug] [2026-03-08T23:03:45.273Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\updatePrices.js changed, reloading triggers
+[debug] [2026-03-08T23:03:46.278Z] Validating nodejs source
+[debug] [2026-03-08T23:03:46.278Z] Validating nodejs source
+[debug] [2026-03-08T23:03:47.753Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:03:47.753Z] Building nodejs source
+[debug] [2026-03-08T23:03:47.753Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:03:47.755Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:03:47.756Z] Building nodejs source
+[debug] [2026-03-08T23:03:47.756Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:03:47.755Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:03:47.767Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:03:47.757Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:03:47.768Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:03:47.778Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\index.js changed, reloading triggers
+[debug] [2026-03-08T23:03:47.777Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\index.js changed, reloading triggers
+[info] Serving at port 8524
+
+[info] Serving at port 8549
+
+[debug] [2026-03-08T23:03:48.780Z] Validating nodejs source
+[debug] [2026-03-08T23:03:48.780Z] Validating nodejs source
+[debug] [2026-03-08T23:03:50.113Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:03:50.113Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:03:50.114Z] Building nodejs source
+[debug] [2026-03-08T23:03:50.113Z] Building nodejs source
+[debug] [2026-03-08T23:03:50.114Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[debug] [2026-03-08T23:03:50.113Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:03:50.114Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:03:50.127Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:03:50.133Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:03:50.115Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:03:50.127Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:03:50.132Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[info] Serving at port 8111
+
+[info] Serving at port 8786
+
+[debug] [2026-03-08T23:03:51.322Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:03:51.357Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:03:54.179Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:03:54.183Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:03:54.182Z] [functions[us-central1-triggerPriceUpdate]] http function initialized (http://127.0.0.1:5000/restiq-vendormanagement/us-central1/triggerPriceUpdate).
+[debug] [2026-03-08T23:03:54.185Z] [functions[us-central1-triggerPriceUpdate]] http function initialized (http://127.0.0.1:5001/restiq-vendormanagement/us-central1/triggerPriceUpdate).
+[debug] [2026-03-08T23:03:55.384Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:03:55.418Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:03:56.507Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\runPriceShell.js changed, reloading triggers
+[debug] [2026-03-08T23:03:56.510Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\runPriceShell.js changed, reloading triggers
+[debug] [2026-03-08T23:03:57.512Z] Validating nodejs source
+[debug] [2026-03-08T23:03:57.512Z] Validating nodejs source
+[debug] [2026-03-08T23:03:58.806Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:03:58.807Z] Building nodejs source
+[debug] [2026-03-08T23:03:58.807Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:03:58.809Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:03:58.818Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:03:58.853Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:03:58.854Z] Building nodejs source
+[debug] [2026-03-08T23:03:58.854Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:03:58.856Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:03:58.867Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8081
+
+[info] Serving at port 8924
+
+[debug] [2026-03-08T23:03:59.956Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:04:00.006Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:04:04.009Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:04:04.049Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:04:07.472Z] ----------------------------------------------------------------------
+[debug] [2026-03-08T23:04:07.476Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\oruma\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js functions:shell
+[debug] [2026-03-08T23:04:07.476Z] CLI Version:   15.9.0
+[debug] [2026-03-08T23:04:07.476Z] Platform:      win32
+[debug] [2026-03-08T23:04:07.476Z] Node Version:  v22.16.0
+[debug] [2026-03-08T23:04:07.477Z] Time:          Sun Mar 08 2026 19:04:07 GMT-0400 (Eastern Daylight Saving Time)
+[debug] [2026-03-08T23:04:07.477Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-03-08T23:04:07.479Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-03-08T23:04:10.759Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-08T23:04:10.760Z] > authorizing via signed-in user (admin@orumadiner.com)
+[debug] [2026-03-08T23:04:10.760Z] [iam] checking project restiq-vendormanagement for permissions ["firebase.projects.get"]
+[debug] [2026-03-08T23:04:10.760Z] Checked if tokens are valid: false, expires at: 1772874632531
+[debug] [2026-03-08T23:04:10.761Z] Checked if tokens are valid: false, expires at: 1772874632531
+[debug] [2026-03-08T23:04:10.761Z] > refreshing access token with scopes: []
+[debug] [2026-03-08T23:04:10.762Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-03-08T23:04:10.762Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-03-08T23:04:10.937Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-03-08T23:04:10.937Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-03-08T23:04:11.003Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-03-08T23:04:11.004Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-03-08T23:04:11.006Z] [iam] error while checking permissions, command may fail: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[warn] !  functions: Functions Emulator unable to start on port 5000, starting on 5002 instead. {"metadata":{"emulator":{"name":"functions"},"message":"Functions Emulator unable to start on port 5000, starting on 5002 instead."}}
+[debug] [2026-03-08T23:04:11.025Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-03-08T23:04:11.077Z] defaultcredentials: writing to file C:\Users\oruma\AppData\Roaming\firebase\admin_orumadiner_com_application_default_credentials.json
+[debug] [2026-03-08T23:04:11.079Z] DEBUG: Setting GAC to C:\Users\oruma\AppData\Roaming\firebase\admin_orumadiner_com_application_default_credentials.json
+[debug] [2026-03-08T23:04:11.081Z] Checked if tokens are valid: false, expires at: 1772874632531
+[debug] [2026-03-08T23:04:11.081Z] Checked if tokens are valid: false, expires at: 1772874632531
+[debug] [2026-03-08T23:04:11.081Z] > refreshing access token with scopes: []
+[debug] [2026-03-08T23:04:11.082Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-03-08T23:04:11.082Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-03-08T23:04:11.188Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-03-08T23:04:11.188Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-03-08T23:04:11.189Z] Failed to get Admin SDK config for restiq-vendormanagement, falling back to cache Failed to get Admin SDK for Firebase project restiq-vendormanagement. Please make sure the project exists and your account has permission to access it. {"name":"FirebaseError","children":[],"exit":2,"message":"Failed to get Admin SDK for Firebase project restiq-vendormanagement. Please make sure the project exists and your account has permission to access it.","original":{"name":"FirebaseError","children":[],"exit":1,"message":"Authentication Error: Your credentials are no longer valid. Please run \u001b[1mfirebase login --reauth\u001b[22m\n\nFor CI servers and headless environments, generate a new token with \u001b[1mfirebase login:ci\u001b[22m","status":500},"status":500}
+[debug] [2026-03-08T23:04:11.213Z] [functions] Watching "C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions" for Cloud Functions...
+[debug] [2026-03-08T23:04:11.223Z] Validating nodejs source
+[debug] [2026-03-08T23:04:12.352Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:04:12.353Z] Building nodejs source
+[debug] [2026-03-08T23:04:12.354Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:04:12.358Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:04:12.377Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8231
+
+[debug] [2026-03-08T23:04:13.243Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:04:17.322Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:04:17.324Z] [functions[us-central1-weeklyForecastJob]] function ignored because the pubsub emulator does not exist or is not running.
+[debug] [2026-03-08T23:04:17.324Z] [functions[us-central1-accuracyReconciliationJob]] function ignored because the pubsub emulator does not exist or is not running.
+[debug] [2026-03-08T23:04:17.324Z] [functions[us-central1-forecastEngineQueueWorker]] function ignored because the pubsub emulator does not exist or is not running.
+[debug] [2026-03-08T23:04:17.325Z] [functions[us-central1-triggerPriceUpdate]] http function initialized (http://127.0.0.1:5002/restiq-vendormanagement/us-central1/triggerPriceUpdate).
+[info] i  functions: Loaded functions: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate 
+[warn] !  functions: The following emulators are not running, calls to these services will affect production: firestore, database, pubsub, storage, eventarc, tasks 
+[debug] [2026-03-08T23:04:17.381Z] >>> [apiv2][query] POST http://127.0.0.1:5002/restiq-vendormanagement/us-central1/triggerPriceUpdate/ [none]
+[debug] [2026-03-08T23:04:17.388Z] [work-queue] {"queuedWork":["/restiq-vendormanagement/us-central1/triggerPriceUpdate/-2026-03-08T23:04:17.388Z"],"queueLength":1,"runningWork":[],"workRunningCount":0}
+[debug] [2026-03-08T23:04:17.388Z] [work-queue] {"queuedWork":[],"queueLength":0,"runningWork":["/restiq-vendormanagement/us-central1/triggerPriceUpdate/-2026-03-08T23:04:17.388Z"],"workRunningCount":1}
+[debug] [2026-03-08T23:04:17.388Z] Accepted request POST /restiq-vendormanagement/us-central1/triggerPriceUpdate/ --> us-central1-triggerPriceUpdate
+[debug] [2026-03-08T23:04:17.391Z] DEBUG: [functions] Runtime ready! Sending request!
+[debug] [2026-03-08T23:04:17.392Z] DEBUG: [functions] Got req.url=/restiq-vendormanagement/us-central1/triggerPriceUpdate/, mapping to path=/
+[debug] [2026-03-08T23:04:17.408Z] DEBUG: [worker-pool] addWorker(us-central1-triggerPriceUpdate)
+[debug] [2026-03-08T23:04:17.409Z] DEBUG: [worker-pool] Adding worker with key us-central1-triggerPriceUpdate, total=1
+[debug] [2026-03-08T23:04:19.070Z] DEBUG: [runtime-status] [21924] Resolved module firebase-admin {"declared":true,"installed":true,"version":"13.7.0","resolution":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-admin\\lib\\index.js"}
+[debug] [2026-03-08T23:04:19.072Z] DEBUG: [runtime-status] [21924] Resolved module firebase-functions {"declared":true,"installed":true,"version":"7.1.0","resolution":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\v2\\index.js"}
+[debug] [2026-03-08T23:04:19.072Z] DEBUG: [runtime-status] [21924] Outgoing network have been stubbed. [{"name":"http","status":"mocked"},{"name":"http","status":"mocked"},{"name":"https","status":"mocked"},{"name":"https","status":"mocked"},{"name":"net","status":"mocked"}]
+[debug] [2026-03-08T23:04:19.073Z] DEBUG: [runtime-status] [21924] Resolved module firebase-functions {"declared":true,"installed":true,"version":"7.1.0","resolution":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\v2\\index.js"}
+[debug] [2026-03-08T23:04:19.073Z] DEBUG: [runtime-status] [21924] Detected firebase-functions v7+, skipping legacy stubs.
+[debug] [2026-03-08T23:04:19.075Z] DEBUG: [runtime-status] [21924] Resolved module firebase-admin {"declared":true,"installed":true,"version":"13.7.0","resolution":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-admin\\lib\\index.js"}
+[debug] [2026-03-08T23:04:19.220Z] DEBUG: [runtime-status] [21924] Resolved module firebase-functions {"declared":true,"installed":true,"version":"7.1.0","resolution":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\v2\\index.js"}
+[debug] [2026-03-08T23:04:19.755Z] DEBUG: [runtime-status] [21924] firebase-admin has been stubbed. {"adminResolution":{"declared":true,"installed":true,"version":"13.7.0","resolution":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-admin\\lib\\index.js"}}
+[debug] [2026-03-08T23:04:19.854Z] DEBUG: [runtime-status] [21924] initializeApp(DEFAULT) {"storageBucket":"restiq-vendormanagement.firebasestorage.app","projectId":"restiq-vendormanagement"}
+[debug] [2026-03-08T23:04:19.864Z] DEBUG: [runtime-status] [21924] Functions runtime initialized. {"cwd":"C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions","node_version":"22.16.0"}
+[debug] [2026-03-08T23:04:19.864Z] DEBUG: [runtime-status] [21924] Listening to port: \\?\pipe\fire_emu_4d68d89b4fc4c579
+[debug] [2026-03-08T23:04:19.961Z] DEBUG: [worker-us-central1-triggerPriceUpdate-e55149db-3148-455a-9efd-4f0aa23956c1]: IDLE
+[debug] [2026-03-08T23:04:19.962Z] DEBUG: [worker-pool] submitRequest(triggerId=us-central1-triggerPriceUpdate)
+[debug] [2026-03-08T23:04:19.963Z] [functions] Beginning execution of "us-central1-triggerPriceUpdate"
+[debug] [2026-03-08T23:04:19.963Z] DEBUG: [worker-us-central1-triggerPriceUpdate-e55149db-3148-455a-9efd-4f0aa23956c1]: BUSY
+[info] >  {"severity":"WARNING","message":"Request body is missing data."} {"user":{"severity":"WARNING","message":"Request body is missing data."},"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-triggerPriceUpdate"},"extension":{},"message":"\u001b[90m> \u001b[39m {\"severity\":\"WARNING\",\"message\":\"Request body is missing data.\"}"}}
+[info] >  {"severity":"ERROR","message":"Error: Invalid request, unable to process.\n    at entryFromArgs (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\logger\\index.js:120:13)\n    at Object.error (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\logger\\index.js:109:8)\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\common\\providers\\https.js:420:26\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\common\\providers\\https.js:383:13\n    at cors (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:188:7)\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:224:17\n    at originCallback (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:214:15)\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:219:13\n    at optionsCallback (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:199:9)\n    at corsMiddleware (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:204:7)"} {"user":{"severity":"ERROR","message":"Error: Invalid request, unable to process.\n    at entryFromArgs (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\logger\\index.js:120:13)\n    at Object.error (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\logger\\index.js:109:8)\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\common\\providers\\https.js:420:26\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\firebase-functions\\lib\\common\\providers\\https.js:383:13\n    at cors (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:188:7)\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:224:17\n    at originCallback (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:214:15)\n    at C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:219:13\n    at optionsCallback (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:199:9)\n    at corsMiddleware (C:\\Users\\oruma\\Documents\\VenorWorkSpace\\restiq-vendormanagement\\functions\\node_modules\\cors\\lib\\index.js:204:7)"},"metadata":{"emulator":{"name":"functions"},"function":{"name":"us-central1-triggerPriceUpdate"},"extension":{},"message":"\u001b[90m> \u001b[39m {\"severity\":\"ERROR\",\"message\":\"Error: Invalid request, unable to process.\\n    at entryFromArgs (C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\logger\\\\index.js:120:13)\\n    at Object.error (C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\logger\\\\index.js:109:8)\\n    at C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\common\\\\providers\\\\https.js:420:26\\n    at C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\firebase-functions\\\\lib\\\\common\\\\providers\\\\https.js:383:13\\n    at cors (C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\cors\\\\lib\\\\index.js:188:7)\\n    at C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\cors\\\\lib\\\\index.js:224:17\\n    at originCallback (C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\cors\\\\lib\\\\index.js:214:15)\\n    at C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\cors\\\\lib\\\\index.js:219:13\\n    at optionsCallback (C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\cors\\\\lib\\\\index.js:199:9)\\n    at corsMiddleware (C:\\\\Users\\\\oruma\\\\Documents\\\\VenorWorkSpace\\\\restiq-vendormanagement\\\\functions\\\\node_modules\\\\cors\\\\lib\\\\index.js:204:7)\"}"}}
+[debug] [2026-03-08T23:04:20.017Z] DEBUG: Finishing up request with event=pause
+[debug] [2026-03-08T23:04:20.018Z] [functions] Finished "us-central1-triggerPriceUpdate" in 54.4173ms
+[debug] [2026-03-08T23:04:20.018Z] DEBUG: [worker-us-central1-triggerPriceUpdate-e55149db-3148-455a-9efd-4f0aa23956c1]: IDLE
+[debug] [2026-03-08T23:04:20.018Z] DEBUG: Finishing up request with event=finish
+[debug] [2026-03-08T23:04:20.019Z] DEBUG: Finishing up request with event=close
+[debug] [2026-03-08T23:04:20.019Z] [work-queue] {"queuedWork":[],"queueLength":0,"runningWork":[],"workRunningCount":0}
+[debug] [2026-03-08T23:04:20.021Z] <<< [apiv2][status] POST http://127.0.0.1:5002/restiq-vendormanagement/us-central1/triggerPriceUpdate/ 400
+[debug] [2026-03-08T23:04:20.022Z] <<< [apiv2][body] POST http://127.0.0.1:5002/restiq-vendormanagement/us-central1/triggerPriceUpdate/ {"error":{"message":"Bad Request","status":"INVALID_ARGUMENT"}}
+[debug] [2026-03-08T23:05:05.006Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:05:05.006Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:05:05.007Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\seed_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:05:06.018Z] Validating nodejs source
+[debug] [2026-03-08T23:05:06.018Z] Validating nodejs source
+[debug] [2026-03-08T23:05:06.019Z] Validating nodejs source
+[debug] [2026-03-08T23:05:07.328Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:05:07.328Z] Building nodejs source
+[debug] [2026-03-08T23:05:07.328Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:05:07.330Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:05:07.346Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:05:07.364Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:05:07.365Z] Building nodejs source
+[debug] [2026-03-08T23:05:07.365Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:05:07.367Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:05:07.367Z] Building nodejs source
+[debug] [2026-03-08T23:05:07.367Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:05:07.366Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:05:07.378Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:05:07.368Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:05:07.381Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8496
+
+[info] Serving at port 8424
+
+[info] Serving at port 8460
+
+[debug] [2026-03-08T23:05:08.682Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:05:08.697Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:05:08.704Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:05:12.721Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:05:12.731Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:05:12.742Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:05:12.742Z] DEBUG: [worker-pool] Shutting down IDLE worker (us-central1-triggerPriceUpdate)
+[debug] [2026-03-08T23:05:12.743Z] DEBUG: [worker-us-central1-triggerPriceUpdate-e55149db-3148-455a-9efd-4f0aa23956c1]: FINISHING
+[debug] [2026-03-08T23:05:12.759Z] DEBUG: [worker-us-central1-triggerPriceUpdate-e55149db-3148-455a-9efd-4f0aa23956c1]: exited
+[debug] [2026-03-08T23:05:12.760Z] DEBUG: [worker-us-central1-triggerPriceUpdate-e55149db-3148-455a-9efd-4f0aa23956c1]: FINISHED
+[debug] [2026-03-08T23:21:40.432Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:21:40.432Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:21:40.464Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:21:41.479Z] Validating nodejs source
+[debug] [2026-03-08T23:21:41.477Z] Validating nodejs source
+[debug] [2026-03-08T23:21:41.503Z] Validating nodejs source
+[debug] [2026-03-08T23:21:44.222Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:21:44.224Z] Building nodejs source
+[debug] [2026-03-08T23:21:44.225Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:21:44.246Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:21:44.247Z] Building nodejs source
+[debug] [2026-03-08T23:21:44.249Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:21:44.259Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:21:44.260Z] Building nodejs source
+[debug] [2026-03-08T23:21:44.262Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:21:44.244Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:21:44.276Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:21:44.264Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:21:44.292Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:21:44.273Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:21:44.298Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8967
+
+[info] Serving at port 8473
+
+[info] Serving at port 8960
+
+[debug] [2026-03-08T23:21:46.270Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:21:46.268Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:21:46.498Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:21:50.374Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:21:50.385Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:21:50.844Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:24:58.619Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:24:58.619Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:24:58.623Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:24:59.626Z] Validating nodejs source
+[debug] [2026-03-08T23:24:59.633Z] Validating nodejs source
+[debug] [2026-03-08T23:24:59.635Z] Validating nodejs source
+[debug] [2026-03-08T23:25:01.827Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:01.827Z] Building nodejs source
+[debug] [2026-03-08T23:25:01.828Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:01.827Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:01.828Z] Building nodejs source
+[debug] [2026-03-08T23:25:01.828Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:01.834Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:01.834Z] Building nodejs source
+[debug] [2026-03-08T23:25:01.834Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:01.831Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:01.848Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:25:01.833Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:01.849Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:25:01.836Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:01.852Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8696
+
+[info] Serving at port 8297
+
+[info] Serving at port 8365
+
+[debug] [2026-03-08T23:25:03.273Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:25:03.273Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:25:03.274Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:25:07.312Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:25:07.311Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:25:07.323Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:25:19.910Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:25:19.910Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:25:19.911Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:25:20.912Z] Validating nodejs source
+[debug] [2026-03-08T23:25:20.926Z] Validating nodejs source
+[debug] [2026-03-08T23:25:20.926Z] Validating nodejs source
+[debug] [2026-03-08T23:25:22.312Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:22.312Z] Building nodejs source
+[debug] [2026-03-08T23:25:22.313Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:22.314Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:22.322Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:22.323Z] Building nodejs source
+[debug] [2026-03-08T23:25:22.323Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:22.332Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:22.333Z] Building nodejs source
+[debug] [2026-03-08T23:25:22.333Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:22.329Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:25:22.324Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:22.336Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:25:22.334Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:22.348Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8812
+
+[info] Serving at port 8859
+
+[info] Serving at port 8976
+
+[debug] [2026-03-08T23:25:23.419Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:25:23.434Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:25:23.435Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:25:27.468Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:25:27.469Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:25:27.478Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:25:57.388Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:25:57.391Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:25:57.394Z] DEBUG: File C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\check_prices_web.js changed, reloading triggers
+[debug] [2026-03-08T23:25:58.399Z] Validating nodejs source
+[debug] [2026-03-08T23:25:58.399Z] Validating nodejs source
+[debug] [2026-03-08T23:25:58.400Z] Validating nodejs source
+[debug] [2026-03-08T23:25:59.774Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:59.774Z] Building nodejs source
+[debug] [2026-03-08T23:25:59.774Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:59.783Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:59.783Z] Building nodejs source
+[debug] [2026-03-08T23:25:59.783Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:59.783Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "lint": "eslint .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.10.0",
+    "firebase": "^11.0.0",
+    "firebase-admin": "^13.7.0",
+    "firebase-functions": "^7.1.0"
+  },
+  "private": true
+}
+[debug] [2026-03-08T23:25:59.783Z] Building nodejs source
+[debug] [2026-03-08T23:25:59.783Z] Failed to find version of module node: reached end of search path C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules
+[warn] !  functions: Your requested "node" version "20" doesn't match your global version "22". Using node@22 from host. 
+[debug] [2026-03-08T23:25:59.775Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:59.789Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:25:59.784Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:59.797Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[debug] [2026-03-08T23:25:59.784Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-03-08T23:25:59.796Z] Found firebase-functions binary at 'C:\Users\oruma\Documents\VenorWorkSpace\restiq-vendormanagement\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8047
+
+[info] Serving at port 8405
+
+[info] Serving at port 8689
+
+[debug] [2026-03-08T23:26:00.929Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:26:00.938Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:26:00.939Z] Got response from /__/functions.yaml {"endpoints":{"weeklyForecastJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 2 * * 0","retryConfig":{}},"entryPoint":"weeklyForecastJob"},"accuracyReconciliationJob":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"0 4 * * 1","retryConfig":{}},"entryPoint":"accuracyReconciliationJob"},"forecastEngineQueueWorker":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"scheduleTrigger":{"schedule":"* * * * *","retryConfig":{"retryCount":null,"maxDoublings":null,"maxRetrySeconds":null,"minBackoffSeconds":null,"maxBackoffSeconds":null},"timeZone":null},"entryPoint":"forecastEngineQueueWorker"},"triggerPriceUpdate":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"callableTrigger":{},"entryPoint":"triggerPriceUpdate"}},"specVersion":"v1alpha1","requiredAPIs":[{"api":"cloudscheduler.googleapis.com","reason":"Needed for scheduled functions."}],"extensions":{}}
+[debug] [2026-03-08T23:26:04.988Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:26:04.991Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.
+[debug] [2026-03-08T23:26:05.005Z] [functions] Loaded functions definitions from source: weeklyForecastJob, accuracyReconciliationJob, forecastEngineQueueWorker, triggerPriceUpdate.

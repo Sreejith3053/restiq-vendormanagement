@@ -41,6 +41,7 @@ import ForecastSettingsPage from './components/Forecast/ForecastSettingsPage';
 // New Container Prediction Test
 import ContainerPredictionTestPage from './components/Forecast/ContainerPredictionTestPage';
 import VegetablePredictionTestPage from './components/Forecast/VegetablePredictionTestPage';
+import VegetableDashboardPage from './components/Forecast/VegetableDashboardPage';
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -116,6 +117,7 @@ function App() {
                                 {/* AI Forecast Sub-routes */}
                                 <Route path="/admin/container-prediction-test" element={<ContainerPredictionTestPage />} />
                                 <Route path="/admin/vegetable-prediction-test" element={<VegetablePredictionTestPage />} />
+                                <Route path="/admin/vegetable-dashboard" element={<VegetableDashboardPage />} />
                                 <Route path="/admin/forecast" element={<ForecastOverviewPage />} />
                                 <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />
                                 <Route path="/admin/forecast/combined" element={<CombinedDemandPage />} />

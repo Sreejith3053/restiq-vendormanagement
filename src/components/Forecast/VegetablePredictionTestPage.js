@@ -219,45 +219,69 @@ export default function VegetablePredictionTestPage() {
 
                 let predictionType = 'Slow Mover';
                 let confidence = 'Low';
-                let forecast = 0;
-                let reasoning = '';
 
-                // Classification 
+                // Keep classification purely for reporting Speed/Confidence visually
                 if (fastMoversList.includes(item.itemName)) {
                     predictionType = 'Fast Mover';
                     confidence = 'High';
-                    forecast = (0.5 * avg8Weeks) + (0.5 * avg2Weeks);
-                    if (forecast > 0) {
-                        forecast = forecast * 1.1;
-                        reasoning = 'Fast Mover formula + 10% spoilage buffer.';
-                    } else {
-                        reasoning = 'No recent purchase trend detected. No order recommended.';
-                    }
                 } else if (mediumMoversList.includes(item.itemName)) {
                     predictionType = 'Medium Mover';
                     confidence = 'Medium';
-                    forecast = avg8Weeks;
-                    if (forecast > 0) {
-                        reasoning = 'Medium Mover formula (uses flat 8-wk avg).';
-                    } else {
-                        reasoning = 'No recent purchase trend detected. No order recommended.';
-                    }
-                } else {
-                    predictionType = 'Slow Mover';
-                    confidence = 'Low';
-                    if (week1qty > 0 || week2qty > 0) {
-                        forecast = avg8Weeks;
-                        reasoning = 'Slow Mover purchased recently.';
-                    } else {
-                        forecast = 0;
-                        reasoning = 'No recent purchase trend detected. No order recommended.';
-                    }
                 }
 
-                let predictedTotal = Math.ceil(forecast);
+                // 1 & 2. Blend
+                let forecast = (0.6 * avg8Weeks) + (0.4 * avg2Weeks);
+                let reasoning = 'Standard blended forecast + 10% buffer.';
+
+                // 3. Spike limiter
+                if (avg8Weeks > 0 && forecast > avg8Weeks * 1.8) {
+                    forecast = avg8Weeks * 1.8;
+                    reasoning = 'Spike limiter applied (capped at 1.8x 8-wk avg) + 10% buffer.';
+                }
+
+                // 4. Spoilage buffer
+                if (forecast > 0) {
+                    forecast = forecast * 1.1;
+                }
+
+                // 5. Apply restaurant baseline minimums
+                const baselines = {
+                    'Onion - Cooking': 10,
+                    'Onion Cooking': 10,
+                    'Onion Cooking 50lbs': 10,
+                    'Onion - Red': 5,
+                    'Onion Red 25lbs': 5,
+                    'Onion Red': 5,
+                    'Cabbage': 3,
+                    'Carrot': 3,
+                    'Carrot 50lbs': 3,
+                    'French Beans': 3,
+                    'Mint Leaves': 3,
+                    'Mint': 3,
+                    'Coriander Leaves': 3,
+                    'Coriander': 3,
+                    'Lemon': 2,
+                    'Okra': 2
+                };
+
+                const itemBaseline = baselines[item.itemName] || 0;
+
+                if (forecast < itemBaseline) {
+                    forecast = itemBaseline;
+                    reasoning = `Baseline override applied (min ${itemBaseline}).`;
+                }
+
+                if (forecast === 0) {
+                    reasoning = 'No recent purchase trend detected. No order recommended.';
+                }
+
+                // 7. Round to integer quantities
+                const predictedTotal = Math.round(forecast);
+
                 let predictedMonday = 0;
                 let predictedThursday = 0;
 
+                // 6. Delivery split
                 if (predictedTotal > 0) {
                     predictedMonday = Math.round(predictedTotal * 0.6);
                     predictedThursday = predictedTotal - predictedMonday;

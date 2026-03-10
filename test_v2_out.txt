@@ -1,0 +1,6 @@
+﻿Onion - Cooking | Fast | M:6 + T:4 = 10 (Unfiltered: 7, 9.5)
+Carrot | Medium | M:5 + T:4 = 9 (Unfiltered: 3, 3)
+Onion - Red | Medium | M:5 + T:3 = 8 (Unfiltered: 2.5, 2.5)
+French Beans | Medium | M:4 + T:3 = 7 (Unfiltered: 5.5, 2)
+Coriander Leaves | Medium | M:2 + T:2 = 4 (Unfiltered: 0, 0)
+Cabbage | Medium | M:2 + T:1 = 3 (Unfiltered: 0.5, 1.5)

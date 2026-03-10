@@ -1,0 +1,282 @@
+[
+  {
+    "item_name": "Onion - Cooking",
+    "category": "Produce",
+    "unit": "lb (50lb)",
+    "price": "19.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 50,
+    "pack_label": "50lb bag"
+  },
+  {
+    "item_name": "Onion - Red",
+    "category": "Produce",
+    "unit": "lb (25lb)",
+    "price": "18.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 25,
+    "pack_label": "25lb bag"
+  },
+  {
+    "item_name": "Cabbage",
+    "category": "Produce",
+    "unit": "lb (50lb)",
+    "price": "24.99",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 50,
+    "pack_label": "50lb bag"
+  },
+  {
+    "item_name": "Capsicum Green",
+    "category": "Produce",
+    "unit": "lb",
+    "price": "3.25",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 1,
+    "pack_label": "lb"
+  },
+  {
+    "item_name": "Capsicum Red",
+    "category": "Produce",
+    "unit": "lb",
+    "price": "3.25",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 1,
+    "pack_label": "lb"
+  },
+  {
+    "item_name": "Capsicum Yellow",
+    "category": "Produce",
+    "unit": "lb",
+    "price": "3.25",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 1,
+    "pack_label": "lb"
+  },
+  {
+    "item_name": "Carrot",
+    "category": "Produce",
+    "unit": "lb (50lb)",
+    "price": "31.99",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 50,
+    "pack_label": "50lb bag"
+  },
+  {
+    "item_name": "Cauliflower",
+    "category": "Produce",
+    "unit": "box",
+    "price": "54.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 25,
+    "pack_label": "25lb box"
+  },
+  {
+    "item_name": "Celery",
+    "category": "Produce",
+    "unit": "bag",
+    "price": 7,
+    "vendor": "ON Thyme",
+    "base_unit": "kg",
+    "pack_size": 1,
+    "pack_label": "kg"
+  },
+  {
+    "item_name": "Coriander Leaves",
+    "category": "Produce",
+    "unit": "bundle",
+    "price": 1.5,
+    "vendor": "ON Thyme",
+    "base_unit": "bunch",
+    "pack_size": 1,
+    "pack_label": "bunch"
+  },
+  {
+    "item_name": "Curry Leaves",
+    "category": "Produce",
+    "unit": "box",
+    "price": 49,
+    "vendor": "ON Thyme",
+    "base_unit": "box",
+    "pack_size": 1,
+    "pack_label": "box = 12 lb"
+  },
+  {
+    "item_name": "French Beans",
+    "category": "Produce",
+    "unit": "bag",
+    "price": "4.0",
+    "vendor": "ON Thyme",
+    "base_unit": "bag",
+    "pack_size": 1,
+    "pack_label": "bag"
+  },
+  {
+    "item_name": "Ginger",
+    "category": "Produce",
+    "unit": "lb (30lb)",
+    "price": "54.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 30,
+    "pack_label": "30lb bag"
+  },
+  {
+    "item_name": "Green Onion",
+    "category": "Produce",
+    "unit": "bundle",
+    "price": "2.0",
+    "vendor": "ON Thyme",
+    "base_unit": "bundle",
+    "pack_size": 1,
+    "pack_label": "bundle"
+  },
+  {
+    "item_name": "Leeks",
+    "category": "Produce",
+    "unit": "bundle",
+    "price": 6,
+    "vendor": "ON Thyme",
+    "base_unit": "bunch",
+    "pack_size": 1,
+    "pack_label": "bunch"
+  },
+  {
+    "item_name": "Lemon",
+    "category": "Produce",
+    "unit": "case (100)",
+    "price": "44.0",
+    "vendor": "ON Thyme",
+    "base_unit": "unit",
+    "pack_size": 100,
+    "pack_label": "100 case"
+  },
+  {
+    "item_name": "Lime",
+    "category": "Produce",
+    "unit": "unit",
+    "price": 17.99,
+    "vendor": "ON Thyme",
+    "base_unit": "pack",
+    "pack_size": 1,
+    "pack_label": "pack = 3.64kg"
+  },
+  {
+    "item_name": "Long Beans",
+    "category": "Produce",
+    "unit": "bundle",
+    "price": 7.5,
+    "vendor": "ON Thyme",
+    "base_unit": "pack",
+    "pack_size": 1,
+    "pack_label": "pack = 1.5lb"
+  },
+  {
+    "item_name": "Mint Leaves",
+    "category": "Produce",
+    "unit": "bundle",
+    "price": 1.5,
+    "vendor": "ON Thyme",
+    "base_unit": "bunch",
+    "pack_size": 1,
+    "pack_label": "bunch"
+  },
+  {
+    "item_name": "Okra",
+    "category": "Produce",
+    "unit": "packet",
+    "price": "5.0",
+    "vendor": "ON Thyme",
+    "base_unit": "packet",
+    "pack_size": 1,
+    "pack_label": "packet"
+  },
+  {
+    "item_name": "Peeled Garlic",
+    "category": "Produce",
+    "unit": "case (18lb)",
+    "price": "32.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 18,
+    "pack_label": "18lb case"
+  },
+  {
+    "item_name": "Pepper Mix",
+    "category": "Produce",
+    "unit": "lb",
+    "price": "3.25",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 1,
+    "pack_label": "lb"
+  },
+  {
+    "item_name": "Plantain Green",
+    "category": "Produce",
+    "unit": "unit",
+    "price": 6.5,
+    "vendor": "ON Thyme",
+    "base_unit": "pack",
+    "pack_size": 1,
+    "pack_label": "pack = 5lb"
+  },
+  {
+    "item_name": "Potatoes",
+    "category": "Produce",
+    "unit": "lb (50lb)",
+    "price": "24.98",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 50,
+    "pack_label": "50lb bag"
+  },
+  {
+    "item_name": "Thai Chilli",
+    "category": "Produce",
+    "unit": "box (30lbs)",
+    "price": "156.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lbs",
+    "pack_size": 30,
+    "pack_label": "30lbs box"
+  },
+  {
+    "item_name": "Beets",
+    "category": "Produce",
+    "unit": "lb",
+    "price": "1.23",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 1,
+    "pack_label": "lb"
+  },
+  {
+    "item_name": "Ash Guard",
+    "category": "Produce",
+    "unit": "lb",
+    "price": "1.57",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 1,
+    "pack_label": "lb"
+  },
+  {
+    "item_name": "Tomato",
+    "category": "Produce",
+    "unit": "box (25lb)",
+    "price": "49.0",
+    "vendor": "ON Thyme",
+    "base_unit": "lb",
+    "pack_size": 25,
+    "pack_label": "25lb box"
+  }
+]

@@ -1,0 +1,9 @@
+﻿Onion - Cooking  | m8(U): 9.5 | m4(U): 7.0 | m8(F): 11.5 | m4(F): 9.0 | Cap: 15
+Onion - Red      | m8(U): 2.5 | m4(U): 2.5 | m8(F): 8.0 | m4(F): 7.0 | Cap: 9
+Cabbage          | m8(U): 1.5 | m4(U): 0.5 | m8(F): 4.0 | m4(F): 1.5 | Cap: 5
+Carrot           | m8(U): 3.0 | m4(U): 3.0 | m8(F): 9.5 | m4(F): 7.5 | Cap: 10
+French Beans     | m8(U): 2.0 | m4(U): 5.5 | m8(F): 8.0 | m4(F): 5.5 | Cap: 9
+Mint Leaves      | m8(U): 0.0 | m4(U): 2.0 | m8(F): 8.0 | m4(F): 8.0 | Cap: 4
+Coriander Leaves | m8(U): 0.0 | m4(U): 0.0 | m8(F): 8.0 | m4(F): 0.0 | Cap: 7
+Lemon            | m8(U): 1.5 | m4(U): 2.5 | m8(F): 3.0 | m4(F): 3.0 | Cap: 4
+Okra             | m8(U): 2.5 | m4(U): 6.0 | m8(F): 3.0 | m4(F): 9.0 | Cap: 10

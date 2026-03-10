@@ -1,0 +1,27 @@
+﻿Okra                 | Freq: 7/8 | MedFilt8: 3.0 | MedUnfilt8: 2.5 | MedFilt4: 9.0
+Peeled Garlic        | Freq: 2/8 | MedFilt8: 7.0 | MedUnfilt8: 0.0 | MedFilt4: 7.0
+Lemon                | Freq: 5/8 | MedFilt8: 3.0 | MedUnfilt8: 1.5 | MedFilt4: 3.0
+Onion - Red          | Freq: 4/8 | MedFilt8: 8.0 | MedUnfilt8: 2.5 | MedFilt4: 7.0
+Cauliflower          | Freq: 5/8 | MedFilt8: 10.0 | MedUnfilt8: 8.0 | MedFilt4: 8.0
+Onion - Cooking      | Freq: 6/8 | MedFilt8: 11.5 | MedUnfilt8: 9.5 | MedFilt4: 9.0
+Curry Leaves         | Freq: 3/8 | MedFilt8: 5.0 | MedUnfilt8: 0.0 | MedFilt4: 5.0
+Cabbage              | Freq: 5/8 | MedFilt8: 4.0 | MedUnfilt8: 1.5 | MedFilt4: 1.5
+Capsicum Yellow      | Freq: 1/8 | MedFilt8: 9.0 | MedUnfilt8: 0.0 | MedFilt4: 9.0
+Beets                | Freq: 3/8 | MedFilt8: 4.0 | MedUnfilt8: 0.0 | MedFilt4: 4.0
+Carrot               | Freq: 4/8 | MedFilt8: 9.5 | MedUnfilt8: 3.0 | MedFilt4: 7.5
+Capsicum Red         | Freq: 3/8 | MedFilt8: 8.0 | MedUnfilt8: 0.0 | MedFilt4: 0.0
+Coriander Leaves     | Freq: 2/8 | MedFilt8: 8.0 | MedUnfilt8: 0.0 | MedFilt4: 0.0
+Mint Leaves          | Freq: 2/8 | MedFilt8: 8.0 | MedUnfilt8: 0.0 | MedFilt4: 8.0
+Green Onion          | Freq: 4/8 | MedFilt8: 4.5 | MedUnfilt8: 2.0 | MedFilt4: 7.0
+Ginger               | Freq: 2/8 | MedFilt8: 3.0 | MedUnfilt8: 0.0 | MedFilt4: 0.0
+Capsicum Green       | Freq: 4/8 | MedFilt8: 11.0 | MedUnfilt8: 3.5 | MedFilt4: 15.0
+Lime                 | Freq: 2/8 | MedFilt8: 5.5 | MedUnfilt8: 0.0 | MedFilt4: 0.0
+Pepper Mix           | Freq: 2/8 | MedFilt8: 5.0 | MedUnfilt8: 0.0 | MedFilt4: 5.0
+French Beans         | Freq: 5/8 | MedFilt8: 8.0 | MedUnfilt8: 2.0 | MedFilt4: 5.5
+Potatoes             | Freq: 3/8 | MedFilt8: 1.0 | MedUnfilt8: 0.0 | MedFilt4: 5.0
+Celery               | Freq: 2/8 | MedFilt8: 4.5 | MedUnfilt8: 0.0 | MedFilt4: 0.0
+Long Beans           | Freq: 2/8 | MedFilt8: 2.5 | MedUnfilt8: 0.0 | MedFilt4: 2.0
+Ash Guard            | Freq: 2/8 | MedFilt8: 8.0 | MedUnfilt8: 0.0 | MedFilt4: 8.0
+Thai Chilli          | Freq: 1/8 | MedFilt8: 3.0 | MedUnfilt8: 0.0 | MedFilt4: 3.0
+Plantain Green       | Freq: 3/8 | MedFilt8: 3.0 | MedUnfilt8: 0.0 | MedFilt4: 3.0
+Leeks                | Freq: 1/8 | MedFilt8: 3.0 | MedUnfilt8: 0.0 | MedFilt4: 0.0

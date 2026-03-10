@@ -289,7 +289,7 @@ export default function CombinedDemandPage() {
                 }
 
                 if (item.isPackaging) {
-                    displayVendorPackStr = `${pkSize} units / ${baseUnit}`;
+                    displayVendorPackStr = `${pkSize} ${pkSize === 1 ? 'unit' : 'units'} / ${baseUnit}`;
                     orderUnit = baseUnit;
                 } else if (nameLower === 'coriander leaves') displayVendorPackStr = `1 bunch`;
                 else if (nameLower === 'mint leaves') displayVendorPackStr = `1 bunch`;
@@ -345,7 +345,8 @@ export default function CombinedDemandPage() {
                             thu: thursdayQty,
                             total: predictedTotal,
                             trend: trendLabel,
-                            conf: override ? 'High' : (qtyIn8Filtered.length >= 7 ? 'High' : 'Medium')
+                            conf: override ? 'High' : (qtyIn8Filtered.length >= 7 ? 'High' : 'Medium'),
+                            recentHistory: qtyIn4.join(', ')
                         });
                     }
                 } else {
@@ -367,13 +368,17 @@ export default function CombinedDemandPage() {
                                 rMon = Math.round(restTotal * 0.5);
                                 rThu = restTotal - rMon;
                             }
+                            let bHist = item.restVolHistoryMap[branch] || {};
+                            let bRecentsStr = last4Cycles.map(d => bHist[d] || 0).join(', ');
+
                             branchDrilldownData.push({
                                 branchName: branch,
                                 mon: rMon,
                                 thu: rThu,
                                 total: restTotal,
                                 trend: trendLabel,
-                                conf: override ? 'High' : (qtyIn8Filtered.length >= 7 ? 'High' : 'Medium')
+                                conf: override ? 'High' : (qtyIn8Filtered.length >= 7 ? 'High' : 'Medium'),
+                                recentHistory: bRecentsStr
                             });
                         }
                     });
@@ -461,6 +466,9 @@ export default function CombinedDemandPage() {
     // Stats
     const activeOperationalItems = aggregated.filter(a => a.isActiveForecast).length;
     const itemsMissingCost = aggregated.filter(a => a.isActiveForecast && a.catalogSellPrice <= 0).length;
+    const prodCount = filteredAggregated.filter(a => a.isActiveForecast && a.category === 'Produce').length;
+    const packCount = filteredAggregated.filter(a => a.isActiveForecast && a.category === 'Packaging').length;
+    const cleanCount = filteredAggregated.filter(a => a.isActiveForecast && ['Cleaning', 'Cleaning Supplies'].includes(a.category)).length;
 
     // Compute Vendor Subtotals for full Grid Display
     const fullGridVendorRollups = useMemo(() => {
@@ -530,7 +538,7 @@ export default function CombinedDemandPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24 }}>
                         <div className="ui-card" style={{ padding: 20 }}>
                             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Forecast Active Items</div>
-                            <div style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', marginTop: 8 }}>{activeOperationalItems} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>ops</span></div>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', marginTop: 8 }}>{activeOperationalItems} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>Forecast Line Items</span></div>
                         </div>
                         <div className="ui-card" style={{ padding: 20, borderTop: '3px solid #f43f5e' }}>
                             <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Items Missing Catalog Price</div>
@@ -558,6 +566,13 @@ export default function CombinedDemandPage() {
                         </div>
                     </div>
 
+                    {/* Category Lines Summary */}
+                    <div style={{ display: 'flex', gap: 24, padding: '0 8px', marginBottom: 16, fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
+                        <span>Produce: <b style={{ color: '#f8fafc' }}>{prodCount} items</b></span>
+                        <span>Packaging: <b style={{ color: '#f8fafc' }}>{packCount} items</b></span>
+                        <span>Cleaning: <b style={{ color: '#f8fafc' }}>{cleanCount} items</b></span>
+                    </div>
+
                     {/* Secondary Filters Bar */}
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, background: 'var(--bg-panel)', padding: '12px 20px', borderRadius: 8, border: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', gap: 6, borderRight: '1px solid var(--border)', paddingRight: 16 }}>
@@ -571,7 +586,7 @@ export default function CombinedDemandPage() {
                                 onClick={() => setShowInactive(true)}
                                 style={{ padding: '6px 12px', background: showInactive ? 'rgba(255,255,255,0.1)' : 'transparent', color: showInactive ? '#f8fafc' : 'var(--muted)', border: 'none', borderRadius: 20, cursor: 'pointer', fontWeight: 600, fontSize: 12 }}
                             >
-                                Show Catalog
+                                Include Catalog Items
                             </button>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -642,11 +657,11 @@ export default function CombinedDemandPage() {
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
                                                         <div style={{ fontWeight: 700, color: '#f8fafc', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 }}>{vendor}</div>
                                                         <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--muted)' }}>
-                                                            <span>Mon Demand: <b style={{ color: '#3b82f6' }}>{fullGridVendorRollups[vendor].m}</b></span>
-                                                            <span>Thu Demand: <b style={{ color: '#8b5cf6' }}>{fullGridVendorRollups[vendor].t}</b></span>
-                                                            <span>Rest. Billing: <b style={{ color: '#ec4899' }}>${fullGridVendorRollups[vendor].r.toFixed(2)}</b></span>
+                                                            <span>Monday Packs: <b style={{ color: '#3b82f6' }}>{fullGridVendorRollups[vendor].m}</b></span>
+                                                            <span>Thursday Packs: <b style={{ color: '#8b5cf6' }}>{fullGridVendorRollups[vendor].t}</b></span>
+                                                            <span>Restaurant Billing: <b style={{ color: '#ec4899' }}>${fullGridVendorRollups[vendor].r.toFixed(2)}</b></span>
                                                             <span>Vendor Payout: <b style={{ color: '#f59e0b' }}>${fullGridVendorRollups[vendor].p.toFixed(2)}</b></span>
-                                                            <span>Comm: <b style={{ color: '#10b981' }}>${fullGridVendorRollups[vendor].c.toFixed(2)}</b></span>
+                                                            <span>Commission: <b style={{ color: '#10b981' }}>${fullGridVendorRollups[vendor].c.toFixed(2)}</b></span>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -733,12 +748,13 @@ export default function CombinedDemandPage() {
                                                                         <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--bg-panel)', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
                                                                             <thead>
                                                                                 <tr>
-                                                                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Branch Name</th>
+                                                                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Branch Contribution</th>
                                                                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: '#3b82f6', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Mon Qty</th>
                                                                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: '#8b5cf6', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Thu Qty</th>
                                                                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Total Routed</th>
                                                                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Trend</th>
                                                                                     <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Confidence</th>
+                                                                                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>Recent History (4wks)</th>
                                                                                 </tr>
                                                                             </thead>
                                                                             <tbody>
@@ -750,6 +766,7 @@ export default function CombinedDemandPage() {
                                                                                         <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{branch.total}</td>
                                                                                         <td style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><TrendBadge trend={branch.trend} /></td>
                                                                                         <td style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}><ConfidenceBadge confidence={branch.conf} /></td>
+                                                                                        <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid rgba(255,255,255,0.05)', letterSpacing: 1 }}>[{branch.recentHistory}]</td>
                                                                                     </tr>
                                                                                 ))}
                                                                             </tbody>

@@ -3,6 +3,7 @@ import { db, storage } from '../../firebase';
 import { addDoc, collection, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
+import PricingIntelligencePanel from './PricingIntelligencePanel';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
@@ -233,6 +234,17 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                         <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={itemForm.itemSize} onChange={e => setItemForm(p => ({ ...p, itemSize: e.target.value }))} /></div>
                         <div><label className="ui-label">Price ($) *</label><input className="ui-input" type="number" step="0.01" placeholder="0.00" value={itemForm.price} onChange={e => setItemForm(p => ({ ...p, price: e.target.value }))} /></div>
                     </div>
+
+                    {/* Marketplace Intelligence Panel */}
+                    {itemForm.name.trim() && itemForm.price && (
+                        <PricingIntelligencePanel
+                            itemName={itemForm.name}
+                            category={itemForm.category}
+                            vendorPrice={itemForm.price}
+                            isEdit={false}
+                            onApplyPrice={(price) => setItemForm(p => ({ ...p, price: String(price) }))}
+                        />
+                    )}
                     <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" placeholder="Optional SKU or product code" value={itemForm.sku} onChange={e => setItemForm(p => ({ ...p, sku: e.target.value }))} /></div>
                     <div style={{ marginTop: 16 }}><label className="ui-label">Description</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Public item description shown to users" value={itemForm.description} onChange={e => setItemForm(p => ({ ...p, description: e.target.value }))} /></div>
                     <div style={{ marginTop: 16 }}><label className="ui-label">Private Notes</label><textarea className="ui-input" style={{ height: 60 }} placeholder="Internal notes" value={itemForm.notes} onChange={e => setItemForm(p => ({ ...p, notes: e.target.value }))} /></div>

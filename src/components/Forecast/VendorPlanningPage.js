@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ForecastInsightPanel } from './ForecastComponents';
 import vendorCatalogV2 from '../../data/catalog_v2.json';
 import purchaseDatasetV2 from '../../data/history_realistic_v2_tomato.json';
 import containerTestData from './containerTestData.json';
 import { db } from '../../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -57,6 +57,7 @@ const Toast = ({ message, type }) => (
 );
 
 const SendToVendorModal = ({ vendor, onClose, onSend }) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const today = new Date();
     const tmw = new Date(today);
     tmw.setDate(tmw.getDate() + 1);
@@ -66,7 +67,7 @@ const SendToVendorModal = ({ vendor, onClose, onSend }) => {
 
     const message = `Hello ${vendor.vendorName},
 
-Please find the Oruma Marketplace supply order for the delivery week of ${weekStr}.
+Please find the Marketplace supply order for the delivery week of ${weekStr}.
 
 Monday Delivery:
 ${vendor.totalMondayDemand} units
@@ -79,7 +80,7 @@ Estimated Vendor Payout: $${vendor.estimatedVendorPayout.toFixed(2)}
 Please review and confirm availability.
 
 Thank you,
-Oruma Marketplace`;
+Marketplace`;
 
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
@@ -91,15 +92,25 @@ Oruma Marketplace`;
                 <div style={{ padding: 24 }}>
                     <div style={{ marginBottom: 16 }}>
                         <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4, fontWeight: 600 }}>SUBJECT</label>
-                        <input type="text" readOnly value={`Oruma Marketplace Supply Order – Week of ${tmw.toLocaleString('default', { month: 'long' })} ${tmw.getDate()}`} className="ui-input" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', color: '#f8fafc', padding: '10px 12px', borderRadius: 6, border: '1px solid var(--border)' }} />
+                        <input type="text" readOnly value={`Marketplace Supply Order – Week of ${tmw.toLocaleString('default', { month: 'long' })} ${tmw.getDate()}`} className="ui-input" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', color: '#f8fafc', padding: '10px 12px', borderRadius: 6, border: '1px solid var(--border)' }} />
                     </div>
                     <div style={{ marginBottom: 24 }}>
                         <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4, fontWeight: 600 }}>MESSAGE BODY</label>
                         <textarea readOnly rows={12} value={message} className="ui-input" style={{ width: '100%', background: 'rgba(0,0,0,0.2)', color: '#f8fafc', padding: '10px 12px', borderRadius: 6, border: '1px solid var(--border)', fontFamily: 'inherit', resize: 'vertical' }} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                        <button onClick={onClose} className="ui-btn ghost">Cancel</button>
-                        <button onClick={onSend} className="ui-btn primary">Send Email</button>
+                        <button onClick={onClose} className="ui-btn ghost" disabled={isSubmitting}>Cancel</button>
+                        <button
+                            onClick={async () => {
+                                setIsSubmitting(true);
+                                await onSend();
+                                setIsSubmitting(false);
+                            }}
+                            className="ui-btn primary"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? 'Sending...' : 'Send Email'}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -112,11 +123,87 @@ export default function VendorPlanningPage() {
     const [loading, setLoading] = useState(true);
     const [expandedVendors, setExpandedVendors] = useState(new Set());
     const [toast, setToast] = useState(null);
-    const [modalVendor, setModalVendor] = useState(null);
 
     const showToast = (message, type = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
+    };
+
+    const handleSendDayDispatch = async (vendor, day) => {
+        // 'day' is either 'Monday' or 'Thursday'
+
+        // Optimistic update — disable the button IMMEDIATELY before waiting for Firestore
+        setVendors(prev => prev.map(v => {
+            if (v.vendorId !== vendor.vendorId) return v;
+            return {
+                ...v,
+                mondaySent: day === 'Monday' ? true : v.mondaySent,
+                thuSent: day === 'Thursday' ? true : v.thuSent
+            };
+        }));
+
+        const today = new Date();
+        const tmw = new Date(today);
+        tmw.setDate(tmw.getDate() + 1);
+        const inAWeek = new Date(today);
+        inAWeek.setDate(inAWeek.getDate() + 7);
+
+        const dispatchId = `disp_${vendor.vendorId}_${tmw.getFullYear()}_${tmw.getMonth()}_${tmw.getDate()}`;
+        const docRef = doc(collection(db, 'vendorDispatches'), dispatchId);
+
+        const itemsPayload = vendor.items.map(i => ({
+            itemId: i.itemName.toLowerCase().replace(/\s+/g, '-'),
+            itemName: i.itemName,
+            mondayQty: i.mondayQty,
+            thursdayQty: i.thursdayQty,
+            packLabel: i.displayVendorPackStr,
+            catalogSellPrice: i.catalogSellPrice || 0,
+            lineMarketplaceCommission: i.lineMarketplaceCommission || 0,
+            lineVendorPayout: i.lineVendorPayout || 0,
+            lineRestaurantBilling: i.lineRestaurantBilling || 0
+        }));
+
+        // Build base payload for new document (used on first send)
+        const basePayload = {
+            dispatchId,
+            vendorId: vendor.vendorId,
+            vendorName: vendor.vendorName,
+            weekStart: tmw.toISOString(),
+            weekEnd: inAWeek.toISOString(),
+            restaurantId: 'marketplace_network',
+            restaurantName: 'Marketplace Network',
+            status: 'Sent',
+            mondayTotalPacks: vendor.totalMondayDemand,
+            thursdayTotalPacks: vendor.totalThursdayDemand,
+            restaurantBilling: vendor.totalRestaurantBilling,
+            vendorPayout: vendor.estimatedVendorPayout,
+            marketplaceCommission: vendor.marketplaceCommission,
+            sentAt: new Date(),
+            confirmedAt: null,
+            deliveredAt: null,
+            updatedAt: new Date(),
+            mondayDelivered: false,
+            thursdayDelivered: false,
+            mondaySent: false,
+            thursdaySent: false,
+            confirmationNotes: '',
+            rejectionReason: '',
+            partialReason: '',
+            items: itemsPayload
+        };
+
+        // Day-specific update
+        const dayField = day === 'Monday' ? 'mondaySent' : 'thursdaySent';
+        const sentAtField = day === 'Monday' ? 'mondaySentAt' : 'thursdaySentAt';
+
+        try {
+            // Upsert: merge so we don't clobber the other day's flags
+            await setDoc(docRef, { ...basePayload, [dayField]: true, [sentAtField]: new Date() }, { merge: true });
+            showToast(`${day} order sent to ${vendor.vendorName}!`);
+        } catch (err) {
+            console.error('Error sending dispatch:', err);
+            showToast(`Failed to send ${day} order.`, 'error');
+        }
     };
 
     const toggleExpand = (vid) => {
@@ -126,10 +213,53 @@ export default function VendorPlanningPage() {
         setExpandedVendors(next);
     };
 
+    // Persist the latest dispatch status map so fetchData can apply it after loading
+    const liveDispatchRef = useRef({});
+
+    useEffect(() => {
+        // Live listener: subscribe to vendorDispatches and immediately patch vendor states
+        const unsubscribe = onSnapshot(collection(db, 'vendorDispatches'), (snapshot) => {
+            const freshMap = {};
+            const STATUS_PRIORITY = { 'Delivered': 5, 'Partially Confirmed': 4, 'Confirmed': 3, 'Sent': 2 };
+            snapshot.docs.forEach(d => {
+                const data = d.data();
+                const recordTime = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (data.sentAt?.toMillis ? data.sentAt.toMillis() : 0);
+                const newPriority = STATUS_PRIORITY[data.status] || 1;
+                const existing = freshMap[data.vendorId];
+                const existingPriority = existing ? (STATUS_PRIORITY[existing.status] || 1) : 0;
+                // Prefer the dispatch with higher status; break ties by recency
+                if (!existing || newPriority > existingPriority || (newPriority === existingPriority && recordTime > existing.recordTime)) {
+                    freshMap[data.vendorId] = {
+                        status: data.status,
+                        monDelivered: !!data.mondayDelivered,
+                        thuDelivered: !!data.thursdayDelivered,
+                        mondaySent: !!data.mondaySent,
+                        thuSent: !!data.thursdaySent,
+                        recordTime
+                    };
+                }
+            });
+            // Persist for use by fetchData
+            liveDispatchRef.current = freshMap;
+            // Patch any already-loaded vendor rows immediately
+            setVendors(prev => {
+                if (!prev.length) return prev;
+                return prev.map(v => {
+                    const live = freshMap[v.vendorId];
+                    if (!live) return v;
+                    return { ...v, dispatchStatus: live.status, monDelivered: live.monDelivered, thuDelivered: live.thuDelivered, mondaySent: live.mondaySent, thuSent: live.thuSent };
+                });
+            });
+        });
+        return () => unsubscribe();
+    }, []);
+
     useEffect(() => {
         setLoading(true);
         (async () => {
             const catalogLookup = {};
+            const localVendorIdMap = {};
+            const localDispatchStatusMap = {};
 
             vendorCatalogV2.forEach(row => {
                 const name = row.item_name?.trim();
@@ -141,6 +271,7 @@ export default function VendorPlanningPage() {
                 const vendorSnap = await getDocs(collection(db, 'vendors'));
                 const vendorDocs = vendorSnap.docs.map(d => ({ id: d.id, ...d.data() }));
                 for (const v of vendorDocs) {
+                    localVendorIdMap[v.name] = v.id;
                     try {
                         const itemSnap = await getDocs(collection(db, `vendors/${v.id}/items`));
                         itemSnap.docs.forEach(d => {
@@ -216,6 +347,30 @@ export default function VendorPlanningPage() {
                 if (!globalHistoryMap[exactName].orderHistoryMap[data.date]) globalHistoryMap[exactName].orderHistoryMap[data.date] = 0;
                 globalHistoryMap[exactName].orderHistoryMap[data.date] += (Number(data.boxesOrdered) || 0);
             });
+
+            try {
+                const today = new Date();
+                const tmw = new Date(today);
+                tmw.setDate(tmw.getDate() + 1);
+
+                const dispatchSnap = await getDocs(collection(db, 'vendorDispatches'));
+                dispatchSnap.docs.forEach(d => {
+                    const data = d.data();
+                    const recordTime = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (data.sentAt?.toMillis ? data.sentAt.toMillis() : 0);
+                    // We map by vendorId to easily look up latest status
+                    // Just store the most recent one we find (in production we'd filter tightly by active week)
+                    if (!localDispatchStatusMap[data.vendorId] || recordTime > localDispatchStatusMap[data.vendorId].recordTime) {
+                        localDispatchStatusMap[data.vendorId] = {
+                            status: data.status,
+                            monDelivered: data.mondayDelivered,
+                            thuDelivered: data.thursdayDelivered,
+                            recordTime: recordTime
+                        };
+                    }
+                });
+            } catch (err) {
+                console.warn('Failed to load dispatch statuses', err);
+            }
 
             const vendorGroupMap = {};
 
@@ -298,10 +453,16 @@ export default function VendorPlanningPage() {
                     if (median4 > median8 * 1.2) trendLabel = 'up';
                     else if (median4 < median8 * 0.8 && median4 > 0) trendLabel = 'down';
 
+                    const resolvedVendorId = localVendorIdMap[vendorName] || vendorName.toLowerCase().replace(/\s+/g, '-');
+
                     if (!vendorGroupMap[vendorName]) {
                         vendorGroupMap[vendorName] = {
                             id: vendorName,
+                            vendorId: resolvedVendorId,
                             vendorName: vendorName,
+                            dispatchStatus: localDispatchStatusMap[resolvedVendorId]?.status || null,
+                            monDelivered: localDispatchStatusMap[resolvedVendorId]?.monDelivered || false,
+                            thuDelivered: localDispatchStatusMap[resolvedVendorId]?.thuDelivered || false,
                             isPackagingVendor: vendorName.toLowerCase().includes('taas') || item.isPackaging,
                             items: [],
 
@@ -371,6 +532,14 @@ export default function VendorPlanningPage() {
 
             arrayResults = arrayResults.sort((a, b) => b.totalWeeklyDemand - a.totalWeeklyDemand);
 
+            // Apply any already-loaded live delivery flags from the snapshot listener
+            const liveMap = liveDispatchRef.current;
+            arrayResults = arrayResults.map(v => {
+                const live = liveMap[v.vendorId];
+                if (!live) return v;
+                return { ...v, dispatchStatus: live.status, monDelivered: live.monDelivered, thuDelivered: live.thuDelivered, mondaySent: live.mondaySent, thuSent: live.thuSent };
+            });
+
             setVendors(arrayResults);
             setLoading(false);
 
@@ -388,7 +557,7 @@ export default function VendorPlanningPage() {
         const weekStr = `${tmw.toLocaleString('default', { month: 'long' })} ${tmw.getDate()} – ${inAWeek.toLocaleString('default', { month: 'long' })} ${inAWeek.getDate()}`;
 
         doc.setFontSize(18);
-        doc.text('ORUMA MARKETPLACE SUPPLY ORDER', 14, 22);
+        doc.text('MARKETPLACE SUPPLY ORDER', 14, 22);
 
         doc.setFontSize(11);
         doc.text(`Vendor: ${vendor.vendorName}`, 14, 32);
@@ -461,7 +630,7 @@ export default function VendorPlanningPage() {
             styles: { fontSize: 10 }
         });
 
-        const safeFilename = `oruma-supply-order-${vendor.vendorName.toLowerCase().replace(/\s+/g, '-')}-${tmw.getFullYear()}-${String(tmw.getMonth() + 1).padStart(2, '0')}-${String(tmw.getDate()).padStart(2, '0')}.pdf`;
+        const safeFilename = `marketplace-supply-order-${vendor.vendorName.toLowerCase().replace(/\s+/g, '-')}-${tmw.getFullYear()}-${String(tmw.getMonth() + 1).padStart(2, '0')}-${String(tmw.getDate()).padStart(2, '0')}.pdf`;
         doc.save(safeFilename);
 
         showToast(`Exported ${safeFilename} successfully!`);
@@ -470,7 +639,7 @@ export default function VendorPlanningPage() {
     return (
         <div style={{ padding: '0 24px', maxWidth: 1400, margin: '0 auto', paddingBottom: 64 }}>
             {toast && <Toast message={toast.message} type={toast.type} />}
-            {modalVendor && <SendToVendorModal vendor={modalVendor} onClose={() => setModalVendor(null)} onSend={() => { setModalVendor(null); showToast(`Email processed successfully to ${modalVendor.vendorName}!`); }} />}
+
 
             <div className="page-header" style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -492,9 +661,22 @@ export default function VendorPlanningPage() {
                             <div style={{ padding: 24, borderBottom: '1px solid var(--border)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                                     <div>
-                                        <h3 style={{ margin: 0, color: v.isPackagingVendor ? '#8b5cf6' : '#4dabf7', fontSize: 20 }}>
+                                        <h3 style={{ margin: 0, color: v.isPackagingVendor ? '#8b5cf6' : '#4dabf7', fontSize: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
                                             {v.vendorName}
-                                            {v.isPackagingVendor && <span style={{ fontSize: 12, fontWeight: 400, color: '#8b5cf6', marginLeft: 8 }}>(Packaging)</span>}
+                                            {v.isPackagingVendor && <span style={{ fontSize: 12, fontWeight: 400, color: '#8b5cf6' }}>(Packaging)</span>}
+                                            {v.dispatchStatus && (
+                                                <span style={{
+                                                    fontSize: 11, fontWeight: 700, padding: '4px 8px', borderRadius: 4, textTransform: 'uppercase',
+                                                    background: v.dispatchStatus === 'Delivered' || v.dispatchStatus === 'Confirmed' ? 'rgba(16, 185, 129, 0.15)' :
+                                                        v.dispatchStatus === 'Rejected' ? 'rgba(244, 63, 94, 0.15)' :
+                                                            v.dispatchStatus === 'Partially Confirmed' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                                                    color: v.dispatchStatus === 'Delivered' || v.dispatchStatus === 'Confirmed' ? '#10b981' :
+                                                        v.dispatchStatus === 'Rejected' ? '#f43f5e' :
+                                                            v.dispatchStatus === 'Partially Confirmed' ? '#f59e0b' : '#38bdf8'
+                                                }}>
+                                                    {v.dispatchStatus}
+                                                </span>
+                                            )}
                                         </h3>
                                         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Delivery Week: {new Date(Date.now() + 86400000).toLocaleString('default', { month: 'long' })} {new Date(Date.now() + 86400000).getDate()}</div>
                                     </div>
@@ -504,13 +686,19 @@ export default function VendorPlanningPage() {
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-                                    <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, background: 'rgba(77, 171, 247, 0.05)' }}>
+                                    <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, background: 'rgba(77, 171, 247, 0.05)', position: 'relative' }}>
                                         <div style={{ fontSize: 11, color: '#4dabf7', marginBottom: 6, fontWeight: 700, letterSpacing: 0.5 }}>MONDAY ESTIMATE</div>
-                                        <div style={{ fontSize: 28, fontWeight: 700 }}>{v.totalMondayDemand} <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--muted)' }}>Units</span></div>
+                                        <div style={{ fontSize: 28, fontWeight: 700, color: v.monDelivered ? '#10b981' : '#f8fafc' }}>
+                                            {v.totalMondayDemand} <span style={{ fontSize: 14, fontWeight: 400, color: v.monDelivered ? '#10b981' : 'var(--muted)' }}>Units</span>
+                                        </div>
+                                        {v.monDelivered && <span style={{ position: 'absolute', top: 12, right: 12, fontSize: 11, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>✓ DONE</span>}
                                     </div>
-                                    <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, background: 'rgba(132, 94, 247, 0.05)' }}>
+                                    <div style={{ border: '1px solid var(--border)', padding: 16, borderRadius: 8, background: 'rgba(132, 94, 247, 0.05)', position: 'relative' }}>
                                         <div style={{ fontSize: 11, color: '#845ef7', marginBottom: 6, fontWeight: 700, letterSpacing: 0.5 }}>THURSDAY ESTIMATE</div>
-                                        <div style={{ fontSize: 28, fontWeight: 700 }}>{v.totalThursdayDemand} <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--muted)' }}>Units</span></div>
+                                        <div style={{ fontSize: 28, fontWeight: 700, color: v.thuDelivered ? '#10b981' : '#f8fafc' }}>
+                                            {v.totalThursdayDemand} <span style={{ fontSize: 14, fontWeight: 400, color: v.thuDelivered ? '#10b981' : 'var(--muted)' }}>Units</span>
+                                        </div>
+                                        {v.thuDelivered && <span style={{ position: 'absolute', top: 12, right: 12, fontSize: 11, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>✓ DONE</span>}
                                     </div>
                                 </div>
 
@@ -558,8 +746,39 @@ export default function VendorPlanningPage() {
                                     <button className="ui-btn small primary ghost" style={{ flex: 1, padding: '12px 0' }} onClick={() => handleExportPDF(v)}>
                                         📄 Export PDF
                                     </button>
-                                    <button className="ui-btn small primary" style={{ flex: 1, padding: '12px 0' }} onClick={() => setModalVendor(v)}>
-                                        ✉️ Send to Vendor
+                                    {/* Send Monday */}
+                                    <button
+                                        className="ui-btn small"
+                                        style={{
+                                            flex: 1, padding: '12px 0',
+                                            background: v.mondaySent ? 'rgba(16,185,129,0.1)' : 'rgba(77, 171, 247, 0.15)',
+                                            color: v.mondaySent ? '#10b981' : '#4dabf7',
+                                            border: `1px solid ${v.mondaySent ? 'rgba(16,185,129,0.3)' : 'rgba(77,171,247,0.3)'}`,
+                                            cursor: v.mondaySent ? 'not-allowed' : 'pointer',
+                                            fontWeight: 600,
+                                            opacity: v.mondaySent ? 0.8 : 1
+                                        }}
+                                        disabled={v.mondaySent}
+                                        onClick={() => handleSendDayDispatch(v, 'Monday')}
+                                    >
+                                        {v.mondaySent ? '✓ Mon Sent' : '📤 Send Monday'}
+                                    </button>
+                                    {/* Send Thursday */}
+                                    <button
+                                        className="ui-btn small"
+                                        style={{
+                                            flex: 1, padding: '12px 0',
+                                            background: v.thuSent ? 'rgba(16,185,129,0.1)' : 'rgba(132, 94, 247, 0.15)',
+                                            color: v.thuSent ? '#10b981' : '#845ef7',
+                                            border: `1px solid ${v.thuSent ? 'rgba(16,185,129,0.3)' : 'rgba(132,94,247,0.3)'}`,
+                                            cursor: v.thuSent ? 'not-allowed' : 'pointer',
+                                            fontWeight: 600,
+                                            opacity: v.thuSent ? 0.8 : 1
+                                        }}
+                                        disabled={v.thuSent}
+                                        onClick={() => handleSendDayDispatch(v, 'Thursday')}
+                                    >
+                                        {v.thuSent ? '✓ Thu Sent' : '📤 Send Thursday'}
                                     </button>
                                 </div>
                                 <button

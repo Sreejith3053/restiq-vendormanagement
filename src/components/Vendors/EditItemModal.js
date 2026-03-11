@@ -5,6 +5,8 @@ import { db, storage } from '../../firebase';
 import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
+import PricingIntelligencePanel from './PricingIntelligencePanel';
+import CompetitivenessScorePanel from './CompetitivenessScorePanel';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
@@ -258,6 +260,23 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                                     <div><label className="ui-label">Size per Qty</label><input className="ui-input" placeholder="e.g. 500g, 100mL" value={form.itemSize} onChange={e => handleChange('itemSize', e.target.value)} /></div>
                                     <div><label className="ui-label">Vendor Price ($)</label><input className="ui-input" type="number" step="0.01" value={form.vendorPrice} onChange={e => handleChange('vendorPrice', e.target.value)} placeholder="0.00" /></div>
                                 </div>
+
+                                {/* Marketplace Intelligence Panel */}
+                                <PricingIntelligencePanel
+                                    itemName={form.name}
+                                    category={form.category}
+                                    vendorPrice={form.vendorPrice}
+                                    originalPrice={item.vendorPrice ?? item.price ?? 0}
+                                    isEdit={true}
+                                    onApplyPrice={(price) => handleChange('vendorPrice', String(price))}
+                                />
+                                {/* Vendor Competitiveness Score */}
+                                <CompetitivenessScorePanel
+                                    itemName={form.name}
+                                    vendorPrice={form.vendorPrice}
+                                    vendorId={vendorId}
+                                    category={form.category}
+                                />
                                 <div style={{ marginTop: 16 }}><label className="ui-label">SKU</label><input className="ui-input" value={form.sku} onChange={e => handleChange('sku', e.target.value)} placeholder="Optional SKU or product code" /></div>
                                 <div style={{ marginTop: 16 }}><label className="ui-label">Description</label><textarea className="ui-input" style={{ height: 60 }} value={form.description} onChange={e => handleChange('description', e.target.value)} placeholder="Public item description" /></div>
                                 <div style={{ marginTop: 16 }}><label className="ui-label">Private Notes</label><input className="ui-input" value={form.notes} onChange={e => handleChange('notes', e.target.value)} placeholder="Internal notes" /></div>

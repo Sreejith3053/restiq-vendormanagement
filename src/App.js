@@ -21,12 +21,21 @@ import AdminRestaurantInvoicesPage from './components/Admin/AdminRestaurantInvoi
 import RestaurantInvoiceDetailPage from './components/Admin/RestaurantInvoiceDetailPage';
 import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
 import InvoiceDetailPage from './components/Vendors/InvoiceDetailPage';
+import DispatchRequestsPage from './components/Vendors/DispatchRequestsPage';
+import DispatchDetailPage from './components/Vendors/DispatchDetailPage';
+import VendorScoreDashboard from './components/Vendors/VendorScoreDashboard';
+import VendorExpectedAllocation from './components/Vendors/VendorExpectedAllocation';
+import VendorCapacityPlanning from './components/Vendors/VendorCapacityPlanning';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 import AdminItemsPage from './components/Admin/AdminItemsPage';
 import AdminRestaurantsPage from './components/Admin/AdminRestaurantsPage';
 import AdminRequestsPage from './components/Admin/AdminRequestsPage';
 import AdminRestaurantDetailPage from './components/Admin/AdminRestaurantDetailPage';
+import MarketplaceIntelligencePage from './components/Admin/MarketplaceIntelligencePage';
+import VendorCompetitivenessDashboard from './components/Admin/VendorCompetitivenessDashboard';
+import VendorAllocationDashboard from './components/Admin/VendorAllocationDashboard';
+import SupplyCapacityDashboard from './components/Admin/SupplyCapacityDashboard';
 
 // Forecast Module (Super Admin Only)
 import ForecastOverviewPage from './components/Forecast/ForecastOverviewPage';
@@ -37,6 +46,21 @@ import FestivalSeasonalityPage from './components/Forecast/FestivalSeasonalityPa
 import ForecastAccuracyPage from './components/Forecast/ForecastAccuracyPage';
 import ForecastAlertsPage from './components/Forecast/ForecastAlertsPage';
 import ForecastSettingsPage from './components/Forecast/ForecastSettingsPage';
+
+// Main Dashboard
+import GlobalSupplyControlTower from './components/Forecast/GlobalSupplyControlTower';
+import SuggestedOrderReview from './components/Forecast/SuggestedOrderReview';
+import SubmittedOrdersPage from './components/Forecast/SubmittedOrdersPage';
+
+// New Unified Forecast Pages
+import DemandForecastPage from './components/Forecast/DemandForecastPage';
+import ForecastIntelligencePage from './components/Forecast/ForecastIntelligencePage';
+
+// Dispatch & Logistics Pages
+import DispatchConfirmationsPage from './components/Forecast/DispatchConfirmationsPage';
+import WarehousePickListPage from './components/Forecast/WarehousePickListPage';
+import DeliveryStatusPage from './components/Forecast/DeliveryStatusPage';
+import IssuesDisputesPage from './components/Forecast/IssuesDisputesPage';
 
 // New Container Prediction Test
 import ContainerPredictionTestPage from './components/Forecast/ContainerPredictionTestPage';
@@ -103,22 +127,26 @@ function App() {
                                 <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/users" element={<UserManagementPage />} />
-                                <Route path="/orders" element={<OrdersPage />} />
                                 <Route path="/settings/permissions" element={<RolePermissionsPage />} />
                                 <Route path="/admin/items" element={<AdminItemsPage />} />
                                 <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
                                 <Route path="/admin/restaurants/:restaurantId" element={<AdminRestaurantDetailPage />} />
                                 <Route path="/admin/requests" element={<AdminRequestsPage />} />
+                                <Route path="/admin/marketplace-intelligence" element={<MarketplaceIntelligencePage />} />
+                                <Route path="/admin/vendor-competitiveness" element={<VendorCompetitivenessDashboard />} />
+                                <Route path="/admin/vendor-allocation" element={<VendorAllocationDashboard />} />
+                                <Route path="/admin/supply-capacity" element={<SupplyCapacityDashboard />} />
                                 <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
                                 <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
                                 <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />
                                 <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
 
-                                {/* AI Forecast Sub-routes */}
+                                {/* AI Forecast Sub-routes — hidden from nav but kept for backward compat */}
                                 <Route path="/admin/container-prediction-test" element={<ContainerPredictionTestPage />} />
                                 <Route path="/admin/vegetable-prediction-test" element={<VegetablePredictionTestPage />} />
                                 <Route path="/admin/vegetable-dashboard" element={<VegetableDashboardPage />} />
-                                <Route path="/admin/forecast" element={<ForecastOverviewPage />} />
+                                <Route path="/admin/forecast/demand" element={<DemandForecastPage />} />
+                                <Route path="/admin/forecast/intelligence" element={<ForecastIntelligencePage />} />
                                 <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />
                                 <Route path="/admin/forecast/combined" element={<CombinedDemandPage />} />
                                 <Route path="/admin/forecast/vendors" element={<VendorPlanningPage />} />
@@ -126,8 +154,17 @@ function App() {
                                 <Route path="/admin/forecast/accuracy" element={<ForecastAccuracyPage />} />
                                 <Route path="/admin/forecast/alerts" element={<ForecastAlertsPage />} />
                                 <Route path="/admin/forecast/settings" element={<ForecastSettingsPage />} />
+                                <Route path="/admin/forecast/control-tower" element={<GlobalSupplyControlTower />} />
+                                <Route path="/admin/forecast/suggested-order-review" element={<SuggestedOrderReview />} />
+                                <Route path="/admin/forecast/submitted-orders" element={<SubmittedOrdersPage />} />
 
-                                <Route path="/" element={<Navigate to="/admin/dashboard" />} />
+                                {/* Dispatch & Logistics */}
+                                <Route path="/admin/dispatch/confirmations" element={<DispatchConfirmationsPage />} />
+                                <Route path="/admin/dispatch/warehouse" element={<WarehousePickListPage />} />
+                                <Route path="/admin/dispatch/delivery" element={<DeliveryStatusPage />} />
+                                <Route path="/admin/dispatch/issues" element={<IssuesDisputesPage />} />
+
+                                <Route path="/" element={<Navigate to="/admin/forecast/control-tower" />} />
                             </>
                         )}
 
@@ -139,8 +176,13 @@ function App() {
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/profile" element={<VendorDetailPage />} />
                                 <Route path="/orders" element={<OrdersPage />} />
+                                <Route path="/dispatch-requests" element={<DispatchRequestsPage />} />
+                                <Route path="/dispatch-requests/:dispatchId" element={<DispatchDetailPage />} />
                                 <Route path="/vendor/invoices" element={<VendorInvoicesPage />} />
                                 <Route path="/vendor/invoices/:invoiceId" element={<InvoiceDetailPage />} />
+                                <Route path="/vendor/competitiveness" element={<VendorScoreDashboard />} />
+                                <Route path="/vendor/allocation" element={<VendorExpectedAllocation />} />
+                                <Route path="/vendor/capacity" element={<VendorCapacityPlanning />} />
                                 {isAdmin && (
                                     <>
                                         <Route path="/users" element={<UserManagementPage />} />

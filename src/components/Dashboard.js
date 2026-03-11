@@ -14,11 +14,11 @@ export default function Dashboard() {
     // Filter state
     const [timeFilter, setTimeFilter] = useState('This Week');
 
-    // Revenue modal state
     const [showRevenueModal, setShowRevenueModal] = useState(false);
 
     // Data state
     const [allOrders, setAllOrders] = useState([]);
+    const [allDispatches, setAllDispatches] = useState([]);
     const [vendorItemsMap, setVendorItemsMap] = useState({});
 
     // Derived state for Dashboard widgets
@@ -77,6 +77,17 @@ export default function Dashboard() {
 
         return { currentRev, prevRev, revChange, pending, fulfilled, revenueDetails };
     }, [allOrders]);
+
+    const dispatchStats = useMemo(() => {
+        let pending = 0, confirmed = 0, rejected = 0, delivered = 0;
+        allDispatches.forEach(d => {
+            if (d.status === 'Sent') pending++;
+            else if (d.status === 'Confirmed' || d.status === 'Partially Confirmed') confirmed++;
+            else if (d.status === 'Rejected') rejected++;
+            else if (d.status === 'Delivered') delivered++;
+        });
+        return { pending, confirmed, rejected, delivered, total: allDispatches.length };
+    }, [allDispatches]);
 
     const derivedData = useMemo(() => {
         const now = new Date();
@@ -212,6 +223,21 @@ export default function Dashboard() {
                     }
                 }
 
+                // 5. Fetch vendorDispatches for dashboard stats
+                if (vendorId) {
+                    try {
+                        const dispatchQ = query(
+                            collection(db, 'vendorDispatches'),
+                            where('vendorId', '==', vendorId)
+                        );
+                        const dispatchSnap = await getDocs(dispatchQ);
+                        const fetchedDispatches = dispatchSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        setAllDispatches(fetchedDispatches);
+                    } catch (err) {
+                        console.error("Error fetching dispatches for dashboard:", err);
+                    }
+                }
+
             } catch (err) {
                 console.error('Dashboard load error:', err);
             } finally {
@@ -328,6 +354,42 @@ export default function Dashboard() {
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>All-time delivered</div>
                 </div>
             </div>
+
+            {/* Weekly Dispatch Planning Section */}
+            {dispatchStats.total > 0 && (
+                <>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                        <div className="ui-card-title" style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#f8fafc' }}>Weekly Supply Dispatches</div>
+                        <button className="ui-btn ghost" style={{ fontSize: '13px', padding: '4px 12px' }} onClick={() => navigate('/dispatch-requests')}>View All &rarr;</button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+
+                        <div className="ui-card" onClick={() => navigate('/dispatch-requests')} style={{ display: 'flex', flexDirection: 'column', padding: '20px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid rgba(56, 189, 248, 0.3)', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                            <div style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 600, textTransform: 'uppercase' }}>Pending Review</div>
+                            <div style={{ fontSize: '28px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{dispatchStats.pending}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Awaiting your confirmation</div>
+                        </div>
+
+                        <div className="ui-card" onClick={() => navigate('/dispatch-requests')} style={{ display: 'flex', flexDirection: 'column', padding: '20px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid rgba(16, 185, 129, 0.3)', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                            <div style={{ fontSize: '13px', color: '#10b981', fontWeight: 600, textTransform: 'uppercase' }}>Confirmed</div>
+                            <div style={{ fontSize: '28px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{dispatchStats.confirmed}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Ready for fulfillment</div>
+                        </div>
+
+                        <div className="ui-card" onClick={() => navigate('/dispatch-requests')} style={{ display: 'flex', flexDirection: 'column', padding: '20px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid rgba(244, 63, 94, 0.3)', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                            <div style={{ fontSize: '13px', color: '#f43f5e', fontWeight: 600, textTransform: 'uppercase' }}>Rejected</div>
+                            <div style={{ fontSize: '28px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{dispatchStats.rejected}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Escalated to Control Tower</div>
+                        </div>
+
+                        <div className="ui-card" onClick={() => navigate('/dispatch-requests')} style={{ display: 'flex', flexDirection: 'column', padding: '20px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Delivered</div>
+                            <div style={{ fontSize: '28px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{dispatchStats.delivered}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Completed dispatches</div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
                 {/* Left Column */}

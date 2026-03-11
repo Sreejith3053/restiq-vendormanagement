@@ -7,6 +7,7 @@ import { runCorrectionEngine } from './forecastCorrectionEngine';
 import SavingsOpportunityBanner from './SavingsOpportunityBanner';
 import BundleCompatibilityAlert from './BundleCompatibilityAlert';
 import { findMissingBundlePairs } from '../Vendors/marketplaceIntelligence';
+import { fetchOrderHistory, getRestaurantList, buildRestaurantForecast, getOrderStats, fetchCorrectionHistory, computeCorrectionProfiles } from './forecastHelpers';
 
 // Mock catalog for the 'Add Item' flow
 const MOCK_CATALOG = [
@@ -32,15 +33,7 @@ const MOCK_CATALOG = [
     { name: 'Napkins', category: 'Cleaning Supplies', unit: 'case' }
 ];
 
-// Mock starting prediction
-const MOCK_PREDICTION_LINES = [
-    { id: 'i1', itemName: 'Onion - Cooking', category: 'Produce', packLabel: '50lb bag', predictedQty: 6, finalQty: 6, note: '' },
-    { id: 'i2', itemName: 'Tomato', category: 'Produce', packLabel: 'box', predictedQty: 4, finalQty: 4, note: '' },
-    { id: 'i3', itemName: 'French Beans', category: 'Produce', packLabel: '1.5lb bag', predictedQty: 2, finalQty: 2, note: '' },
-    { id: 'i4', itemName: 'Coriander Leaves', category: 'Produce', packLabel: 'bunch', predictedQty: 10, finalQty: 10, note: '' },
-    { id: 'i5', itemName: '16oz Clear Container', category: 'Packaging', packLabel: 'case', predictedQty: 1, finalQty: 1, note: '' },
-    { id: 'i6', itemName: 'Peeled Garlic', category: 'Produce', packLabel: 'case', predictedQty: 1, finalQty: 1, note: '' }
-];
+// Mock prediction lines removed — now loaded from Firestore via forecastHelpers
 
 // Derive change type automatically
 const getChangeType = (predicted, final) => {
@@ -61,42 +54,100 @@ export default function SuggestedOrderReview() {
     const [searchItemStr, setSearchItemStr] = useState('');
     const [expandedSavings, setExpandedSavings] = useState({});
 
-    // Core Correction Learning Hook - Mocking for 'oruma-takeout' on 'Monday'
-    const { learningProfiles } = useCorrectionLearning('oruma-takeout', 'Monday');
+    // ── Restaurant selection (Firestore-backed) ──
+    const [restaurants, setRestaurants] = useState([]);
+    const [selectedRestaurant, setSelectedRestaurant] = useState('');
+    const [orderRecords, setOrderRecords] = useState([]);
+    const [forecastSource, setForecastSource] = useState('loading'); // 'firestore' | 'fallback' | 'loading'
+    const [orderStats, setOrderStats] = useState(null); // stats for the currently selected restaurant
+    const [correctionProfiles, setCorrectionProfiles] = useState({}); // learned corrections
 
-    // Simulate data load
+    // Correction Learning Hook — for sidebar display only
+    const { learningProfiles, insights: learningInsights } = useCorrectionLearning(selectedRestaurant || 'oruma-takeout', 'Monday');
+
+    // ── Step 1: Fetch order history from Firestore on mount ──
     useEffect(() => {
-        setTimeout(() => {
-            setLines(MOCK_PREDICTION_LINES.map(line => {
-                // Apply learning engine adjustments
-                const profile = learningProfiles[line.id];
-                let adjustedPredictedQty = line.predictedQty;
-                let learningHint = null;
+        let cancelled = false;
+        async function loadHistory() {
+            try {
+                const records = await fetchOrderHistory(12);
+                if (cancelled) return;
 
-                if (profile && (profile.confidence === 'High' || profile.confidence === 'Medium') && profile.recommendedCorrection !== 0) {
-                    adjustedPredictedQty = Math.max(0, line.predictedQty + profile.recommendedCorrection);
-                    learningHint = `Learned adjustment: ${profile.recommendedCorrection > 0 ? '+' : ''}${profile.recommendedCorrection} ${line.packLabel.split(' ')[0]}`;
+                if (records.length > 0) {
+                    setOrderRecords(records);
+                    const restList = getRestaurantList(records);
+                    setRestaurants(restList);
+                    if (restList.length > 0) setSelectedRestaurant(restList[0]);
+                    setForecastSource('firestore');
+                } else {
+                    // No Firestore data — fall back to empty
+                    setForecastSource('fallback');
+                    toast.info('No marketplace order history found. Showing empty forecast.');
+                }
+            } catch (err) {
+                console.error('Failed to fetch order history:', err);
+                setForecastSource('fallback');
+                toast.warn('Could not load order history from Firestore. Check permissions.');
+            }
+        }
+        loadHistory();
+        return () => { cancelled = true; };
+    }, []);
+
+    // ── Step 2: Build forecast when restaurant selection changes ──
+    useEffect(() => {
+        if (forecastSource === 'loading') return;
+        setLoading(true);
+        setStatus('Draft Suggestion');
+
+        let cancelled = false;
+
+        async function buildForecast() {
+            // Small delay to allow UI to show loading state
+            await new Promise(r => setTimeout(r, 400));
+            if (cancelled) return;
+
+            let forecastLines = [];
+
+            if (forecastSource === 'firestore' && orderRecords.length > 0 && selectedRestaurant) {
+                // Fetch corrections and compute profiles for the forecast engine
+                let profiles = {};
+                try {
+                    const corrections = await fetchCorrectionHistory(selectedRestaurant, 'Monday');
+                    profiles = computeCorrectionProfiles(corrections);
+                    if (!cancelled) setCorrectionProfiles(profiles);
+                } catch (err) {
+                    console.warn('[SuggestedOrder] Could not load corrections:', err.message);
                 }
 
-                // If confidence is low, don't adjust but we can pass status
-                if (profile && profile.historyCount < 3) {
-                    learningHint = 'Not enough history';
-                }
+                // Build forecast with corrections applied inside the engine
+                forecastLines = buildRestaurantForecast(orderRecords, selectedRestaurant, restaurants, profiles);
+            }
 
+            if (cancelled) return;
+
+            // Compute stats for the selected restaurant
+            const stats = getOrderStats(orderRecords, selectedRestaurant);
+            setOrderStats(stats);
+
+            // Lines come from the engine already corrected — just set them with display metadata
+            const processedLines = forecastLines.map(line => {
                 return {
                     ...line,
-                    predictedQty: line.predictedQty,       // Raw base prediction
-                    adjustedPredictedQty,                  // Learned correction applied
-                    finalQty: adjustedPredictedQty,        // Final starts equal to the best guess adjusted prediction
-                    deltaQty: adjustedPredictedQty - line.predictedQty,
-                    deltaType: getChangeType(line.predictedQty, adjustedPredictedQty),
-                    learningHint: learningHint,
-                    learningProfile: profile
+                    adjustedPredictedQty: line.predictedQty, // already corrected by engine
+                    learningHint: line.correctionHint,
+                    deltaQty: line.predictedQty - (line.rawPrediction ?? line.predictedQty),
+                    deltaType: getChangeType(line.rawPrediction ?? line.predictedQty, line.predictedQty),
                 };
-            }));
+            });
+
+            setLines(processedLines);
             setLoading(false);
-        }, 800);
-    }, [learningProfiles]);
+        }
+
+        buildForecast();
+        return () => { cancelled = true; };
+    }, [selectedRestaurant, forecastSource, orderRecords, restaurants]);
 
     // Time references — Correct sequence: Generated < Cutoff < Delivery Day
     //   Generated: Saturday 23:30 of the current week (AI run)
@@ -250,8 +301,8 @@ export default function SuggestedOrderReview() {
         // Build document mimicking requested `suggestedOrders` schema
         const doc = {
             suggestionId: `sug_${Date.now()}`,
-            restaurantId: 'rest_demo_123',
-            restaurantName: 'Oruma Takeout',
+            restaurantId: selectedRestaurant,
+            restaurantName: selectedRestaurant,
             deliveryDay: 'Monday',
             weekStart: generatedDate.toISOString(),
             cutoffAt: cutoffDate.toISOString(),
@@ -292,9 +343,9 @@ export default function SuggestedOrderReview() {
         try {
             const weekStart = generatedDate.toISOString();
             const result = await runCorrectionEngine({
-                suggestionId: `sug_rest_demo_123_${Date.now()}`,
-                restaurantId: 'rest_demo_123',
-                restaurantName: 'Oruma Takeout',
+                suggestionId: `sug_${selectedRestaurant}_${Date.now()}`,
+                restaurantId: selectedRestaurant,
+                restaurantName: selectedRestaurant,
                 deliveryDay: 'Monday',
                 weekStart,
                 lines,
@@ -349,9 +400,34 @@ export default function SuggestedOrderReview() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-panel)', padding: '12px 20px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                    {/* Restaurant selector */}
+                    <div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Restaurant</div>
+                        <select
+                            value={selectedRestaurant}
+                            onChange={e => setSelectedRestaurant(e.target.value)}
+                            disabled={isLocked || restaurants.length === 0}
+                            style={{
+                                background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#f8fafc',
+                                padding: '6px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600, minWidth: 180,
+                                cursor: isLocked ? 'not-allowed' : 'pointer'
+                            }}
+                        >
+                            {restaurants.length === 0 && <option value="">No restaurants found</option>}
+                            {restaurants.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                    </div>
+                    <div style={{ width: 1, height: 32, background: 'var(--border)' }}></div>
                     <div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Delivery Day</div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>Monday</div>
+                    </div>
+                    <div style={{ width: 1, height: 32, background: 'var(--border)' }}></div>
+                    <div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Data Source</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: forecastSource === 'firestore' ? '#10b981' : '#f59e0b' }}>
+                            {forecastSource === 'firestore' ? '🟢 Live Firestore' : forecastSource === 'fallback' ? '🟡 No Data' : '⏳ Loading...'}
+                        </div>
                     </div>
                     <div style={{ width: 1, height: 32, background: 'var(--border)' }}></div>
                     <div>
@@ -441,7 +517,137 @@ export default function SuggestedOrderReview() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {lines.map((line) => {
+                                {lines.length === 0 && !loading ? (
+                                    <tr>
+                                        <td colSpan="8" style={{ padding: 0, border: 'none' }}>
+                                            <div style={{
+                                                padding: '40px 32px', textAlign: 'center',
+                                                background: 'linear-gradient(180deg, rgba(59,130,246,0.03) 0%, transparent 100%)'
+                                            }}>
+                                                {/* Icon */}
+                                                <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>
+                                                    {orderStats?.uniqueOrderDates === 0 ? '📭' : orderStats?.uniqueOrderDates < 8 ? '📊' : '🔍'}
+                                                </div>
+
+                                                {/* Title */}
+                                                <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>
+                                                    {orderStats?.uniqueOrderDates === 0
+                                                        ? 'No Completed Orders Found'
+                                                        : orderStats?.uniqueOrderDates < 8
+                                                            ? 'Building Order History'
+                                                            : 'Items Need More Consistency'
+                                                    }
+                                                </h3>
+
+                                                {/* Subtitle — explains algorithm requirement */}
+                                                <p style={{ margin: '0 0 24px 0', color: 'var(--muted)', fontSize: 14, maxWidth: 540, marginLeft: 'auto', marginRight: 'auto' }}>
+                                                    {orderStats?.uniqueOrderDates === 0
+                                                        ? `We couldn't find any fulfilled orders for this restaurant in the last 12 weeks. The forecast engine needs completed order history to predict your next order.`
+                                                        : orderStats?.uniqueOrderDates < 8
+                                                            ? `The forecast engine analyzes the last 8 order cycles to predict demand. You have ${orderStats.uniqueOrderDates} so far — keep ordering through the marketplace and predictions will appear automatically.`
+                                                            : `You have ${orderStats.uniqueOrderDates} order cycles, but each item needs to appear in at least 6 of the last 8 cycles to be predictable. Your most consistent item appears in ${orderStats.bestItemAppearances} of 8 cycles. Keep ordering regularly and the forecast will kick in.`
+                                                    }
+                                                </p>
+
+                                                {/* Stats cards */}
+                                                {orderStats && (
+                                                    <div style={{
+                                                        display: 'inline-flex', gap: 16, padding: '16px 24px',
+                                                        background: 'var(--bg-panel)', borderRadius: 12,
+                                                        border: '1px solid var(--border)', marginBottom: 20,
+                                                        flexWrap: 'wrap', justifyContent: 'center'
+                                                    }}>
+                                                        <div style={{ textAlign: 'center', minWidth: 110 }}>
+                                                            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Order Cycles</div>
+                                                            <div style={{ fontSize: 28, fontWeight: 700, color: orderStats.uniqueOrderDates >= 8 ? '#10b981' : orderStats.uniqueOrderDates > 0 ? '#3b82f6' : '#64748b' }}>
+                                                                {orderStats.uniqueOrderDates} <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--muted)' }}>/ 8</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch' }}></div>
+                                                        <div style={{ textAlign: 'center', minWidth: 110 }}>
+                                                            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Best Item Freq</div>
+                                                            <div style={{ fontSize: 28, fontWeight: 700, color: orderStats.bestItemAppearances >= 6 ? '#10b981' : orderStats.bestItemAppearances > 0 ? '#f59e0b' : '#64748b' }}>
+                                                                {orderStats.bestItemAppearances} <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--muted)' }}>/ 6 needed</span>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch' }}></div>
+                                                        <div style={{ textAlign: 'center', minWidth: 100 }}>
+                                                            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Unique Items</div>
+                                                            <div style={{ fontSize: 28, fontWeight: 700, color: orderStats.uniqueItems > 0 ? '#a78bfa' : '#64748b' }}>
+                                                                {orderStats.uniqueItems}
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ width: 1, background: 'var(--border)', alignSelf: 'stretch' }}></div>
+                                                        <div style={{ textAlign: 'center', minWidth: 100 }}>
+                                                            <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 4 }}>Status</div>
+                                                            <div style={{ fontSize: 14, fontWeight: 700, color: orderStats.statusColor, marginTop: 6 }}>
+                                                                {orderStats.statusLabel}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Progress bar — shows the most relevant bottleneck */}
+                                                {orderStats && orderStats.uniqueOrderDates > 0 && !orderStats.isReady && (
+                                                    <div style={{ maxWidth: 400, margin: '0 auto 16px auto' }}>
+                                                        {orderStats.uniqueOrderDates < 8 ? (
+                                                            <>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+                                                                    <span>Step 1: Order cycles needed</span>
+                                                                    <span style={{ fontWeight: 600, color: '#f59e0b' }}>
+                                                                        {orderStats.uniqueOrderDates} / 8 cycles
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                                                                    <div style={{
+                                                                        height: '100%', borderRadius: 4,
+                                                                        width: `${Math.min(100, (orderStats.uniqueOrderDates / 8) * 100)}%`,
+                                                                        background: 'linear-gradient(90deg, #f59e0b, #3b82f6)',
+                                                                        transition: 'width 0.5s ease'
+                                                                    }}></div>
+                                                                </div>
+                                                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                                                                    {orderStats.cyclesShortfall} more order cycle{orderStats.cyclesShortfall !== 1 ? 's' : ''} needed
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+                                                                    <span>Step 2: Item consistency needed</span>
+                                                                    <span style={{ fontWeight: 600, color: '#f59e0b' }}>
+                                                                        Best: {orderStats.bestItemAppearances} / 6 appearances
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                                                                    <div style={{
+                                                                        height: '100%', borderRadius: 4,
+                                                                        width: `${Math.min(100, (orderStats.bestItemAppearances / 6) * 100)}%`,
+                                                                        background: 'linear-gradient(90deg, #f59e0b, #10b981)',
+                                                                        transition: 'width 0.5s ease'
+                                                                    }}></div>
+                                                                </div>
+                                                                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                                                                    Order the same items consistently across cycles to build predictable patterns
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Helpful tip */}
+                                                <div style={{
+                                                    fontSize: 13, color: 'rgba(148, 163, 184, 0.8)', marginTop: 16,
+                                                    padding: '12px 16px', background: 'rgba(255,255,255,0.02)',
+                                                    borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)',
+                                                    maxWidth: 480, margin: '16px auto 0 auto'
+                                                }}>
+                                                    💡 <strong>Tip:</strong> You can still add items manually using the "+ Add Item Not Seen" button above.
+                                                    As more orders are fulfilled through the marketplace, the AI will learn your patterns.
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : lines.map((line) => {
                                     const isRemoved = line.deltaType === 'Removed';
 
                                     // Badge color resolution map
@@ -570,11 +776,6 @@ export default function SuggestedOrderReview() {
                                         </React.Fragment>
                                     );
                                 })}
-                                {lines.length === 0 && (
-                                    <tr>
-                                        <td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>No items found in prediction list. Please add items manually.</td>
-                                    </tr>
-                                )}
                             </tbody>
                         </table>
                     </div>
@@ -657,19 +858,31 @@ export default function SuggestedOrderReview() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                                     <span style={{ color: 'var(--muted)' }}>Last week accuracy</span>
-                                    <span style={{ fontWeight: 600, color: '#10b981' }}>87%</span>
+                                    <span style={{ fontWeight: 600, color: learningInsights?.lastWeekAccuracy != null ? (learningInsights.lastWeekAccuracy >= 80 ? '#10b981' : learningInsights.lastWeekAccuracy >= 50 ? '#f59e0b' : '#f43f5e') : 'var(--muted)' }}>
+                                        {learningInsights?.lastWeekAccuracy != null ? `${learningInsights.lastWeekAccuracy}%` : '—'}
+                                    </span>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
                                     <span style={{ color: 'var(--muted)' }}>Most edited item</span>
-                                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Onion - Cooking</span>
+                                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>
+                                        {learningInsights?.mostEditedItem || '—'}
+                                    </span>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
-                                    <span style={{ color: 'var(--muted)' }}>Consistently reduced</span>
-                                    <span style={{ fontWeight: 600, color: '#f59e0b' }}>French Beans</span>
-                                </div>
+                                {learningInsights?.consistentlyReduced && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
+                                        <span style={{ color: 'var(--muted)' }}>Consistently reduced</span>
+                                        <span style={{ fontWeight: 600, color: '#f59e0b' }}>{learningInsights.consistentlyReduced}</span>
+                                    </div>
+                                )}
+                                {learningInsights?.consistentlyIncreased && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
+                                        <span style={{ color: 'var(--muted)' }}>Consistently increased</span>
+                                        <span style={{ fontWeight: 600, color: '#38bdf8' }}>{learningInsights.consistentlyIncreased}</span>
+                                    </div>
+                                )}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
                                     <span style={{ color: 'rgba(56, 189, 248, 0.8)' }}>Active learned items</span>
-                                    <span style={{ fontWeight: 600, color: '#38bdf8' }}>{Object.values(learningProfiles).filter(p => p.confidence === 'High' || p.confidence === 'Medium').length}</span>
+                                    <span style={{ fontWeight: 600, color: '#38bdf8' }}>{learningInsights?.activeLearnedCount || 0}</span>
                                 </div>
                             </div>
                         </div>

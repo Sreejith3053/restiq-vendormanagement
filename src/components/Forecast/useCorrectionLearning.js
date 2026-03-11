@@ -1,144 +1,119 @@
-import { useMemo } from 'react';
-
-/**
- * MOCK HISTORICAL DATA 
- * Mimics reading from `forecastCorrections` indicating the gap between raw prediction vs final submitted.
- * 
- * Rules:
- * - Onion Cooking: Consistently increased (Predicts 6 -> User submits 7).
- * - French Beans: Consistently reduced (Predicts 2 -> User submits 1).
- * - Tomato: Inconsistent / Low History.
- */
-const MOCK_HISTORICAL_EDITS = [
-    // Onion Cooking: High Confidence Increase (+1)
-    { week: 'W1', itemId: 'i1', itemName: 'Onion - Cooking', predictedQty: 6, finalQty: 7, deltaQty: 1, deltaType: 'Increased' },
-    { week: 'W2', itemId: 'i1', itemName: 'Onion - Cooking', predictedQty: 6, finalQty: 7, deltaQty: 1, deltaType: 'Increased' },
-    { week: 'W3', itemId: 'i1', itemName: 'Onion - Cooking', predictedQty: 5, finalQty: 6, deltaQty: 1, deltaType: 'Increased' },
-    { week: 'W4', itemId: 'i1', itemName: 'Onion - Cooking', predictedQty: 6, finalQty: 7, deltaQty: 1, deltaType: 'Increased' },
-
-    // French Beans: Medium Confidence Reduce (-1)
-    { week: 'W2', itemId: 'i3', itemName: 'French Beans', predictedQty: 2, finalQty: 1, deltaQty: -1, deltaType: 'Reduced' },
-    { week: 'W3', itemId: 'i3', itemName: 'French Beans', predictedQty: 2, finalQty: 1, deltaQty: -1, deltaType: 'Reduced' },
-    { week: 'W4', itemId: 'i3', itemName: 'French Beans', predictedQty: 2, finalQty: 1, deltaQty: -1, deltaType: 'Reduced' },
-
-    // Tomato: Low Confidence / Inconsistent
-    { week: 'W3', itemId: 'i2', itemName: 'Tomato', predictedQty: 4, finalQty: 5, deltaQty: 1, deltaType: 'Increased' },
-    { week: 'W4', itemId: 'i2', itemName: 'Tomato', predictedQty: 4, finalQty: 2, deltaQty: -2, deltaType: 'Reduced' },
-
-    // Coriander: Unchanged / Stable Base
-    { week: 'W1', itemId: 'i4', itemName: 'Coriander Leaves', predictedQty: 10, finalQty: 10, deltaQty: 0, deltaType: 'Unchanged' },
-    { week: 'W2', itemId: 'i4', itemName: 'Coriander Leaves', predictedQty: 10, finalQty: 10, deltaQty: 0, deltaType: 'Unchanged' },
-    { week: 'W3', itemId: 'i4', itemName: 'Coriander Leaves', predictedQty: 10, finalQty: 10, deltaQty: 0, deltaType: 'Unchanged' },
-    { week: 'W4', itemId: 'i4', itemName: 'Coriander Leaves', predictedQty: 10, finalQty: 10, deltaQty: 0, deltaType: 'Unchanged' },
-];
+import { useState, useEffect, useMemo } from 'react';
+import { fetchCorrectionHistory, computeCorrectionProfiles } from './forecastHelpers';
 
 /**
  * useCorrectionLearning Hook
- * Analyzes historical edits to derive safe, weighted prediction corrections.
+ *
+ * Reads real correction data from Firestore `forecastCorrections` collection
+ * and computes learning profiles for display in the sidebar.
+ *
+ * This hook is used ONLY for UI display (Learning Insights sidebar).
+ * The actual corrections are applied inside buildRestaurantForecast() in forecastHelpers.js.
  */
 export default function useCorrectionLearning(restaurantId, deliveryDay) {
+    const [corrections, setCorrections] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const learningProfiles = useMemo(() => {
-        // In a real app, query `forecastCorrections` where restaurantId == X and deliveryDay == Y
-        const history = MOCK_HISTORICAL_EDITS; // Pretend this was filtered
+    // Fetch corrections from Firestore whenever restaurant or delivery day changes
+    useEffect(() => {
+        let cancelled = false;
 
-        // Group edits by Item
-        const itemHistory = history.reduce((acc, entry) => {
-            if (!acc[entry.itemId]) {
-                acc[entry.itemId] = {
-                    itemId: entry.itemId,
-                    itemName: entry.itemName,
-                    edits: []
-                };
-            }
-            acc[entry.itemId].edits.push(entry);
-            return acc;
-        }, {});
-
-        // Build Correction Profiles
-        const profiles = {};
-
-        Object.values(itemHistory).forEach(item => {
-            const edits = item.edits;
-            const historyCount = edits.length;
-
-            // Rules A: Minimum Learning Threshold (requires 3 or more weeks)
-            if (historyCount < 3) {
-                profiles[item.itemId] = {
-                    itemId: item.itemId,
-                    itemName: item.itemName,
-                    status: 'Not Enough History',
-                    confidence: 'Low',
-                    recommendedCorrection: 0
-                };
-                return;
-            }
-
-            const totalDelta = edits.reduce((sum, e) => sum + e.deltaQty, 0);
-            const avgDelta = totalDelta / historyCount;
-
-            const increasedCount = edits.filter(e => e.deltaQty > 0).length;
-            const reducedCount = edits.filter(e => e.deltaQty < 0).length;
-            const unchangedCount = edits.filter(e => e.deltaQty === 0).length;
-
-            let directionConsistency = 'Mixed';
-            let activeCount = 0;
-
-            if (increasedCount > reducedCount && increasedCount > unchangedCount) {
-                directionConsistency = 'Increased';
-                activeCount = increasedCount;
-            } else if (reducedCount > increasedCount && reducedCount > unchangedCount) {
-                directionConsistency = 'Reduced';
-                activeCount = reducedCount;
-            } else if (unchangedCount >= increasedCount && unchangedCount >= reducedCount) {
-                directionConsistency = 'Unchanged';
-                activeCount = unchangedCount;
-            }
-
-            const consistencyRatio = activeCount / historyCount;
-
-            // Rule B & 7: Confidence Scoring
-            let confidence = 'Low';
-            if (consistencyRatio >= 0.75 && historyCount >= 4) {
-                confidence = 'High';
-            } else if (consistencyRatio >= 0.60 && historyCount >= 3) {
-                confidence = 'Medium';
-            }
-
-            // Rule C: Weighted Correction (Only applying 50% of the average diff, rounded)
-            let recommendedCorrection = 0;
-            if (confidence === 'High' || confidence === 'Medium') {
-                if (directionConsistency === 'Unchanged') {
-                    recommendedCorrection = 0;
-                } else {
-                    // Apply 0.5 weight so we don't swing wildly
-                    recommendedCorrection = Math.round(avgDelta * 0.5);
+        async function load() {
+            setLoading(true);
+            try {
+                const data = await fetchCorrectionHistory(restaurantId, deliveryDay);
+                if (!cancelled) {
+                    setCorrections(data);
                 }
+            } catch (err) {
+                console.warn('[CorrectionLearning] Fetch failed:', err.message);
+                if (!cancelled) setCorrections([]);
+            } finally {
+                if (!cancelled) setLoading(false);
             }
+        }
 
-            let status = 'Stable / No Correction Needed';
-            if (confidence !== 'Low') {
-                if (recommendedCorrection > 0) status = 'Usually Increased';
-                if (recommendedCorrection < 0) status = 'Usually Reduced';
-            } else if (directionConsistency === 'Mixed') {
-                status = 'Volatile / Mixed Behavior';
-            }
+        if (restaurantId) {
+            load();
+        } else {
+            setCorrections([]);
+            setLoading(false);
+        }
 
-            profiles[item.itemId] = {
-                itemId: item.itemId,
-                itemName: item.itemName,
-                historyCount,
-                avgDelta: Number(avgDelta.toFixed(1)),
-                directionConsistency,
-                consistencyRatio,
-                confidence,
-                recommendedCorrection,
-                status
-            };
-        });
-
-        return profiles;
+        return () => { cancelled = true; };
     }, [restaurantId, deliveryDay]);
 
-    return { learningProfiles };
+    // Compute profiles from raw corrections
+    const learningProfiles = useMemo(() => {
+        return computeCorrectionProfiles(corrections);
+    }, [corrections]);
+
+    // Compute summary insights for the sidebar
+    const insights = useMemo(() => {
+        if (corrections.length === 0) {
+            return {
+                hasData: false,
+                totalCorrections: 0,
+                lastWeekAccuracy: null,
+                mostEditedItem: null,
+                consistentlyReduced: null,
+                consistentlyIncreased: null,
+                activeLearnedCount: 0,
+            };
+        }
+
+        // Group corrections by week to find last week's accuracy
+        const weekGroups = {};
+        corrections.forEach(c => {
+            const week = c.weekLabel || c.weekStart || 'unknown';
+            if (!weekGroups[week]) weekGroups[week] = [];
+            weekGroups[week].push(c);
+        });
+
+        const weekKeys = Object.keys(weekGroups).sort().reverse();
+        const lastWeekCorrections = weekKeys.length > 0 ? weekGroups[weekKeys[0]] : [];
+
+        let lastWeekAccuracy = null;
+        if (lastWeekCorrections.length > 0) {
+            const unchangedCount = lastWeekCorrections.filter(c => c.deltaType === 'Unchanged').length;
+            lastWeekAccuracy = Math.round((unchangedCount / lastWeekCorrections.length) * 100);
+        }
+
+        // Most edited item (highest edit frequency)
+        const editCounts = {};
+        corrections.forEach(c => {
+            if (c.deltaType !== 'Unchanged') {
+                editCounts[c.itemName] = (editCounts[c.itemName] || 0) + 1;
+            }
+        });
+        const mostEditedItem = Object.entries(editCounts)
+            .sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+        // Find consistently reduced and increased items from profiles
+        let consistentlyReduced = null;
+        let consistentlyIncreased = null;
+        Object.values(learningProfiles).forEach(p => {
+            if (p.directionConsistency === 'Reduced' && p.confidence !== 'Low' && !consistentlyReduced) {
+                consistentlyReduced = p.itemName;
+            }
+            if (p.directionConsistency === 'Increased' && p.confidence !== 'Low' && !consistentlyIncreased) {
+                consistentlyIncreased = p.itemName;
+            }
+        });
+
+        const activeLearnedCount = Object.values(learningProfiles)
+            .filter(p => p.confidence === 'High' || p.confidence === 'Medium').length;
+
+        return {
+            hasData: true,
+            totalCorrections: corrections.length,
+            lastWeekAccuracy,
+            mostEditedItem,
+            consistentlyReduced,
+            consistentlyIncreased,
+            activeLearnedCount,
+        };
+    }, [corrections, learningProfiles]);
+
+    return { learningProfiles, insights, loading };
 }

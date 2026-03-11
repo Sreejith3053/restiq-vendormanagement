@@ -1,9 +1,9 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, query, getDocs, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { getActiveWeekStart, getWeekEnd, formatWeekLabel, isInWeek, sendVendorDispatch } from './dispatchModel';
 import vendorCatalogV2 from '../../data/catalog_v2.json';
-import purchaseDatasetV2 from '../../data/history_realistic_v2_tomato.json';
+import { fetchOrderHistory, fetchCorrectionHistory } from './forecastHelpers';
 import containerTestData from './containerTestData.json';
 import CombinedDemandPage from './CombinedDemandPage';
 
@@ -350,14 +350,27 @@ export default function GlobalSupplyControlTower() {
             };
         });
 
-        purchaseDatasetV2.forEach(data => {
-            if (!data.purchase_date || !data.item_name) return;
-            const exactName = normalizeItemName(data.item_name);
-            if (!globalHistoryMap[exactName]) globalHistoryMap[exactName] = { orderHistoryMap: {}, category: 'Produce', isPackaging: false };
-            if (!globalHistoryMap[exactName].orderHistoryMap[data.purchase_date]) globalHistoryMap[exactName].orderHistoryMap[data.purchase_date] = 0;
-            globalHistoryMap[exactName].orderHistoryMap[data.purchase_date] += (Number(data.normalized_quantity) || 0);
-        });
+        // ── Fetch LIVE order history from Firestore marketplaceOrders ──
+        try {
+            const orderRecords = await fetchOrderHistory(12);
+            console.log(`[ControlTower] Loaded ${orderRecords.length} order records from Firestore`);
 
+            orderRecords.forEach(record => {
+                const exactName = normalizeItemName(record.itemName);
+                if (!exactName) return;
+                if (!globalHistoryMap[exactName]) {
+                    globalHistoryMap[exactName] = { orderHistoryMap: {}, category: 'Produce', isPackaging: false };
+                }
+                if (!globalHistoryMap[exactName].orderHistoryMap[record.date]) {
+                    globalHistoryMap[exactName].orderHistoryMap[record.date] = 0;
+                }
+                globalHistoryMap[exactName].orderHistoryMap[record.date] += (Number(record.quantity) || 0);
+            });
+        } catch (err) {
+            console.error('[ControlTower] Failed to fetch order history from Firestore:', err);
+        }
+
+        // Packaging/Cleaning items from containerTestData (still static for now)
         containerTestData.forEach(data => {
             if (!data.date || !data.itemName) return;
             const exactName = normalizeItemName(data.itemName);
@@ -366,8 +379,11 @@ export default function GlobalSupplyControlTower() {
             globalHistoryMap[exactName].orderHistoryMap[data.date] += (Number(data.boxesOrdered) || 0);
         });
 
+        // Build cycle lists from all collected dates
         const globalDatesSet = new Set();
-        purchaseDatasetV2.forEach(d => { if (d.purchase_date) globalDatesSet.add(d.purchase_date); });
+        Object.values(globalHistoryMap).forEach(item => {
+            Object.keys(item.orderHistoryMap).forEach(d => globalDatesSet.add(d));
+        });
         containerTestData.forEach(d => { if (d.date) globalDatesSet.add(d.date); });
 
         const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
@@ -508,9 +524,22 @@ export default function GlobalSupplyControlTower() {
             }
         });
 
+        // ── Compute accuracy from real forecastCorrections ──
+        let accuracyScore = null;
+        try {
+            const corrections = await fetchCorrectionHistory('oruma-takeout', 'Monday');
+            if (corrections.length > 0) {
+                const unchangedCount = corrections.filter(c => c.deltaType === 'Unchanged').length;
+                accuracyScore = Math.round((unchangedCount / corrections.length) * 100);
+            }
+        } catch (err) {
+            console.warn('[ControlTower] Could not compute accuracy:', err.message);
+        }
+
         setMetrics({
             activeItems: tActive, totalMonday: tMon, totalThursday: tThu,
-            billing: tBill, payout: tPay, commission: tComm, missingPrices: tMiss, accuracyScore: 87
+            billing: tBill, payout: tPay, commission: tComm, missingPrices: tMiss,
+            accuracyScore: accuracyScore ?? '—'
         });
 
         setVendors(Object.values(vMap).sort((a, b) => b.total - a.total));

@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import vendorCatalogV2 from '../../data/catalog_v2.json';
-import purchaseDatasetV2 from '../../data/history_realistic_v2_tomato.json';
-import containerTestData from './containerTestData.json';
+import { fetchOrderHistory } from './forecastHelpers';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
@@ -98,14 +96,7 @@ export default function CombinedDemandPage() {
         (async () => {
             const catalogLookup = {};
 
-            // 1. Register static fallback catalog items
-            vendorCatalogV2.forEach(row => {
-                const name = row.item_name?.trim();
-                const exactName = normalizeItemName(name);
-                if (exactName) catalogLookup[exactName] = { ...row, price: parseFloat(row.price) || 0 };
-            });
-
-            // 2. Override with Live Firebase Catalog
+            // Build catalog from Live Firebase Vendors only
             try {
                 const vendorSnap = await getDocs(collection(db, 'vendors'));
                 const vendors = vendorSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -119,13 +110,15 @@ export default function CombinedDemandPage() {
                             if (exactName) {
                                 const dbPrice = parseFloat(itemData.vendorPrice) || parseFloat(itemData.price) || 0;
                                 catalogLookup[exactName] = {
-                                    ...catalogLookup[exactName],    // keep static category mapping if present
+                                    ...catalogLookup[exactName],
                                     ...itemData,
                                     price: dbPrice > 0 ? dbPrice : (catalogLookup[exactName]?.price || 0),
-                                    vendor: v.name || catalogLookup[exactName]?.vendor || 'Unknown Vendor',
+                                    vendor: v.name || 'Unknown Vendor',
                                     base_unit: itemData.unit || catalogLookup[exactName]?.base_unit,
                                     pack_size: itemData.packQuantity || catalogLookup[exactName]?.pack_size || 1,
-                                    pack_label: itemData.itemSize || catalogLookup[exactName]?.pack_label
+                                    pack_label: itemData.itemSize || catalogLookup[exactName]?.pack_label,
+                                    category: itemData.category || catalogLookup[exactName]?.category || 'Produce',
+                                    isPackaging: (itemData.category || '').toLowerCase().includes('packaging') || (itemData.category || '').toLowerCase().includes('cleaning')
                                 };
                             }
                         });
@@ -137,87 +130,63 @@ export default function CombinedDemandPage() {
                 console.error("Failed to load Firebase catalog:", err);
             }
 
-            containerTestData.forEach(row => {
-                if (row.itemName) {
-                    const exactName = normalizeItemName(row.itemName);
-                    if (!catalogLookup[exactName]) {
-                        catalogLookup[exactName] = {
-                            vendor: row.vendorName,
-                            category: row.category,
-                            base_unit: row.packType,
-                            pack_size: row.packSize,
-                            pack_label: `${row.packSize} ${row.packType}`,
-                            price: 0,
-                            isPackaging: true,
-                            central_stock_only: row.central_stock_only,
-                            is_central_stock: row.is_central_stock
-                        };
-                    }
-                }
+            // Pre-fill history map with ALL catalog items so we can show 0-demand items
+            const globalHistoryMap = {};
+            Object.keys(catalogLookup).forEach(exactName => {
+                globalHistoryMap[exactName] = { orderHistoryMap: {}, restVolHistoryMap: {}, appearanceCount: 0, totalGlobalVolume8Wk: 0, isPackaging: catalogLookup[exactName].isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[exactName].category) };
             });
 
+            // ── Fetch LIVE order history from Firestore marketplaceOrders ──
+            const activeLocationsSet = new Set();
+
+            try {
+                const orderRecords = await fetchOrderHistory(12);
+                console.log(`[CombinedDemand] Loaded ${orderRecords.length} order records from Firestore`);
+
+                orderRecords.forEach(record => {
+                    const exactName = normalizeItemName(record.itemName);
+                    if (!exactName) return;
+
+                    if (!globalHistoryMap[exactName]) {
+                        globalHistoryMap[exactName] = { orderHistoryMap: {}, restVolHistoryMap: {}, appearanceCount: 0, totalGlobalVolume8Wk: 0 };
+                    }
+                    const qty = Number(record.qty) || 0;
+                    if (!globalHistoryMap[exactName].orderHistoryMap[record.date]) {
+                        globalHistoryMap[exactName].orderHistoryMap[record.date] = 0;
+                    }
+                    globalHistoryMap[exactName].orderHistoryMap[record.date] += qty;
+
+                    // Track restaurant-level volume for branch drilldown
+                    const branchId = record.restaurantId || 'unknown';
+                    activeLocationsSet.add(branchId);
+
+                    // We'll compute last8 volumes after cycle computation below
+                    // Store raw per-restaurant data for now
+                    if (!globalHistoryMap[exactName].restVolHistoryMap[branchId]) {
+                        globalHistoryMap[exactName].restVolHistoryMap[branchId] = 0;
+                    }
+                    globalHistoryMap[exactName].restVolHistoryMap[branchId] += qty;
+                });
+            } catch (err) {
+                console.error('[CombinedDemand] Failed to fetch order history from Firestore:', err);
+            }
+
+            const totalActiveUniqueRests = activeLocationsSet.size || 1;
+
+            // Build cycle lists from all collected dates
             const globalDatesSet = new Set();
-            purchaseDatasetV2.forEach(d => {
-                if (d.purchase_date) globalDatesSet.add(d.purchase_date);
-            });
-            containerTestData.forEach(d => {
-                if (d.date) globalDatesSet.add(d.date);
+            Object.values(globalHistoryMap).forEach(item => {
+                Object.keys(item.orderHistoryMap).forEach(d => globalDatesSet.add(d));
             });
 
             const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
             const last8Cycles = allCycles.slice(0, 8);
             const last4Cycles = allCycles.slice(0, 4);
 
-            const globalHistoryMap = {};
-            const activeLocationsSet = new Set();
-
-            // Pre-fill history map with ALL catalog items so we can show 0-demand items
-            Object.keys(catalogLookup).forEach(exactName => {
-                globalHistoryMap[exactName] = { orderHistoryMap: {}, restVolHistoryMap: {}, appearanceCount: 0, totalGlobalVolume8Wk: 0, isPackaging: catalogLookup[exactName].isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[exactName].category) };
-            });
-
-            purchaseDatasetV2.forEach(data => {
-                if (!data.purchase_date || !data.item_name) return;
-                const exactName = normalizeItemName(data.item_name);
-
-                if (!globalHistoryMap[exactName]) {
-                    globalHistoryMap[exactName] = { orderHistoryMap: {}, restVolHistoryMap: {}, appearanceCount: 0, totalGlobalVolume8Wk: 0 };
-                }
-                const qty = Number(data.normalized_quantity) || 0;
-                if (!globalHistoryMap[exactName].orderHistoryMap[data.purchase_date]) {
-                    globalHistoryMap[exactName].orderHistoryMap[data.purchase_date] = 0;
-                }
-                globalHistoryMap[exactName].orderHistoryMap[data.purchase_date] += qty;
-
-                if (last8Cycles.includes(data.purchase_date)) {
-                    globalHistoryMap[exactName].totalGlobalVolume8Wk += qty;
-                    if (!globalHistoryMap[exactName].restVolHistoryMap[data.restaurant]) {
-                        globalHistoryMap[exactName].restVolHistoryMap[data.restaurant] = 0;
-                    }
-                    globalHistoryMap[exactName].restVolHistoryMap[data.restaurant] += qty;
-                }
-
-                activeLocationsSet.add(data.restaurant);
-            });
-
-            const totalActiveUniqueRests = activeLocationsSet.size || 1;
-
-            containerTestData.forEach(data => {
-                if (!data.date || !data.itemName) return;
-                const exactName = normalizeItemName(data.itemName);
-
-                if (!globalHistoryMap[exactName]) {
-                    globalHistoryMap[exactName] = { orderHistoryMap: {}, restVolHistoryMap: {}, appearanceCount: 0, totalGlobalVolume8Wk: 0, isPackaging: true };
-                }
-                const qty = Number(data.boxesOrdered) || 0;
-                if (!globalHistoryMap[exactName].orderHistoryMap[data.date]) {
-                    globalHistoryMap[exactName].orderHistoryMap[data.date] = 0;
-                }
-                globalHistoryMap[exactName].orderHistoryMap[data.date] += qty;
-
-                if (last8Cycles.includes(data.date)) {
-                    globalHistoryMap[exactName].totalGlobalVolume8Wk += qty;
-                }
+            // Recompute totalGlobalVolume8Wk now that we know last8Cycles
+            Object.keys(globalHistoryMap).forEach(itemName => {
+                const item = globalHistoryMap[itemName];
+                item.totalGlobalVolume8Wk = last8Cycles.reduce((sum, d) => sum + (item.orderHistoryMap[d] || 0), 0);
             });
 
             const aggregatedResults = [];

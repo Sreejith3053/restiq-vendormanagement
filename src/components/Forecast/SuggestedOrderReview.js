@@ -8,30 +8,10 @@ import SavingsOpportunityBanner from './SavingsOpportunityBanner';
 import BundleCompatibilityAlert from './BundleCompatibilityAlert';
 import { findMissingBundlePairs } from '../Vendors/marketplaceIntelligence';
 import { fetchOrderHistory, getRestaurantList, buildRestaurantForecast, getOrderStats, fetchCorrectionHistory, computeCorrectionProfiles } from './forecastHelpers';
+import { db } from '../../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
-// Mock catalog for the 'Add Item' flow
-const MOCK_CATALOG = [
-    { name: 'Tomato', category: 'Produce', unit: 'box' },
-    { name: 'Onion - Cooking', category: 'Produce', unit: '50lb bag' },
-    { name: 'Onion - Red', category: 'Produce', unit: '25lb bag' },
-    { name: 'French Beans', category: 'Produce', unit: '1.5lb bag' },
-    { name: 'Carrot', category: 'Produce', unit: '50lb bag' },
-    { name: 'Cabbage', category: 'Produce', unit: '50lb bag' },
-    { name: 'Plantain Green', category: 'Produce', unit: '5lb pack' },
-    { name: 'Green Onion', category: 'Produce', unit: 'bundle' },
-    { name: 'Coriander Leaves', category: 'Produce', unit: 'bunch' },
-    { name: 'Mint Leaves', category: 'Produce', unit: 'bunch' },
-    { name: 'Lemon', category: 'Produce', unit: 'case' },
-    { name: 'Lime', category: 'Produce', unit: '3.64kg pack' },
-    { name: 'Peeled Garlic', category: 'Produce', unit: 'case' },
-    { name: 'Ginger', category: 'Produce', unit: '30lb box' },
-    { name: 'Thai Chilli', category: 'Produce', unit: '30lb box' },
-    { name: 'Curry Leaves', category: 'Produce', unit: '12lb box' },
-    { name: 'Okra', category: 'Produce', unit: 'packet' },
-    { name: '16oz Clear Container', category: 'Packaging', unit: 'case' },
-    { name: '24oz Clear Container', category: 'Packaging', unit: 'case' },
-    { name: 'Napkins', category: 'Cleaning Supplies', unit: 'case' }
-];
+// Catalog for the 'Add Item' flow — loaded from Firestore
 
 // Mock prediction lines removed — now loaded from Firestore via forecastHelpers
 
@@ -53,6 +33,8 @@ export default function SuggestedOrderReview() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [searchItemStr, setSearchItemStr] = useState('');
     const [expandedSavings, setExpandedSavings] = useState({});
+    const [itemCatalog, setItemCatalog] = useState([]);
+    const [allVendorItems, setAllVendorItems] = useState([]);
 
     // ── Restaurant selection (Firestore-backed) ──
     const [restaurants, setRestaurants] = useState([]);
@@ -65,13 +47,38 @@ export default function SuggestedOrderReview() {
     // Correction Learning Hook — for sidebar display only
     const { learningProfiles, insights: learningInsights } = useCorrectionLearning(selectedRestaurant || 'oruma-takeout', 'Monday');
 
-    // ── Step 1: Fetch order history from Firestore on mount ──
+    // ── Step 1: Fetch order history + item catalog from Firestore on mount ──
     useEffect(() => {
         let cancelled = false;
         async function loadHistory() {
             try {
+                // Load order history
                 const records = await fetchOrderHistory(12);
                 if (cancelled) return;
+
+                // Load item catalog from all vendors for Add Item flow
+                const vendorsSnap = await getDocs(collection(db, 'vendors'));
+                const catalogItems = [];
+                const vendorItems = [];
+                const seen = new Set();
+                for (const vDoc of vendorsSnap.docs) {
+                    try {
+                        const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+                        itemSnap.docs.forEach(d => {
+                            const data = d.data();
+                            const name = (data.name || '').trim();
+                            if (!name) return;
+                            const price = parseFloat(data.vendorPrice) || parseFloat(data.price) || 0;
+                            vendorItems.push({ vendorId: vDoc.id, vendorName: vDoc.data().name || 'Unknown', name, price, category: data.category || 'Produce', unit: data.unit || data.packLabel || 'unit' });
+                            if (!seen.has(name.toLowerCase())) {
+                                seen.add(name.toLowerCase());
+                                catalogItems.push({ name, category: data.category || 'Produce', unit: data.unit || data.packLabel || 'unit' });
+                            }
+                        });
+                    } catch (_) {}
+                }
+                setItemCatalog(catalogItems.sort((a, b) => a.name.localeCompare(b.name)));
+                setAllVendorItems(vendorItems);
 
                 if (records.length > 0) {
                     setOrderRecords(records);
@@ -192,7 +199,7 @@ export default function SuggestedOrderReview() {
             finalPacks,
             changesCount,
             netDeltaPacks,
-            confidence: 82 // Mocked confidence
+            confidence: forecastSource === 'firestore' ? 82 : 0
         };
     }, [lines]);
 
@@ -204,26 +211,24 @@ export default function SuggestedOrderReview() {
         return { added, increased, reduced, removed };
     }, [lines]);
 
-    // ── Savings opportunities: mock cheaper-supplier data per item ──
+    // ── Savings opportunities: live cross-vendor price comparison ──
     const savingsData = useMemo(() => {
-        // In production this would come from a live Firestore scan.
-        // For now, hardcode a few examples to demonstrate the feature.
-        const cheaperMap = {
-            'Onion - Cooking':  { cheaperPrice: 17.50, monthlyUsage: 24 },
-            'Coriander Leaves': { cheaperPrice: 8.00,  monthlyUsage: 40 },
-        };
+        if (allVendorItems.length === 0) return {};
         const result = {};
         lines.forEach(l => {
-            const entry = cheaperMap[l.itemName];
-            if (entry) {
-                const currentPrice = l.itemName === 'Onion - Cooking' ? 19.50 : 9.50;
-                if (entry.cheaperPrice < currentPrice) {
-                    result[l.id] = { currentPrice, cheaperPrice: entry.cheaperPrice, monthlyUsage: entry.monthlyUsage };
-                }
+            const key = l.itemName.toLowerCase();
+            const vendorsForItem = allVendorItems.filter(v => v.name.toLowerCase() === key && v.price > 0);
+            if (vendorsForItem.length < 2) return;
+            const prices = vendorsForItem.map(v => v.price).sort((a, b) => a - b);
+            const lowest = prices[0];
+            const highest = prices[prices.length - 1];
+            if (lowest < highest) {
+                const monthlyUsage = Math.round((orderRecords.filter(r => r.itemName.toLowerCase() === key).reduce((s, r) => s + r.qty, 0)) / 3);
+                result[l.id] = { currentPrice: highest, cheaperPrice: lowest, monthlyUsage: Math.max(monthlyUsage, 1) };
             }
         });
         return result;
-    }, [lines]);
+    }, [lines, allVendorItems, orderRecords]);
 
     // ── Bundle compatibility: detect missing paired items ──
     const missingBundlePairs = useMemo(() => {
@@ -366,7 +371,7 @@ export default function SuggestedOrderReview() {
     };
 
     // Filter catalog for modal
-    const filteredCatalog = MOCK_CATALOG.filter(c => c.name.toLowerCase().includes(searchItemStr.toLowerCase()));
+    const filteredCatalog = itemCatalog.filter(c => c.name.toLowerCase().includes(searchItemStr.toLowerCase()));
 
     if (loading) {
         return (
@@ -495,7 +500,7 @@ export default function SuggestedOrderReview() {
                         <BundleCompatibilityAlert
                             missingPairs={missingBundlePairs}
                             onAddItem={(matchName) => {
-                                const catalogItem = MOCK_CATALOG.find(c => c.name === matchName);
+                                const catalogItem = itemCatalog.find(c => c.name === matchName);
                                 if (catalogItem) handleAddItem(catalogItem);
                                 else toast.info(`${matchName} not found in catalog`);
                             }}

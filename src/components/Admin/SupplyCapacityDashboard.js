@@ -3,59 +3,215 @@
  *
  * Admin dashboard — Supply Capacity Forecast.
  * KPIs, pipeline position, capacity table, shortage alerts, detail drawer.
+ *
+ * Data sources:
+ *   - vendors/{id}/items  → vendor catalog
+ *   - marketplaceOrders   → demand forecasting + estimated vendor capacity
+ *   - supplyCapacityEngine.forecastSupplyHealth() → core algorithm
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     FiRefreshCw, FiDownload, FiSearch, FiX, FiChevronRight,
     FiAlertTriangle, FiCheckCircle, FiShield, FiActivity,
     FiTruck, FiEye, FiPackage, FiTrendingUp,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import { db } from '../../firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { fetchOrderHistory } from '../Forecast/forecastHelpers';
 import {
-    generateMockCapacityForecast, supplyHealthLabel,
+    forecastSupplyHealth, supplyHealthLabel,
 } from '../Vendors/supplyCapacityEngine';
 
-const ALL_FORECASTS = generateMockCapacityForecast();
-const CATEGORIES = ['All', ...new Set(ALL_FORECASTS.map(f => f.category).filter(Boolean))];
+const C = { green: '#34d399', red: '#f87171', amber: '#fbbf24', blue: '#38bdf8', purple: '#a78bfa', cyan: '#22d3ee', orange: '#fb923c', muted: '#94a3b8', fg: '#f8fafc' };
 const HEALTH_OPTIONS = ['All', 'Healthy', 'Watch', 'Tight', 'Shortage Risk', 'Excess Capacity'];
 
-const C = { green: '#34d399', red: '#f87171', amber: '#fbbf24', blue: '#38bdf8', purple: '#a78bfa', cyan: '#22d3ee', orange: '#fb923c', muted: '#94a3b8', fg: '#f8fafc' };
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function normalizeItemName(name) {
+    if (!name) return '';
+    return name.trim().replace(/\s+/g, ' ');
+}
 
+function getNextMonday() {
+    const d = new Date();
+    d.setDate(d.getDate() + ((1 + 7 - d.getDay()) % 7 || 7));
+    return d.toISOString().slice(0, 10);
+}
+
+// ── Data Loading ──────────────────────────────────────────────────────────────
+
+async function loadAllVendorItems() {
+    const vendorsSnap = await getDocs(collection(db, 'vendors'));
+    const vendors = vendorsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const allItems = [];
+    for (const v of vendors) {
+        try {
+            const itemSnap = await getDocs(collection(db, `vendors/${v.id}/items`));
+            itemSnap.docs.forEach(d => {
+                const data = d.data();
+                const name = normalizeItemName(data.name);
+                if (!name) return;
+                allItems.push({
+                    vendorId: v.id,
+                    vendorName: v.name || 'Unknown',
+                    itemId: d.id,
+                    itemName: name,
+                    category: data.category || 'Produce',
+                    inStock: data.inStock !== false,
+                });
+            });
+        } catch (e) {
+            console.warn('Failed to load items for vendor', v.id);
+        }
+    }
+    return allItems;
+}
+
+function computeCapacityForecasts(allItems, orderRecords) {
+    const weekStart = getNextMonday();
+
+    // 1. Group items by normalized name
+    const itemGroups = {};
+    allItems.forEach(item => {
+        const key = item.itemName.toLowerCase();
+        if (!itemGroups[key]) itemGroups[key] = { itemName: item.itemName, category: item.category, vendors: {} };
+        if (!itemGroups[key].vendors[item.vendorId]) {
+            itemGroups[key].vendors[item.vendorId] = {
+                vendorId: item.vendorId,
+                vendorName: item.vendorName,
+                inStock: item.inStock,
+            };
+        }
+    });
+
+    // 2. Compute demand per item from order history (weekly average over ~12 weeks)
+    const itemDemand = {};
+    const vendorItemHistory = {}; // vendorId_itemKey → total qty delivered
+
+    orderRecords.forEach(rec => {
+        const key = rec.itemName.toLowerCase();
+        if (!itemDemand[key]) itemDemand[key] = { total: 0, count: 0 };
+        itemDemand[key].total += rec.qty;
+        itemDemand[key].count++;
+
+        // Track vendor-level deliveries for capacity estimation
+        if (rec.vendor) {
+            const vk = `${rec.vendor}_${key}`;
+            if (!vendorItemHistory[vk]) vendorItemHistory[vk] = { total: 0, count: 0 };
+            vendorItemHistory[vk].total += rec.qty;
+            vendorItemHistory[vk].count++;
+        }
+    });
+
+    // 3. For each item group, run forecastSupplyHealth
+    const forecasts = [];
+    Object.entries(itemGroups).forEach(([key, group]) => {
+        const demand = itemDemand[key];
+        if (!demand || demand.total === 0) return;
+
+        const weeklyAvg = Math.round(demand.total / 12);
+        const monday = Math.round(weeklyAvg * 0.6);
+        const thursday = Math.round(weeklyAvg * 0.4);
+
+        // Build vendor capacity estimates from order history
+        const vendorList = Object.values(group.vendors).map(v => {
+            const vk = `${v.vendorId}_${key}`;
+            const hist = vendorItemHistory[vk];
+            // Estimate weekly capacity as ~1.2x average weekly delivery (vendors can deliver a bit more than average)
+            const weeklyCapEst = hist ? Math.round((hist.total / 12) * 1.2) : 0;
+            const monCap = Math.round(weeklyCapEst * 0.6);
+            const thuCap = Math.round(weeklyCapEst * 0.4);
+            return {
+                vendorId: v.vendorId,
+                vendorName: v.vendorName,
+                mondayCapacity: monCap,
+                thursdayCapacity: thuCap,
+                weeklyCapacity: weeklyCapEst,
+                stockStatus: v.inStock ? 'in_stock' : 'out_of_stock',
+                leadTimeDays: 1,
+                capacityConfidence: hist ? 'history' : 'estimated',
+                active: true,
+            };
+        }).filter(v => v.weeklyCapacity > 0);
+
+        if (vendorList.length === 0) return;
+
+        const result = forecastSupplyHealth({
+            itemName: group.itemName,
+            comparableGroup: group.itemName.toLowerCase().replace(/\s+/g, '_'),
+            category: group.category,
+            weekStart,
+            demand: { monday, thursday, weekly: weeklyAvg },
+            vendors: vendorList,
+        });
+
+        forecasts.push(result);
+    });
+
+    // Sort: shortage first
+    const order = { 'Shortage Risk': 0, Tight: 1, Watch: 2, Healthy: 3, 'Excess Capacity': 4 };
+    forecasts.sort((a, b) => (order[a.supplyHealthStatus] ?? 5) - (order[b.supplyHealthStatus] ?? 5));
+
+    return forecasts;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMPONENT
+// ══════════════════════════════════════════════════════════════════════════════
 export default function SupplyCapacityDashboard() {
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [selectedHealth, setSelectedHealth] = useState('All');
     const [drawerRow, setDrawerRow] = useState(null);
-    const [refreshing, setRefreshing] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [allForecasts, setAllForecasts] = useState([]);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const allItems = await loadAllVendorItems();
+            console.log(`[Capacity] Loaded ${allItems.length} vendor items`);
+            const orderRecords = await fetchOrderHistory(12);
+            console.log(`[Capacity] Loaded ${orderRecords.length} order records`);
+            const forecasts = computeCapacityForecasts(allItems, orderRecords);
+            console.log(`[Capacity] Computed ${forecasts.length} capacity forecasts`);
+            setAllForecasts(forecasts);
+        } catch (err) {
+            console.error('[Capacity] Failed to load data:', err);
+            toast.error('Failed to load capacity data');
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => { loadData(); }, []);
+
+    const categories = useMemo(() => ['All', ...new Set(allForecasts.map(f => f.category).filter(Boolean))], [allForecasts]);
 
     const rows = useMemo(() => {
-        let data = [...ALL_FORECASTS];
+        let data = [...allForecasts];
         if (selectedCategory !== 'All') data = data.filter(r => r.category === selectedCategory);
         if (selectedHealth !== 'All') data = data.filter(r => r.supplyHealthStatus === selectedHealth);
         if (search) { const q = search.toLowerCase(); data = data.filter(r => `${r.itemName} ${r.comparableGroup}`.toLowerCase().includes(q)); }
-        // Sort: shortage first, then tight, then others
-        const order = { 'Shortage Risk': 0, Tight: 1, Watch: 2, Healthy: 3, 'Excess Capacity': 4 };
-        data.sort((a, b) => (order[a.supplyHealthStatus] ?? 5) - (order[b.supplyHealthStatus] ?? 5));
         return data;
-    }, [search, selectedCategory, selectedHealth]);
+    }, [search, selectedCategory, selectedHealth, allForecasts]);
 
-    const healthy = ALL_FORECASTS.filter(f => f.supplyHealthStatus === 'Healthy').length;
-    const tight = ALL_FORECASTS.filter(f => f.supplyHealthStatus === 'Tight' || f.supplyHealthStatus === 'Watch').length;
-    const shortage = ALL_FORECASTS.filter(f => f.supplyHealthStatus === 'Shortage Risk').length;
-    const excess = ALL_FORECASTS.filter(f => f.supplyHealthStatus === 'Excess Capacity').length;
-    const totalDemand = ALL_FORECASTS.reduce((s, f) => s + f.weeklyForecastDemand, 0);
-    const totalCap = ALL_FORECASTS.reduce((s, f) => s + f.weeklyCapacity, 0);
+    const healthy = allForecasts.filter(f => f.supplyHealthStatus === 'Healthy').length;
+    const tight = allForecasts.filter(f => f.supplyHealthStatus === 'Tight' || f.supplyHealthStatus === 'Watch').length;
+    const shortage = allForecasts.filter(f => f.supplyHealthStatus === 'Shortage Risk').length;
+    const excess = allForecasts.filter(f => f.supplyHealthStatus === 'Excess Capacity').length;
+    const totalDemand = allForecasts.reduce((s, f) => s + f.weeklyForecastDemand, 0);
+    const totalCap = allForecasts.reduce((s, f) => s + f.weeklyCapacity, 0);
 
     const kpis = [
-        { label: 'Healthy Supply', value: healthy, color: C.green, icon: <FiCheckCircle /> },
-        { label: 'Tight / Watch', value: tight, color: C.amber, icon: <FiShield /> },
-        { label: 'Shortage Risk', value: shortage, color: C.red, icon: <FiAlertTriangle /> },
-        { label: 'Excess Capacity', value: excess, color: C.purple, icon: <FiTrendingUp /> },
-        { label: 'Total Demand', value: totalDemand, color: C.blue, icon: <FiTruck /> },
-        { label: 'Total Capacity', value: totalCap, color: C.cyan, icon: <FiPackage /> },
+        { label: 'Healthy Supply', value: loading ? '…' : healthy, color: C.green, icon: <FiCheckCircle /> },
+        { label: 'Tight / Watch', value: loading ? '…' : tight, color: C.amber, icon: <FiShield /> },
+        { label: 'Shortage Risk', value: loading ? '…' : shortage, color: C.red, icon: <FiAlertTriangle /> },
+        { label: 'Excess Capacity', value: loading ? '…' : excess, color: C.purple, icon: <FiTrendingUp /> },
+        { label: 'Total Demand', value: loading ? '…' : totalDemand, color: C.blue, icon: <FiTruck /> },
+        { label: 'Total Capacity', value: loading ? '…' : totalCap, color: C.cyan, icon: <FiPackage /> },
     ];
 
-    const handleRefresh = () => { setRefreshing(true); setTimeout(() => { setRefreshing(false); toast.success('Capacity forecast recalculated'); }, 800); };
+    const handleRefresh = () => { loadData(); toast.info('Recalculating capacity forecast…'); };
 
     const thS = { padding: '10px 14px', textAlign: 'left', fontSize: 11, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' };
     const tdS = { padding: '12px 14px', fontSize: 13, borderBottom: '1px solid rgba(255,255,255,0.05)' };
@@ -79,11 +235,11 @@ export default function SupplyCapacityDashboard() {
                             background: 'rgba(255,255,255,0.04)', color: C.fg, fontSize: 13, width: 200, outline: 'none',
                         }} />
                     </div>
-                    <button onClick={handleRefresh} disabled={refreshing} style={{
+                    <button onClick={handleRefresh} disabled={loading} style={{
                         padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
                         background: 'rgba(255,255,255,0.04)', color: C.fg, fontSize: 13, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 6,
-                    }}><FiRefreshCw size={14} /> Recalculate</button>
+                    }}><FiRefreshCw size={14} className={loading ? 'spin' : ''} /> Recalculate</button>
                     <button onClick={() => toast.info('Export queued')} style={{
                         padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(56,189,248,0.25)',
                         background: 'rgba(56,189,248,0.08)', color: C.blue, fontSize: 13, cursor: 'pointer',
@@ -109,122 +265,134 @@ export default function SupplyCapacityDashboard() {
                 ))}
             </div>
 
-            {/* PIPELINE POSITION */}
-            <div style={{ marginBottom: 24, padding: '14px 20px', background: 'rgba(56,189,248,0.04)', border: '1px solid rgba(56,189,248,0.12)', borderRadius: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>📋 Pipeline Position</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, flexWrap: 'wrap' }}>
-                    <span>Forecast Engine</span><span>→</span>
-                    <span style={{ color: C.green, fontWeight: 700, padding: '2px 10px', background: 'rgba(52,211,153,0.15)', borderRadius: 6 }}>🛡️ Supply Capacity Forecast</span>
-                    {['→', 'Suggested Orders', '→', 'Submitted Orders', '→', 'Combined Demand', '→', 'Vendor Allocation', '→', 'Dispatch'].map((s, i) => (
-                        <span key={i} style={{ color: C.muted }}>{s}</span>
-                    ))}
-                </div>
-            </div>
-
-            {/* SHORTAGE ALERTS */}
-            {ALL_FORECASTS.some(f => f.alerts.length > 0) && (
-                <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.fg, marginBottom: 10 }}>🚨 Supply Alerts</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {ALL_FORECASTS.flatMap(f => f.alerts).slice(0, 6).map((a, i) => {
-                            const ac = a.severity === 'critical' ? C.red : a.severity === 'warning' ? C.amber : C.purple;
-                            return (
-                                <div key={i} style={{
-                                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
-                                    background: `${ac}08`, border: `1px solid ${ac}20`, borderRadius: 10,
-                                }}>
-                                    <span style={{ fontSize: 16 }}>{a.severity === 'critical' ? '🔴' : a.severity === 'warning' ? '🟡' : '🟣'}</span>
-                                    <span style={{ fontSize: 13, color: '#cbd5e1', flex: 1 }}>{a.text}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
+            {/* LOADING */}
+            {loading && (
+                <div style={{ textAlign: 'center', padding: 60, color: C.muted, fontSize: 14 }}>
+                    <FiRefreshCw size={24} className="spin" style={{ marginBottom: 12 }} /><br />
+                    Computing capacity forecast from Firestore…
                 </div>
             )}
 
-            {/* FILTERS */}
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20, alignItems: 'center' }}>
-                {CATEGORIES.map(cat => (
-                    <button key={cat} onClick={() => setSelectedCategory(cat)} style={{
-                        padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        background: selectedCategory === cat ? C.blue : 'rgba(255,255,255,0.04)',
-                        color: selectedCategory === cat ? '#0f172a' : C.muted,
-                        border: `1px solid ${selectedCategory === cat ? C.blue : 'rgba(255,255,255,0.1)'}`,
-                    }}>{cat}</button>
-                ))}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                    {HEALTH_OPTIONS.map(h => (
-                        <button key={h} onClick={() => setSelectedHealth(h)} style={{
-                            padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                            background: selectedHealth === h ? 'rgba(56,189,248,0.15)' : 'transparent',
-                            color: selectedHealth === h ? C.blue : C.muted,
-                            border: `1px solid ${selectedHealth === h ? 'rgba(56,189,248,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                        }}>{h}</button>
-                    ))}
-                </div>
-            </div>
+            {!loading && (
+                <>
+                    {/* PIPELINE POSITION */}
+                    <div style={{ marginBottom: 24, padding: '14px 20px', background: 'rgba(56,189,248,0.04)', border: '1px solid rgba(56,189,248,0.12)', borderRadius: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 8 }}>📋 Pipeline Position</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, flexWrap: 'wrap' }}>
+                            <span>Forecast Engine</span><span>→</span>
+                            <span style={{ color: C.green, fontWeight: 700, padding: '2px 10px', background: 'rgba(52,211,153,0.15)', borderRadius: 6 }}>🛡️ Supply Capacity Forecast</span>
+                            {['→', 'Suggested Orders', '→', 'Submitted Orders', '→', 'Combined Demand', '→', 'Vendor Allocation', '→', 'Dispatch'].map((s, i) => (
+                                <span key={i} style={{ color: C.muted }}>{s}</span>
+                            ))}
+                        </div>
+                    </div>
 
-            {/* TABLE + DRAWER */}
-            <div style={{ display: 'flex', gap: 0 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, overflow: 'hidden' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr>
-                                    <th style={thS}>Item</th><th style={thS}>Category</th><th style={thS}>Demand</th>
-                                    <th style={thS}>Capacity</th><th style={thS}>Gap</th><th style={thS}>Status</th>
-                                    <th style={thS}>Mon</th><th style={thS}>Thu</th><th style={thS}>Vendors</th>
-                                    <th style={thS}></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((r, idx) => {
-                                    const hl = supplyHealthLabel(r.capacityGapPct);
+                    {/* SHORTAGE ALERTS */}
+                    {allForecasts.some(f => f.alerts.length > 0) && (
+                        <div style={{ marginBottom: 24 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.fg, marginBottom: 10 }}>🚨 Supply Alerts</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {allForecasts.flatMap(f => f.alerts).slice(0, 6).map((a, i) => {
+                                    const ac = a.severity === 'critical' ? C.red : a.severity === 'warning' ? C.amber : C.purple;
                                     return (
-                                        <tr key={idx} style={{ cursor: 'pointer' }} {...trHover} onClick={() => setDrawerRow(r)}>
-                                            <td style={{ ...tdS, fontWeight: 600, color: C.fg }}>{r.itemName}</td>
-                                            <td style={tdS}><span style={{ background: 'rgba(148,163,184,0.1)', color: C.muted, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{r.category}</span></td>
-                                            <td style={{ ...tdS, fontWeight: 700, color: C.fg }}>{r.weeklyForecastDemand}</td>
-                                            <td style={{ ...tdS, fontWeight: 700, color: C.blue }}>{r.weeklyCapacity}</td>
-                                            <td style={{ ...tdS, fontWeight: 700, color: r.capacityGap >= 0 ? C.green : C.red }}>
-                                                {r.capacityGap >= 0 ? '+' : ''}{r.capacityGap}
-                                            </td>
-                                            <td style={tdS}>
-                                                <span style={{ background: `${hl.color}22`, color: hl.color, padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
-                                                    {hl.icon} {hl.text}
-                                                </span>
-                                            </td>
-                                            <td style={{ ...tdS, fontSize: 12 }}>
-                                                <span style={{ color: supplyHealthLabel(r.mondayCapacity > 0 && r.mondayForecastDemand > 0 ? (r.mondayCapacity - Math.ceil(r.mondayForecastDemand * (1 + r.safetyMargin))) / Math.ceil(r.mondayForecastDemand * (1 + r.safetyMargin)) : 1).color }}>
-                                                    {r.mondayHealth}
-                                                </span>
-                                            </td>
-                                            <td style={{ ...tdS, fontSize: 12 }}>
-                                                <span style={{ color: supplyHealthLabel(r.thursdayCapacity > 0 && r.thursdayForecastDemand > 0 ? (r.thursdayCapacity - Math.ceil(r.thursdayForecastDemand * (1 + r.safetyMargin))) / Math.ceil(r.thursdayForecastDemand * (1 + r.safetyMargin)) : 1).color }}>
-                                                    {r.thursdayHealth}
-                                                </span>
-                                            </td>
-                                            <td style={{ ...tdS, color: C.muted }}>{r.activeVendorCount}</td>
-                                            <td style={tdS}>
-                                                <button onClick={e => { e.stopPropagation(); setDrawerRow(r); }} style={{
-                                                    background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)',
-                                                    color: C.blue, padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-                                                }}><FiEye size={12} /> View</button>
-                                            </td>
-                                        </tr>
+                                        <div key={i} style={{
+                                            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+                                            background: `${ac}08`, border: `1px solid ${ac}20`, borderRadius: 10,
+                                        }}>
+                                            <span style={{ fontSize: 16 }}>{a.severity === 'critical' ? '🔴' : a.severity === 'warning' ? '🟡' : '🟣'}</span>
+                                            <span style={{ fontSize: 13, color: '#cbd5e1', flex: 1 }}>{a.text}</span>
+                                        </div>
                                     );
                                 })}
-                                {rows.length === 0 && (
-                                    <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: C.muted }}>No items match filters</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                            </div>
+                        </div>
+                    )}
 
-                {drawerRow && <CapacityDrawer row={drawerRow} onClose={() => setDrawerRow(null)} />}
-            </div>
+                    {/* FILTERS */}
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20, alignItems: 'center' }}>
+                        {categories.map(cat => (
+                            <button key={cat} onClick={() => setSelectedCategory(cat)} style={{
+                                padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                background: selectedCategory === cat ? C.blue : 'rgba(255,255,255,0.04)',
+                                color: selectedCategory === cat ? '#0f172a' : C.muted,
+                                border: `1px solid ${selectedCategory === cat ? C.blue : 'rgba(255,255,255,0.1)'}`,
+                            }}>{cat}</button>
+                        ))}
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                            {HEALTH_OPTIONS.map(h => (
+                                <button key={h} onClick={() => setSelectedHealth(h)} style={{
+                                    padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    background: selectedHealth === h ? 'rgba(56,189,248,0.15)' : 'transparent',
+                                    color: selectedHealth === h ? C.blue : C.muted,
+                                    border: `1px solid ${selectedHealth === h ? 'rgba(56,189,248,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                }}>{h}</button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* TABLE + DRAWER */}
+                    <div style={{ display: 'flex', gap: 0 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, overflow: 'hidden' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={thS}>Item</th><th style={thS}>Category</th><th style={thS}>Demand</th>
+                                            <th style={thS}>Capacity</th><th style={thS}>Gap</th><th style={thS}>Status</th>
+                                            <th style={thS}>Mon</th><th style={thS}>Thu</th><th style={thS}>Vendors</th>
+                                            <th style={thS}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {rows.map((r, idx) => {
+                                            const hl = supplyHealthLabel(r.capacityGapPct);
+                                            return (
+                                                <tr key={idx} style={{ cursor: 'pointer' }} {...trHover} onClick={() => setDrawerRow(r)}>
+                                                    <td style={{ ...tdS, fontWeight: 600, color: C.fg }}>{r.itemName}</td>
+                                                    <td style={tdS}><span style={{ background: 'rgba(148,163,184,0.1)', color: C.muted, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{r.category}</span></td>
+                                                    <td style={{ ...tdS, fontWeight: 700, color: C.fg }}>{r.weeklyForecastDemand}</td>
+                                                    <td style={{ ...tdS, fontWeight: 700, color: C.blue }}>{r.weeklyCapacity}</td>
+                                                    <td style={{ ...tdS, fontWeight: 700, color: r.capacityGap >= 0 ? C.green : C.red }}>
+                                                        {r.capacityGap >= 0 ? '+' : ''}{r.capacityGap}
+                                                    </td>
+                                                    <td style={tdS}>
+                                                        <span style={{ background: `${hl.color}22`, color: hl.color, padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                                                            {hl.icon} {hl.text}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...tdS, fontSize: 12 }}>
+                                                        <span style={{ color: supplyHealthLabel(r.mondayCapacity > 0 && r.mondayForecastDemand > 0 ? (r.mondayCapacity - Math.ceil(r.mondayForecastDemand * (1 + r.safetyMargin))) / Math.ceil(r.mondayForecastDemand * (1 + r.safetyMargin)) : 1).color }}>
+                                                            {r.mondayHealth}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...tdS, fontSize: 12 }}>
+                                                        <span style={{ color: supplyHealthLabel(r.thursdayCapacity > 0 && r.thursdayForecastDemand > 0 ? (r.thursdayCapacity - Math.ceil(r.thursdayForecastDemand * (1 + r.safetyMargin))) / Math.ceil(r.thursdayForecastDemand * (1 + r.safetyMargin)) : 1).color }}>
+                                                            {r.thursdayHealth}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...tdS, color: C.muted }}>{r.activeVendorCount}</td>
+                                                    <td style={tdS}>
+                                                        <button onClick={e => { e.stopPropagation(); setDrawerRow(r); }} style={{
+                                                            background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)',
+                                                            color: C.blue, padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                                                        }}><FiEye size={12} /> View</button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {rows.length === 0 && (
+                                            <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: C.muted }}>No items match filters</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {drawerRow && <CapacityDrawer row={drawerRow} onClose={() => setDrawerRow(null)} />}
+                    </div>
+                </>
+            )}
         </div>
     );
 }

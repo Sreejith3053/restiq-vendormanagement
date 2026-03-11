@@ -1,158 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import historyData from '../../data/history_realistic_v2_tomato.json';
-import catalogData from '../../data/catalog_v2.json';
+import { fetchOrderHistory, getRestaurantList, buildRestaurantForecast } from './forecastHelpers';
+import { db } from '../../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const CATEGORIES = ['All', 'Produce', 'Packaging', 'Cleaning Supplies', 'Spices', 'Meat', 'Dairy'];
+const CATEGORIES = ['All', 'Produce', 'Packaging', 'Cleaning Supplies'];
 
 const CAT_COLORS = {
     Produce: { bg: 'rgba(52,211,153,0.12)', color: '#34d399' },
     Packaging: { bg: 'rgba(56,189,248,0.12)', color: '#38bdf8' },
     'Cleaning Supplies': { bg: 'rgba(251,146,60,0.12)', color: '#fb923c' },
-    Spices: { bg: 'rgba(251,191,36,0.12)', color: '#fbbf24' },
-    Meat: { bg: 'rgba(248,113,113,0.12)', color: '#f87171' },
-    Dairy: { bg: 'rgba(167,139,250,0.12)', color: '#a78bfa' },
 };
 const CONF_COLORS = { High: '#34d399', Medium: '#fbbf24', Low: '#f87171' };
-
-const BASELINE_OVERRIDES = {
-    'Onion - Cooking': 10, 'Onion - Red': 5, 'Cabbage': 3,
-    'Carrot': 3, 'French Beans': 3, 'Mint Leaves': 3,
-    'Coriander Leaves': 3, 'Lemon': 2, 'Okra': 2,
-};
-
-// Placeholder rows for future categories (keeps table from feeling empty)
-const FUTURE_CATEGORY_PLACEHOLDERS = [
-    { itemName: '16oz Clear Container', category: 'Packaging', vendor: 'Packaging Supplier', packSize: 200, packLabel: '200 units/case' },
-    { itemName: '28oz Deli Container', category: 'Packaging', vendor: 'Packaging Supplier', packSize: 150, packLabel: '150 units/case' },
-    { itemName: 'Kitchen Degreaser', category: 'Cleaning Supplies', vendor: 'Clean Pro', packSize: 6, packLabel: '6 bottles/case' },
-    { itemName: 'Sanitizer Spray 5L', category: 'Cleaning Supplies', vendor: 'Clean Pro', packSize: 4, packLabel: '4 units/case' },
-    { itemName: 'Kashmiri Chilli Powder', category: 'Spices', vendor: 'Spice Mart', packSize: 5, packLabel: '5kg bag' },
-    { itemName: 'Cumin Seeds', category: 'Spices', vendor: 'Spice Mart', packSize: 5, packLabel: '5kg bag' },
-    { itemName: 'Turmeric Powder', category: 'Spices', vendor: 'Spice Mart', packSize: 5, packLabel: '5kg bag' },
-    { itemName: 'Chicken Drumsticks', category: 'Meat', vendor: 'Halal Meats', packSize: 10, packLabel: '10kg box' },
-    { itemName: 'Lamb Shoulder', category: 'Meat', vendor: 'Halal Meats', packSize: 5, packLabel: '5kg pack' },
-    { itemName: 'Yoghurt Plain 5L', category: 'Dairy', vendor: 'Dairy Fresh', packSize: 4, packLabel: '4 units/case' },
-];
-
-// ─── Forecast Engine ──────────────────────────────────────────────────────────
-function buildProduceForecast() {
-    // Build catalog lookup
-    const catalog = {};
-    catalogData.forEach(c => { catalog[c.item_name] = c; });
-
-    // Aggregate quantities by item and by 2-week window
-    // Group all records by item name
-    const byItem = {};
-    historyData.forEach(row => {
-        const name = row.item_name;
-        if (!byItem[name]) byItem[name] = [];
-        byItem[name].push({ date: new Date(row.purchase_date), qty: Number(row.normalized_quantity) || 0 });
-    });
-
-    // Get most recent date across all records for anchor
-    const allDates = historyData.map(r => new Date(r.purchase_date));
-    const maxDate = new Date(Math.max(...allDates));
-    const fourWeeksAgo = new Date(maxDate);
-    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-    const eightWeeksAgo = new Date(maxDate);
-    eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
-
-    const results = [];
-
-    // Build forecast per item
-    const allItemNames = new Set([
-        ...Object.keys(byItem),
-        ...catalogData.map(c => c.item_name)
-    ]);
-
-    allItemNames.forEach(itemName => {
-        const records = byItem[itemName] || [];
-        const cat = catalog[itemName];
-
-        // Qty in last 8 weeks and 4 weeks
-        const qtyIn8 = records
-            .filter(r => r.date >= eightWeeksAgo)
-            .reduce((s, r) => s + r.qty, 0);
-        const qtyIn4 = records
-            .filter(r => r.date >= fourWeeksAgo)
-            .reduce((s, r) => s + r.qty, 0);
-
-        // Cycle count (unique dates in 8 weeks)
-        const datesIn8 = new Set(
-            records.filter(r => r.date >= eightWeeksAgo).map(r => r.date.toISOString().slice(0, 10))
-        );
-        const cycleCount = datesIn8.size;
-
-        // Simple blend: 40% recent + 60% historical (normalized to weekly)
-        const weeklyAvg8 = qtyIn8 / 8;
-        const weeklyAvg4 = qtyIn4 / 4;
-        let predictedTotal = Math.round((0.4 * weeklyAvg4) + (0.6 * weeklyAvg8));
-
-        // Apply baseline overrides
-        const baseline = BASELINE_OVERRIDES[itemName] || 0;
-        if (predictedTotal < baseline) predictedTotal = baseline;
-
-        // Skip items with no demand and no baseline
-        if (predictedTotal === 0 && !baseline) return;
-
-        // Confidence
-        let confidence = 'Low';
-        if (cycleCount >= 6) confidence = 'High';
-        else if (cycleCount >= 3) confidence = 'Medium';
-        if (baseline && cycleCount < 3) confidence = 'Medium'; // baseline overrides to at least Medium
-
-        // Split
-        const monForecast = Math.round(predictedTotal * 0.6);
-        const thuForecast = predictedTotal - monForecast;
-
-        // Pack logic
-        const packSize = cat?.pack_size || 1;
-        const packLabel = cat?.pack_label || cat?.base_unit || 'unit';
-        const estPacksNeeded = packSize > 1 ? Math.ceil(predictedTotal / packSize) : predictedTotal;
-        const vendorPackStr = packSize > 1 ? `${packSize} ${cat?.base_unit || 'unit'} / ${packLabel}` : packLabel;
-
-        results.push({
-            itemId: itemName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            itemName,
-            category: 'Produce',
-            mondayForecast: monForecast,
-            thursdayForecast: thuForecast,
-            weeklyTotal: predictedTotal,
-            confidence,
-            vendorPackLogic: vendorPackStr,
-            estimatedVendorPacks: estPacksNeeded,
-            vendorName: cat?.vendor || 'ON Thyme',
-        });
-    });
-
-    return results;
-}
-
-function buildPlaceholderForecasts() {
-    // Generate plausible forecast figures for non-Produce categories
-    return FUTURE_CATEGORY_PLACEHOLDERS.map((item, i) => {
-        // Seed deterministic but varied values
-        const base = 2 + (i % 4);
-        const weekly = base + Math.floor(i / 2);
-        const mon = Math.round(weekly * 0.6);
-        const thu = weekly - mon;
-        const packs = Math.ceil(weekly / (item.packSize || 1));
-        const conf = i % 3 === 0 ? 'Medium' : 'Low';
-        return {
-            itemId: item.itemName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            itemName: item.itemName,
-            category: item.category,
-            mondayForecast: mon,
-            thursdayForecast: thu,
-            weeklyTotal: weekly,
-            confidence: conf,
-            vendorPackLogic: item.packLabel,
-            estimatedVendorPacks: packs,
-            vendorName: item.vendor,
-        };
-    });
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function DemandForecastPage() {
@@ -164,18 +23,81 @@ export default function DemandForecastPage() {
     const [sortDir, setSortDir] = useState('desc');
 
     useEffect(() => {
-        setLoading(true);
-        try {
-            const produceRows = buildProduceForecast();
-            const placeholders = buildPlaceholderForecasts();
-            const merged = [...produceRows, ...placeholders]
-                .sort((a, b) => b.weeklyTotal - a.weeklyTotal);
-            setRows(merged);
-        } catch (err) {
-            console.error('Demand forecast build error:', err);
-        } finally {
+        async function loadData() {
+            setLoading(true);
+            try {
+                const records = await fetchOrderHistory(12);
+                const restaurants = getRestaurantList(records);
+
+                // Load vendor catalog for pack info
+                const vendorCatalog = {};
+                const vendorsSnap = await getDocs(collection(db, 'vendors'));
+                for (const vDoc of vendorsSnap.docs) {
+                    const vendorName = vDoc.data().name || 'Unknown';
+                    try {
+                        const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+                        itemSnap.docs.forEach(d => {
+                            const data = d.data();
+                            const name = (data.name || '').trim();
+                            if (!name) return;
+                            if (!vendorCatalog[name.toLowerCase()]) {
+                                vendorCatalog[name.toLowerCase()] = {
+                                    vendorName,
+                                    packSize: parseFloat(data.packSize) || 1,
+                                    packLabel: data.packLabel || data.unit || 'unit',
+                                    category: data.category || 'Produce',
+                                };
+                            }
+                        });
+                    } catch (_) {}
+                }
+
+                // Aggregate forecasts across all restaurants
+                const itemMap = {};
+                for (const rest of restaurants) {
+                    const forecast = buildRestaurantForecast(records, rest);
+                    forecast.forEach(item => {
+                        const key = item.itemName.toLowerCase();
+                        if (!itemMap[key]) {
+                            const cat = vendorCatalog[key];
+                            itemMap[key] = {
+                                itemName: item.itemName,
+                                category: cat?.category || item.category || 'Produce',
+                                mondayForecast: 0,
+                                thursdayForecast: 0,
+                                weeklyTotal: 0,
+                                confidence: item.confidence || 'Medium',
+                                vendorPackLogic: cat ? `${cat.packSize} / ${cat.packLabel}` : '—',
+                                estimatedVendorPacks: 0,
+                                vendorName: cat?.vendorName || '—',
+                                packSize: cat?.packSize || 1,
+                            };
+                        }
+                        itemMap[key].mondayForecast += item.mondayQty || 0;
+                        itemMap[key].thursdayForecast += item.thursdayQty || 0;
+                        itemMap[key].weeklyTotal += (item.mondayQty || 0) + (item.thursdayQty || 0);
+                        // Take highest confidence
+                        if (item.confidence === 'High') itemMap[key].confidence = 'High';
+                        else if (item.confidence === 'Medium' && itemMap[key].confidence === 'Low') itemMap[key].confidence = 'Medium';
+                    });
+                }
+
+                // Calculate packs
+                const result = Object.values(itemMap)
+                    .filter(r => r.weeklyTotal > 0)
+                    .map(r => ({
+                        ...r,
+                        estimatedVendorPacks: r.packSize > 1 ? Math.ceil(r.weeklyTotal / r.packSize) : r.weeklyTotal
+                    }))
+                    .sort((a, b) => b.weeklyTotal - a.weeklyTotal);
+
+                setRows(result);
+            } catch (err) {
+                console.error('DemandForecastPage load error:', err);
+            }
             setLoading(false);
         }
+        loadData();
     }, []);
 
     const handleSort = (col) => {
@@ -216,7 +138,7 @@ export default function DemandForecastPage() {
                     Demand Forecast
                 </h1>
                 <p style={{ color: '#94a3b8', fontSize: 14, margin: 0 }}>
-                    Unified AI-powered weekly demand forecast across all product categories.
+                    Unified weekly demand forecast from live Firestore order history across all product categories.
                 </p>
             </div>
 
@@ -266,7 +188,7 @@ export default function DemandForecastPage() {
             <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, overflow: 'hidden' }}>
                 {loading ? (
                     <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>
-                        ⏳ Building unified demand forecast...
+                        ⏳ Building unified demand forecast from Firestore...
                     </div>
                 ) : filtered.length === 0 ? (
                     <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>No items match your filters.</div>

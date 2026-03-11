@@ -1,96 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import purchaseDatasetV2 from '../../data/history_realistic_v2_tomato.json';
+import { fetchOrderHistory, getRestaurantList, buildRestaurantForecast } from './forecastHelpers';
 
 export default function ForecastAccuracyPage() {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        setLoading(true);
-        setTimeout(() => {
-            const historyMap = {};
-            const globalDatesSet = new Set();
+        async function loadAccuracy() {
+            setLoading(true);
+            try {
+                const records = await fetchOrderHistory(12);
+                if (records.length === 0) { setLogs([]); setLoading(false); return; }
 
-            purchaseDatasetV2.forEach(data => {
-                if (!data.purchase_date || !data.item_name) return;
-                const exactName = data.item_name.trim().toLowerCase()
-                    .replace(/\b\w/g, c => c.toUpperCase());
-                globalDatesSet.add(data.purchase_date);
-                if (!historyMap[exactName]) {
-                    historyMap[exactName] = { itemName: exactName, orderHistoryMap: {} };
-                }
-                const qty = Number(data.normalized_quantity) || 0;
-                if (!historyMap[exactName].orderHistoryMap[data.purchase_date]) {
-                    historyMap[exactName].orderHistoryMap[data.purchase_date] = 0;
-                }
-                historyMap[exactName].orderHistoryMap[data.purchase_date] += qty;
-            });
+                const restaurants = getRestaurantList(records);
+                const generatedLogs = [];
+                let logCount = 1;
 
-            const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-            const latestCycle = allCycles[0];
-            const prevCycles = allCycles.slice(1, 6);
+                // Group orders by date to find the latest and previous cycles
+                const dateSet = new Set();
+                records.forEach(r => { if (r.date) dateSet.add(r.date); });
+                const allDates = [...dateSet].sort((a, b) => new Date(b) - new Date(a));
+                const latestCycle = allDates[0];
 
-            const generatedLogs = [];
-            let logCount = 1;
+                // For each restaurant, build forecast (which simulates what we would have predicted)
+                // then compare with actual latest cycle orders
+                for (const rest of restaurants.slice(0, 3)) {
+                    const forecast = buildRestaurantForecast(records, rest);
+                    const latestActuals = {};
+                    records.filter(r => r.restaurantName === rest && r.date === latestCycle)
+                        .forEach(r => { latestActuals[r.itemName] = (latestActuals[r.itemName] || 0) + r.qty; });
 
-            const targetItems = ['Onion - Cooking', 'Tomato', 'Cabbage', 'Green Onion', 'Coriander Leaves'];
+                    forecast.forEach(item => {
+                        const predicted = (item.mondayQty || 0) + (item.thursdayQty || 0);
+                        const actual = latestActuals[item.itemName] || 0;
+                        if (predicted === 0 && actual === 0) return;
 
-            targetItems.forEach(target => {
-                const itemData = historyMap[target];
-                if (itemData) {
-                    const actualLatest = itemData.orderHistoryMap[latestCycle] || 0;
-
-                    let fakePastPrediction = actualLatest;
-                    if (target === 'Tomato') fakePastPrediction = actualLatest + 2;
-                    if (target === 'Green Onion') fakePastPrediction = actualLatest - 1;
-
-                    if (actualLatest > 0 && fakePastPrediction > 0) {
-                        const varianceQty = actualLatest - fakePastPrediction;
-                        const variancePercent = Math.round((Math.abs(varianceQty) / fakePastPrediction) * 100);
+                        const varianceQty = actual - predicted;
+                        const variancePercent = predicted > 0 ? Math.round((Math.abs(varianceQty) / predicted) * 100) : 0;
                         let status = 'Accurate';
                         if (varianceQty > 0) status = 'Under Forecast';
                         else if (varianceQty < 0) status = 'Over Forecast';
 
-                        // Fake a few different restaurant rows per item
                         generatedLogs.push({
                             id: `log-${logCount++}`,
                             weekStart: latestCycle,
-                            restaurantId: 'REST-' + Math.floor(Math.random() * 9000 + 1000),
-                            itemId: target,
-                            confidenceAtForecastTime: 'High',
-                            wasEventAffected: target === 'Onion - Cooking',
-                            predictedWeeklyQty: fakePastPrediction,
-                            actualWeeklyQty: actualLatest,
-                            varianceQty: varianceQty,
-                            variancePercent: variancePercent,
-                            status: status
+                            restaurantId: rest,
+                            itemId: item.itemName,
+                            confidenceAtForecastTime: item.confidence || 'Medium',
+                            wasEventAffected: false,
+                            predictedWeeklyQty: predicted,
+                            actualWeeklyQty: actual,
+                            varianceQty, variancePercent, status
                         });
-
-                        // Second synthetic record with slight variation
-                        const variance2 = Math.floor(Math.random() * 3) - 1;
-                        const actual2 = actualLatest + variance2;
-                        if (actual2 > 0) {
-                            generatedLogs.push({
-                                id: `log-${logCount++}`,
-                                weekStart: latestCycle,
-                                restaurantId: 'REST-' + Math.floor(Math.random() * 9000 + 1000),
-                                itemId: target,
-                                confidenceAtForecastTime: 'Medium',
-                                wasEventAffected: false,
-                                predictedWeeklyQty: fakePastPrediction,
-                                actualWeeklyQty: actual2,
-                                varianceQty: actual2 - fakePastPrediction,
-                                variancePercent: Math.round((Math.abs(actual2 - fakePastPrediction) / fakePastPrediction) * 100),
-                                status: (actual2 - fakePastPrediction) === 0 ? 'Accurate' : ((actual2 - fakePastPrediction) > 0 ? 'Under Forecast' : 'Over Forecast')
-                            });
-                        }
-                    }
+                    });
                 }
-            });
 
-            setLogs(generatedLogs.sort((a, b) => Math.abs(b.variancePercent) - Math.abs(a.variancePercent)));
+                setLogs(generatedLogs.sort((a, b) => Math.abs(b.variancePercent) - Math.abs(a.variancePercent)));
+            } catch (err) {
+                console.error('ForecastAccuracyPage load error', err);
+            }
             setLoading(false);
-        }, 400);
+        }
+        loadAccuracy();
     }, []);
 
     return (
@@ -98,7 +69,7 @@ export default function ForecastAccuracyPage() {
             <div className="page-header" style={{ marginBottom: 24 }}>
                 <div>
                     <h1>Prediction Accuracy Tracking</h1>
-                    <p className="subtitle" style={{ margin: 0 }}>Review how well the deterministic model performed against reality week-over-week.</p>
+                    <p className="subtitle" style={{ margin: 0 }}>Review how well the forecast model performed against actual Firestore order data.</p>
                 </div>
             </div>
 
@@ -106,7 +77,7 @@ export default function ForecastAccuracyPage() {
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>Retrieving analytical reconciliations...</div>
             ) : logs.length === 0 ? (
                 <div className="ui-card" style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>
-                    No accuracy logs available for the last cycle.
+                    No accuracy logs available — insufficient order history in Firestore.
                 </div>
             ) : (
                 <div className="ui-table-wrap fade-in">
@@ -114,8 +85,8 @@ export default function ForecastAccuracyPage() {
                         <thead>
                             <tr>
                                 <th>Week Start</th>
-                                <th>Location ID</th>
-                                <th>Item ID</th>
+                                <th>Restaurant</th>
+                                <th>Item</th>
                                 <th>Confidence</th>
                                 <th>Predicted Total</th>
                                 <th>Actual Ordered</th>
@@ -134,13 +105,12 @@ export default function ForecastAccuracyPage() {
                                 return (
                                     <tr key={log.id}>
                                         <td data-label="Week Start" style={{ color: 'var(--muted)' }}>{log.weekStart}</td>
-                                        <td data-label="Location ID" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{log.restaurantId}</td>
-                                        <td data-label="Item ID" style={{ fontWeight: 600 }}>{log.itemId}</td>
+                                        <td data-label="Restaurant" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{log.restaurantId}</td>
+                                        <td data-label="Item" style={{ fontWeight: 600 }}>{log.itemId}</td>
                                         <td data-label="Confidence">
                                             <span style={{ fontSize: 12, padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>
                                                 {log.confidenceAtForecastTime}
                                             </span>
-                                            {log.wasEventAffected && <span style={{ marginLeft: 6, fontSize: 12 }} title="Festival Logic Affected">🎉</span>}
                                         </td>
                                         <td data-label="Predicted Total" style={{ color: '#4dabf7', fontWeight: 600 }}>{log.predictedWeeklyQty}</td>
                                         <td data-label="Actual Ordered" style={{ fontWeight: 600 }}>{log.actualWeeklyQty}</td>

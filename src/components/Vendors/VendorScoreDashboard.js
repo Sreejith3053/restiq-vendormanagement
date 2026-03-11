@@ -112,15 +112,15 @@ export default function VendorScoreDashboard() {
     const avgScore = Math.round(scores.reduce((a, r) => a + r.finalScore, 0) / scores.length);
     const avgSl = scoreLabel(avgScore);
 
-    // Mock weekly trend
+    // Score trend — requires historical data collection over time
     const base = selected.finalScore;
     const trend = [
-        { week: 'W1', score: Math.max(0, base - Math.floor(Math.random() * 12) - 5) },
-        { week: 'W2', score: Math.max(0, base - Math.floor(Math.random() * 8) - 2) },
-        { week: 'W3', score: Math.max(0, base - Math.floor(Math.random() * 4)) },
+        { week: 'W1', score: base },
+        { week: 'W2', score: base },
+        { week: 'W3', score: base },
         { week: 'W4', score: base },
     ];
-    const trendDelta = trend[3].score - trend[0].score;
+    const trendDelta = 0; // Will show real delta once vendorScores are collected over multiple weeks
 
     const factors = [
         { label: 'Price Competitiveness', value: fb.price, max: 40, color: C.green },

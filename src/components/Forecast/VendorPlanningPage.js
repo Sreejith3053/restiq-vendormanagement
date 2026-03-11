@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ForecastInsightPanel } from './ForecastComponents';
-import vendorCatalogV2 from '../../data/catalog_v2.json';
-import purchaseDatasetV2 from '../../data/history_realistic_v2_tomato.json';
-import containerTestData from './containerTestData.json';
+import { fetchOrderHistory } from './forecastHelpers';
 import { db } from '../../firebase';
 import { collection, getDocs, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
@@ -261,12 +259,7 @@ export default function VendorPlanningPage() {
             const localVendorIdMap = {};
             const localDispatchStatusMap = {};
 
-            vendorCatalogV2.forEach(row => {
-                const name = row.item_name?.trim();
-                const exactName = normalizeItemName(name);
-                if (exactName) catalogLookup[exactName] = { ...row, price: parseFloat(row.price) || 0 };
-            });
-
+            // Build catalog from Live Firebase Vendors only
             try {
                 const vendorSnap = await getDocs(collection(db, 'vendors'));
                 const vendorDocs = vendorSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -284,10 +277,12 @@ export default function VendorPlanningPage() {
                                     ...catalogLookup[exactName],
                                     ...itemData,
                                     price: dbPrice > 0 ? dbPrice : (catalogLookup[exactName]?.price || 0),
-                                    vendor: v.name || catalogLookup[exactName]?.vendor || 'Unknown Vendor',
+                                    vendor: v.name || 'Unknown Vendor',
                                     base_unit: itemData.unit || catalogLookup[exactName]?.base_unit,
                                     pack_size: itemData.packQuantity || catalogLookup[exactName]?.pack_size || 1,
-                                    pack_label: itemData.itemSize || catalogLookup[exactName]?.pack_label
+                                    pack_label: itemData.itemSize || catalogLookup[exactName]?.pack_label,
+                                    category: itemData.category || catalogLookup[exactName]?.category || 'Produce',
+                                    isPackaging: (itemData.category || '').toLowerCase().includes('packaging') || (itemData.category || '').toLowerCase().includes('cleaning')
                                 };
                             }
                         });
@@ -299,54 +294,41 @@ export default function VendorPlanningPage() {
                 console.error("Failed to load Firebase catalog:", err);
             }
 
-            containerTestData.forEach(row => {
-                if (row.itemName) {
-                    const exactName = normalizeItemName(row.itemName);
-                    if (!catalogLookup[exactName]) {
-                        catalogLookup[exactName] = {
-                            vendor: row.vendorName,
-                            category: row.category,
-                            base_unit: row.packType,
-                            pack_size: row.packSize,
-                            pack_label: `${row.packSize} ${row.packType}`,
-                            price: 0,
-                            isPackaging: true,
-                            central_stock_only: row.central_stock_only,
-                            is_central_stock: row.is_central_stock
-                        };
-                    }
-                }
-            });
-
-            const globalDatesSet = new Set();
-            purchaseDatasetV2.forEach(d => { if (d.purchase_date) globalDatesSet.add(d.purchase_date); });
-            containerTestData.forEach(d => { if (d.date) globalDatesSet.add(d.date); });
-
-            const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-            const last8Cycles = allCycles.slice(0, 8);
-            const last4Cycles = allCycles.slice(0, 4);
-
             const globalHistoryMap = {};
 
             Object.keys(catalogLookup).forEach(exactName => {
                 globalHistoryMap[exactName] = { orderHistoryMap: {}, isPackaging: catalogLookup[exactName].isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[exactName].category) };
             });
 
-            purchaseDatasetV2.forEach(data => {
-                if (!data.purchase_date || !data.item_name) return;
-                const exactName = normalizeItemName(data.item_name);
-                if (!globalHistoryMap[exactName]) globalHistoryMap[exactName] = { orderHistoryMap: {}, isPackaging: false };
-                if (!globalHistoryMap[exactName].orderHistoryMap[data.purchase_date]) globalHistoryMap[exactName].orderHistoryMap[data.purchase_date] = 0;
-                globalHistoryMap[exactName].orderHistoryMap[data.purchase_date] += (Number(data.normalized_quantity) || 0);
+            // ── Fetch LIVE order history from Firestore marketplaceOrders ──
+            try {
+                const orderRecords = await fetchOrderHistory(12);
+                console.log(`[VendorPlanning] Loaded ${orderRecords.length} order records from Firestore`);
+
+                orderRecords.forEach(record => {
+                    const exactName = normalizeItemName(record.itemName);
+                    if (!exactName) return;
+                    if (!globalHistoryMap[exactName]) {
+                        globalHistoryMap[exactName] = { orderHistoryMap: {}, isPackaging: false };
+                    }
+                    if (!globalHistoryMap[exactName].orderHistoryMap[record.date]) {
+                        globalHistoryMap[exactName].orderHistoryMap[record.date] = 0;
+                    }
+                    globalHistoryMap[exactName].orderHistoryMap[record.date] += (Number(record.qty) || 0);
+                });
+            } catch (err) {
+                console.error('[VendorPlanning] Failed to fetch order history from Firestore:', err);
+            }
+
+            // Build cycle lists from all collected dates
+            const globalDatesSet = new Set();
+            Object.values(globalHistoryMap).forEach(item => {
+                Object.keys(item.orderHistoryMap).forEach(d => globalDatesSet.add(d));
             });
 
-            containerTestData.forEach(data => {
-                if (!data.date || !data.itemName) return;
-                const exactName = normalizeItemName(data.itemName);
-                if (!globalHistoryMap[exactName]) globalHistoryMap[exactName] = { orderHistoryMap: {}, isPackaging: true };
-                if (!globalHistoryMap[exactName].orderHistoryMap[data.date]) globalHistoryMap[exactName].orderHistoryMap[data.date] = 0;
-                globalHistoryMap[exactName].orderHistoryMap[data.date] += (Number(data.boxesOrdered) || 0);
-            });
+            const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+            const last8Cycles = allCycles.slice(0, 8);
+            const last4Cycles = allCycles.slice(0, 4);
 
             try {
                 const today = new Date();

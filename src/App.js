@@ -62,10 +62,7 @@ import WarehousePickListPage from './components/Forecast/WarehousePickListPage';
 import DeliveryStatusPage from './components/Forecast/DeliveryStatusPage';
 import IssuesDisputesPage from './components/Forecast/IssuesDisputesPage';
 
-// New Container Prediction Test
-import ContainerPredictionTestPage from './components/Forecast/ContainerPredictionTestPage';
-import VegetablePredictionTestPage from './components/Forecast/VegetablePredictionTestPage';
-import VegetableDashboardPage from './components/Forecast/VegetableDashboardPage';
+
 
 // Toasts
 import { ToastContainer } from 'react-toastify';
@@ -141,10 +138,7 @@ function App() {
                                 <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />
                                 <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
 
-                                {/* AI Forecast Sub-routes — hidden from nav but kept for backward compat */}
-                                <Route path="/admin/container-prediction-test" element={<ContainerPredictionTestPage />} />
-                                <Route path="/admin/vegetable-prediction-test" element={<VegetablePredictionTestPage />} />
-                                <Route path="/admin/vegetable-dashboard" element={<VegetableDashboardPage />} />
+
                                 <Route path="/admin/forecast/demand" element={<DemandForecastPage />} />
                                 <Route path="/admin/forecast/intelligence" element={<ForecastIntelligencePage />} />
                                 <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />

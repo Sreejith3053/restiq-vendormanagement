@@ -1,119 +1,101 @@
 import React, { useState, useEffect } from 'react';
-import vendorCatalogV2 from '../../data/catalog_v2.json';
-import purchaseDatasetV2 from '../../data/history_realistic_v2_tomato.json';
-
-const V2_BASELINE_OVERRIDES = {
-    'Onion - Cooking': { min: 40, speed: 'Fast' },
-    'Onion - Red': { min: 3, speed: 'Slow' },
-    'Cabbage': { min: 2, speed: 'Slow' },
-    'Carrot': { min: 4, speed: 'Slow' },
-    'French Beans': { min: 0, speed: 'None' },
-    'Potatoes': { min: 10, speed: 'Medium' }
-};
+import { fetchOrderHistory, getRestaurantList, buildRestaurantForecast } from './forecastHelpers';
 
 export default function ForecastAlertsPage() {
     const [alerts, setAlerts] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const getMedian = (arr) => {
-        if (!arr || arr.length === 0) return 0;
-        const sorted = [...arr].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
-        return sorted[mid];
-    };
-
     useEffect(() => {
-        setLoading(true);
-        setTimeout(() => {
-            const detectedAlerts = [];
-            const historyMap = {};
-            const globalDatesSet = new Set();
-            let alertIdCount = 1;
-
-            purchaseDatasetV2.forEach(data => {
-                if (!data.purchase_date || !data.item_name) return;
-                const exactName = data.item_name.trim().toLowerCase()
-                    .replace(/\b\w/g, c => c.toUpperCase());
-
-                globalDatesSet.add(data.purchase_date);
-
-                if (!historyMap[exactName]) {
-                    historyMap[exactName] = { itemName: exactName, orderHistoryMap: {}, locationCount: new Set() };
+        async function loadAlerts() {
+            setLoading(true);
+            try {
+                const records = await fetchOrderHistory(12);
+                if (records.length === 0) {
+                    setAlerts([]);
+                    setLoading(false);
+                    return;
                 }
 
-                historyMap[exactName].locationCount.add(data.location_name);
+                const restaurants = getRestaurantList(records);
+                const detectedAlerts = [];
+                let alertIdCount = 1;
 
-                const qty = Number(data.normalized_quantity) || 0;
-                if (!historyMap[exactName].orderHistoryMap[data.purchase_date]) {
-                    historyMap[exactName].orderHistoryMap[data.purchase_date] = 0;
-                }
-                historyMap[exactName].orderHistoryMap[data.purchase_date] += qty;
-            });
+                // Build a global item history for alert detection
+                const itemHistory = {};
+                records.forEach(r => {
+                    const key = r.itemName;
+                    if (!key) return;
+                    if (!itemHistory[key]) itemHistory[key] = { ordersByDate: {}, restaurants: new Set() };
+                    const dateKey = r.date;
+                    if (!itemHistory[key].ordersByDate[dateKey]) itemHistory[key].ordersByDate[dateKey] = 0;
+                    itemHistory[key].ordersByDate[dateKey] += r.qty;
+                    if (r.restaurantName) itemHistory[key].restaurants.add(r.restaurantName);
+                });
 
-            const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-            const last8Cycles = allCycles.slice(0, 8);
-            const latestCycle = last8Cycles[0];
+                const getMedian = (arr) => {
+                    if (!arr || arr.length === 0) return 0;
+                    const sorted = [...arr].sort((a, b) => a - b);
+                    const mid = Math.floor(sorted.length / 2);
+                    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+                };
 
-            Object.values(historyMap).forEach(item => {
-                const qtyIn8Filtered = last8Cycles.filter(date => (item.orderHistoryMap[date] || 0) > 0);
-                const qtyIn8 = last8Cycles.map(date => item.orderHistoryMap[date] || 0);
+                Object.entries(itemHistory).forEach(([itemName, data]) => {
+                    const dates = Object.keys(data.ordersByDate).sort((a, b) => new Date(b) - new Date(a));
+                    if (dates.length < 3) return;
+                    const last8 = dates.slice(0, 8).map(d => data.ordersByDate[d]);
+                    const median8 = getMedian(last8);
+                    const latestDemand = last8[0] || 0;
 
-                const median8 = getMedian(qtyIn8);
-                const latestDemand = item.orderHistoryMap[latestCycle] || 0;
+                    // Rule 1: Sudden spike
+                    if (median8 > 2 && latestDemand > median8 * 1.6) {
+                        detectedAlerts.push({
+                            id: `alt-${alertIdCount++}`,
+                            title: `Sudden Spike Detected: ${itemName}`,
+                            description: `Recent spike (${latestDemand} units ordered last cycle vs normal average of ${Math.round(median8)}).`,
+                            severity: 'High', status: 'Open',
+                            createdAt: new Date().toISOString(),
+                            suggestedAction: 'Review Vendor Constraints',
+                            relatedItemName: itemName
+                        });
+                    }
 
-                const override = V2_BASELINE_OVERRIDES[item.itemName];
+                    // Rule 2: Central buying opportunity
+                    if (data.restaurants.size >= 3 && median8 >= 15) {
+                        detectedAlerts.push({
+                            id: `alt-${alertIdCount++}`,
+                            title: `Central Buying Opportunity`,
+                            description: `${data.restaurants.size} restaurants ordering ${itemName} — consider bulk pallet negotiation.`,
+                            severity: 'Info', status: 'Open',
+                            createdAt: new Date().toISOString(),
+                            suggestedAction: 'Negotiate Bulk Pallet',
+                            relatedItemName: itemName
+                        });
+                    }
 
-                // Rule 1: High Demand Anomaly Warning (Ignore manually suppressed items)
-                if (median8 > 2 && latestDemand > (median8 * 1.6) && (!override || override.min > 0)) {
-                    detectedAlerts.push({
-                        id: `alt-${alertIdCount++}`,
-                        title: `Sudden Spike Detected: ${item.itemName}`,
-                        description: `The deterministic engine capped next week's order, but recorded a recent spike (${latestDemand} units ordered last week vs normal average of ${Math.round(median8)}).`,
-                        severity: 'High',
-                        status: 'Open',
-                        createdAt: new Date().toISOString(),
-                        suggestedAction: 'Review Vendor Constraints',
-                        relatedItemName: item.itemName
-                    });
-                }
+                    // Rule 3: Zero-volume drop
+                    if (median8 >= 8 && latestDemand === 0) {
+                        detectedAlerts.push({
+                            id: `alt-${alertIdCount++}`,
+                            title: `Unexpected Zero-Volume Drop`,
+                            description: `${itemName} had 0 orders last cycle despite a normal average of ${Math.round(median8)}. Check menu status.`,
+                            severity: 'Medium', status: 'Open',
+                            createdAt: new Date().toISOString(),
+                            suggestedAction: 'Check Restaurant Stock',
+                            relatedItemName: itemName
+                        });
+                    }
+                });
 
-                // Rule 2: Multiple locations creating central buying opp
-                if (item.locationCount.size >= 3 && median8 >= 15 && !override) {
-                    detectedAlerts.push({
-                        id: `alt-${alertIdCount++}`,
-                        title: `Central Buying Opportunity`,
-                        description: `High decentralized volume detected. ${item.locationCount.size} separate restaurants are requesting significant volumes of ${item.itemName}.`,
-                        severity: 'Info',
-                        status: 'Open',
-                        createdAt: new Date().toISOString(),
-                        suggestedAction: 'Negotiate Bulk Pallet',
-                        relatedItemName: item.itemName
-                    });
-                }
-
-                // Rule 3: Zero Demand Drop Warning for High Mover
-                if (median8 >= 8 && latestDemand === 0 && !override) {
-                    detectedAlerts.push({
-                        id: `alt-${alertIdCount++}`,
-                        title: `Unexpected Zero-Volume Drop`,
-                        description: `A traditionally fast moving item (${item.itemName}) had exactly 0 orders last week. Ensure the item wasn't accidentally removed from the menu.`,
-                        severity: 'Medium',
-                        status: 'Open',
-                        createdAt: new Date().toISOString(),
-                        suggestedAction: 'Check Restaurant Stock',
-                        relatedItemName: item.itemName
-                    });
-                }
-            });
-
-            setAlerts(detectedAlerts.sort((a, b) => {
-                const severityVal = (v) => v === 'High' ? 3 : v === 'Medium' ? 2 : 1;
-                return severityVal(b.severity) - severityVal(a.severity);
-            }));
+                setAlerts(detectedAlerts.sort((a, b) => {
+                    const severityVal = (v) => v === 'High' ? 3 : v === 'Medium' ? 2 : 1;
+                    return severityVal(b.severity) - severityVal(a.severity);
+                }));
+            } catch (err) {
+                console.error('ForecastAlertsPage load error', err);
+            }
             setLoading(false);
-
-        }, 400);
+        }
+        loadAlerts();
     }, []);
 
     const getSeverityDetails = (severity) => {
@@ -129,7 +111,7 @@ export default function ForecastAlertsPage() {
             <div className="page-header" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h1>Forecast Alerts & Opportunities</h1>
-                    <p className="subtitle" style={{ margin: 0 }}>Review deterministic warnings regarding sudden spikes and central buying options.</p>
+                    <p className="subtitle" style={{ margin: 0 }}>Review live warnings regarding sudden spikes and central buying options from Firestore data.</p>
                 </div>
                 <button className="ui-btn primary ghost">Mark All Read</button>
             </div>

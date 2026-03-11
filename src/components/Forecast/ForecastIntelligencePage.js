@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { db } from '../../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const TABS = [
     { key: 'accuracy', label: '🎯 Forecast Accuracy' },
@@ -297,26 +299,95 @@ function EngineConfigTab() {
 
 // ─── Marketplace Intelligence Tab ─────────────────────────────────────────────
 function MarketplaceIntelligenceTab() {
-    // Mock data representing marketplace-wide intelligence
-    const priceOpportunities = [
-        { item: 'Onion - Cooking', restaurant: 'Oruma Takeout', currentPrice: 19.50, marketLowest: 17.50, monthlySavings: 48 },
-        { item: 'Coriander Leaves', restaurant: 'Oruma Takeout', currentPrice: 9.50, marketLowest: 8.00, monthlySavings: 60 },
-        { item: 'Peeled Garlic', restaurant: 'Oruma Takeout', currentPrice: 22.00, marketLowest: 20.50, monthlySavings: 36 },
-    ];
+    const [loading, setLoading] = useState(true);
+    const [priceOpportunities, setPriceOpportunities] = useState([]);
+    const [vendorCompetitiveness, setVendorCompetitiveness] = useState([]);
+    const [bundleMissRates, setBundleMissRates] = useState([]);
 
-    const vendorCompetitiveness = [
-        { vendor: 'Vendor A', items: 12, aboveMedian: 3, avgMarkup: '+8.2%', risk: 'Medium' },
-        { vendor: 'ON Thyme', items: 18, aboveMedian: 1, avgMarkup: '+2.1%', risk: 'Low' },
-        { vendor: 'Test Taas', items: 8, aboveMedian: 0, avgMarkup: '-3.5%', risk: 'Low' },
-    ];
+    useEffect(() => {
+        async function loadData() {
+            try {
+                const vendorsSnap = await getDocs(collection(db, 'vendors'));
+                const allItems = [];
+                for (const vDoc of vendorsSnap.docs) {
+                    try {
+                        const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+                        itemSnap.docs.forEach(d => {
+                            const data = d.data();
+                            const name = (data.name || '').trim();
+                            const price = parseFloat(data.vendorPrice) || parseFloat(data.price) || 0;
+                            if (name && price > 0) {
+                                allItems.push({ vendorId: vDoc.id, vendorName: vDoc.data().name || 'Unknown', name, price, category: data.category || '' });
+                            }
+                        });
+                    } catch (_) {}
+                }
 
-    const bundleMissRates = [
-        { pair: '16oz Clear Container ↔ 16oz Clear Lid', missRate: '23%', weeklyMisses: 3, impact: 'High' },
-        { pair: '8oz Soup Cup ↔ 8oz Soup Cup Lid', missRate: '15%', weeklyMisses: 2, impact: 'Medium' },
-        { pair: 'T28 Container ↔ T28 Clear Lid', missRate: '8%', weeklyMisses: 1, impact: 'Low' },
-    ];
+                // Price Opportunities — items where cheapest vendor < most expensive
+                const itemPrices = {};
+                allItems.forEach(i => { const k = i.name.toLowerCase(); if (!itemPrices[k]) itemPrices[k] = { name: i.name, vendors: [] }; itemPrices[k].vendors.push(i); });
+                const opps = [];
+                Object.values(itemPrices).forEach(group => {
+                    if (group.vendors.length < 2) return;
+                    const sorted = group.vendors.sort((a, b) => a.price - b.price);
+                    const lowest = sorted[0].price; const highest = sorted[sorted.length - 1].price;
+                    const spread = highest - lowest;
+                    if (spread > 0.5) {
+                        opps.push({ item: group.name, restaurant: 'All Restaurants', currentPrice: highest, marketLowest: lowest, monthlySavings: Math.round(spread * 4) });
+                    }
+                });
+                opps.sort((a, b) => b.monthlySavings - a.monthlySavings);
+                setPriceOpportunities(opps.slice(0, 10));
+
+                // Vendor Competitiveness — items above/below median per vendor
+                const vendorMap = {};
+                Object.values(itemPrices).forEach(group => {
+                    if (group.vendors.length < 2) return;
+                    const prices = group.vendors.map(v => v.price).sort((a, b) => a - b);
+                    const mid = Math.floor(prices.length / 2);
+                    const median = prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid];
+                    group.vendors.forEach(v => {
+                        if (!vendorMap[v.vendorId]) vendorMap[v.vendorId] = { vendor: v.vendorName, items: 0, aboveMedian: 0, markupSum: 0, markupCount: 0 };
+                        vendorMap[v.vendorId].items++;
+                        if (v.price > median) vendorMap[v.vendorId].aboveMedian++;
+                        if (median > 0) { vendorMap[v.vendorId].markupSum += ((v.price - median) / median) * 100; vendorMap[v.vendorId].markupCount++; }
+                    });
+                });
+                const vc = Object.values(vendorMap).map(v => {
+                    const avgMarkup = v.markupCount > 0 ? v.markupSum / v.markupCount : 0;
+                    const risk = v.aboveMedian >= 3 ? 'High' : v.aboveMedian >= 1 ? 'Medium' : 'Low';
+                    return { vendor: v.vendor, items: v.items, aboveMedian: v.aboveMedian, avgMarkup: `${avgMarkup >= 0 ? '+' : ''}${avgMarkup.toFixed(1)}%`, risk };
+                });
+                vc.sort((a, b) => b.aboveMedian - a.aboveMedian);
+                setVendorCompetitiveness(vc);
+
+                // Bundle miss data — check which bundle pairs have items listed but with few vendors offering both
+                const bundlePairs = [
+                    ['16oz Clear Container', '16oz Clear Lid'],
+                    ['8oz Soup Cup', '8oz Soup Cup Lid'],
+                    ['T28 Container', 'T28 Clear Lid'],
+                    ['24oz Clear Container', '24oz Clear Lid'],
+                    ['32oz Clear Container', '32oz Clear Lid'],
+                ];
+                const itemsLower = new Set(allItems.map(i => i.name.toLowerCase()));
+                const bm = bundlePairs.map(([a, b]) => {
+                    const hasA = itemsLower.has(a.toLowerCase());
+                    const hasB = itemsLower.has(b.toLowerCase());
+                    if (!hasA && !hasB) return null;
+                    const missing = (!hasA || !hasB);
+                    const impact = missing ? 'High' : 'Low';
+                    return { pair: `${a} ↔ ${b}`, missRate: missing ? '100%' : '0%', weeklyMisses: missing ? 1 : 0, impact };
+                }).filter(Boolean);
+                setBundleMissRates(bm);
+            } catch (err) { console.error('MarketplaceIntelligenceTab load error', err); }
+            setLoading(false);
+        }
+        loadData();
+    }, []);
 
     const riskColor = { Low: '#34d399', Medium: '#fbbf24', High: '#f87171' };
+
+    if (loading) return <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>Loading marketplace intelligence…</div>;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -346,13 +417,15 @@ function MarketplaceIntelligenceTab() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                            {['Item', 'Restaurant', 'Current Price', 'Market Lowest', 'Savings/Unit', 'Est. Monthly Savings'].map(h => (
+                            {['Item', 'Scope', 'Highest Price', 'Market Lowest', 'Savings/Unit', 'Est. Monthly Savings'].map(h => (
                                 <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {priceOpportunities.map((row, i) => (
+                        {priceOpportunities.length === 0 ? (
+                            <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>No price spread detected — all vendors are competitively priced</td></tr>
+                        ) : priceOpportunities.map((row, i) => (
                             <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -440,7 +513,7 @@ function MarketplaceIntelligenceTab() {
     );
 }
 
-// ─── Main Page ──────────────────────────────────────────────────────────────────
+// --- Main Page -----
 export default function ForecastIntelligencePage() {
     const [activeTab, setActiveTab] = useState('accuracy');
 

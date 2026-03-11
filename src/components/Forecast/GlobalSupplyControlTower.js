@@ -2,9 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, query, getDocs, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { getActiveWeekStart, getWeekEnd, formatWeekLabel, isInWeek, sendVendorDispatch } from './dispatchModel';
-import vendorCatalogV2 from '../../data/catalog_v2.json';
 import { fetchOrderHistory, fetchCorrectionHistory } from './forecastHelpers';
-import containerTestData from './containerTestData.json';
 import CombinedDemandPage from './CombinedDemandPage';
 
 // Import Icons from react-icons
@@ -236,14 +234,7 @@ export default function GlobalSupplyControlTower() {
         const catalogLookup = {};
         const localVendorIdMap = {};
 
-        // 1. Register static fallback catalog items
-        vendorCatalogV2.forEach(row => {
-            const name = row.item_name?.trim();
-            const exactName = normalizeItemName(name);
-            if (exactName) catalogLookup[exactName] = { ...row, price: parseFloat(row.price) || 0 };
-        });
-
-        // 2. Override with Live Firebase Catalog
+        // Build catalog from Live Firebase Vendors only
         try {
             const vendorsSnap = await getDocs(collection(db, 'vendors'));
             const vendorsData = vendorsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -261,10 +252,12 @@ export default function GlobalSupplyControlTower() {
                                 ...catalogLookup[exactName],
                                 ...itemData,
                                 price: dbPrice > 0 ? dbPrice : (catalogLookup[exactName]?.price || 0),
-                                vendor: v.name || catalogLookup[exactName]?.vendor || 'Unknown Vendor',
+                                vendor: v.name || 'Unknown Vendor',
                                 base_unit: itemData.unit || catalogLookup[exactName]?.base_unit,
                                 pack_size: itemData.packQuantity || catalogLookup[exactName]?.pack_size || 1,
-                                pack_label: itemData.itemSize || catalogLookup[exactName]?.pack_label
+                                pack_label: itemData.itemSize || catalogLookup[exactName]?.pack_label,
+                                category: itemData.category || catalogLookup[exactName]?.category || 'Produce',
+                                isPackaging: (itemData.category || '').toLowerCase().includes('packaging') || (itemData.category || '').toLowerCase().includes('cleaning')
                             };
                         }
                     });
@@ -276,7 +269,7 @@ export default function GlobalSupplyControlTower() {
             console.error("Failed to load Firebase catalog:", err);
         }
 
-        // 3. Fetch Dispatches for Risk Alerts
+        // Fetch Dispatches for Risk Alerts
         try {
             const dispatchQ = query(collection(db, 'vendorDispatches'));
             const dispatchSnap = await getDocs(dispatchQ);
@@ -287,7 +280,6 @@ export default function GlobalSupplyControlTower() {
                     alerts.push({ id: d.id, ...data });
                 }
             });
-            // Sort to latest first based on createdAt or sentAt
             alerts.sort((a, b) => {
                 const da = a.updatedAt?.toDate ? a.updatedAt.toDate() : new Date(0);
                 const dbate = b.updatedAt?.toDate ? b.updatedAt.toDate() : new Date(0);
@@ -297,25 +289,6 @@ export default function GlobalSupplyControlTower() {
         } catch (err) {
             console.error('Failed to fetch dispatches for alerts:', err);
         }
-
-        containerTestData.forEach(row => {
-            if (row.itemName) {
-                const exactName = normalizeItemName(row.itemName);
-                if (!catalogLookup[exactName]) {
-                    catalogLookup[exactName] = {
-                        vendor: row.vendorName,
-                        category: row.category || 'Packaging',
-                        base_unit: row.packType,
-                        pack_size: row.packSize,
-                        pack_label: `${row.packSize} ${row.packType}`,
-                        price: 0,
-                        isPackaging: true,
-                        central_stock_only: row.central_stock_only,
-                        is_central_stock: row.is_central_stock
-                    };
-                }
-            }
-        });
 
         const globalHistoryMap = {};
         const localDispatchStatusMap = {};
@@ -364,27 +337,17 @@ export default function GlobalSupplyControlTower() {
                 if (!globalHistoryMap[exactName].orderHistoryMap[record.date]) {
                     globalHistoryMap[exactName].orderHistoryMap[record.date] = 0;
                 }
-                globalHistoryMap[exactName].orderHistoryMap[record.date] += (Number(record.quantity) || 0);
+                globalHistoryMap[exactName].orderHistoryMap[record.date] += (Number(record.qty) || 0);
             });
         } catch (err) {
             console.error('[ControlTower] Failed to fetch order history from Firestore:', err);
         }
-
-        // Packaging/Cleaning items from containerTestData (still static for now)
-        containerTestData.forEach(data => {
-            if (!data.date || !data.itemName) return;
-            const exactName = normalizeItemName(data.itemName);
-            if (!globalHistoryMap[exactName]) globalHistoryMap[exactName] = { orderHistoryMap: {}, category: data.category || 'Packaging', isPackaging: true };
-            if (!globalHistoryMap[exactName].orderHistoryMap[data.date]) globalHistoryMap[exactName].orderHistoryMap[data.date] = 0;
-            globalHistoryMap[exactName].orderHistoryMap[data.date] += (Number(data.boxesOrdered) || 0);
-        });
 
         // Build cycle lists from all collected dates
         const globalDatesSet = new Set();
         Object.values(globalHistoryMap).forEach(item => {
             Object.keys(item.orderHistoryMap).forEach(d => globalDatesSet.add(d));
         });
-        containerTestData.forEach(d => { if (d.date) globalDatesSet.add(d.date); });
 
         const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
         const last8Cycles = allCycles.slice(0, 8);

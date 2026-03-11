@@ -21,18 +21,6 @@ const ITEM_ALIAS_MAP = {
     'Carrot 50lbs': 'Carrot'
 };
 
-const V2_BASELINE_OVERRIDES = {
-    'Onion - Cooking': { min: 10, speed: 'Fast' },
-    'Onion - Red': { min: 5, speed: 'Fast' },
-    'Cabbage': { min: 3, speed: 'Fast' },
-    'Carrot': { min: 3, speed: 'Fast' },
-    'French Beans': { min: 3, speed: 'Fast' },
-    'Mint Leaves': { min: 3, speed: 'Medium' },
-    'Coriander Leaves': { min: 3, speed: 'Medium' },
-    'Lemon': { min: 2, speed: 'Medium' },
-    'Okra': { min: 2, speed: 'Medium' }
-};
-
 function normalizeItemName(name) {
     if (!name) return '';
     const n = name.trim().toLowerCase();
@@ -368,24 +356,15 @@ export default function VendorPlanningPage() {
                 let forecastQty = (0.3 * median4) + (0.7 * median8);
                 let predictedTotal = Math.ceil(forecastQty);
 
-                const override = V2_BASELINE_OVERRIDES[itemName];
-                let isCoreItem = !!override || item.isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[itemName]?.category);
+                // Cap at 1.5× median_8 to prevent outlier spikes
+                const cap = Math.ceil(median8 * 1.5) || 0;
+                if (cap > 0 && predictedTotal > cap) predictedTotal = cap;
 
-                if (override) {
-                    predictedTotal = override.min;
-                } else {
-                    const cap = Math.ceil(median8 * 1.5) || 1;
-                    if (predictedTotal > cap) predictedTotal = cap;
-                    if (itemName === 'Tomato' && predictedTotal < 1 && qtyIn8Filtered.length > 0) {
-                        predictedTotal = Math.ceil(getMedian(qtyIn8Filtered));
-                    }
-                }
+                // Qualify: item must appear in ≥3 of last 8 cycles
+                const MIN_APPEARANCES = 3;
+                if (qtyIn8Filtered.length < MIN_APPEARANCES || predictedTotal <= 0) return;
 
-                if (!isCoreItem && !['Capsicum Green', 'Beets', 'Ash Guard', 'Pepper Mix', 'Cauliflower'].includes(itemName)) {
-                    if ((qtyIn8Filtered.length >= 6 || itemName === 'Tomato') && predictedTotal > 0) isCoreItem = true;
-                }
-
-                if (isCoreItem && predictedTotal > 0) {
+                {
                     let mondayQty = Math.round(predictedTotal * 0.6);
                     let thursdayQty = predictedTotal - mondayQty;
 

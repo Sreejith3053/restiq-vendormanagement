@@ -7,9 +7,11 @@
  * Also integrates correction learning from `forecastCorrections` collection
  * so that all consumers get corrected predictions (Option B architecture).
  *
- * Algorithm: median-blend (30% last-4-cycles + 70% last-8-cycles),
- * baseline overrides, proportional restaurant split, Mon/Thu delivery day split,
+ * Algorithm: purely data-driven median-blend (30% last-4-cycles + 70% last-8-cycles),
+ * proportional restaurant split, Mon/Thu delivery day split,
  * + learned corrections from historical user edits.
+ *
+ * No hardcoded minimums or exclusions — all forecasts derive from actual order data.
  */
 import { db } from '../../firebase';
 import { collection, query, where, orderBy, getDocs, Timestamp, limit } from 'firebase/firestore';
@@ -30,23 +32,8 @@ const ITEM_ALIAS_MAP = {
     'Carrot 50lbs': 'Carrot',
 };
 
-const BASELINE_OVERRIDES = {
-    'Onion - Cooking': { min: 10, speed: 'Fast' },
-    'Onion - Red':     { min: 5,  speed: 'Fast' },
-    'Cabbage':         { min: 3,  speed: 'Fast' },
-    'Carrot':          { min: 3,  speed: 'Fast' },
-    'French Beans':    { min: 3,  speed: 'Fast' },
-    'Mint Leaves':     { min: 3,  speed: 'Medium' },
-    'Coriander Leaves':{ min: 3,  speed: 'Medium' },
-    'Lemon':           { min: 2,  speed: 'Medium' },
-    'Okra':            { min: 2,  speed: 'Medium' },
-};
-
 // Only count these statuses as actual fulfilled orders
 const FULFILLED_STATUSES = ['fulfilled', 'completed', 'delivered', 'delivered_awaiting_confirmation', 'pending_fulfillment'];
-
-// Items that are noise / to exclude
-const EXCLUDED_ITEMS = ['Capsicum Green', 'Beets', 'Ash Guard', 'Pepper Mix', 'Cauliflower'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -355,12 +342,12 @@ export function computeCorrectionProfiles(corrections) {
 /**
  * Build a per-restaurant item forecast using the order history records.
  *
- * Algorithm:
+ * Algorithm (purely data-driven):
  *   1. Group records by date to find order "cycles"
  *   2. For each item, aggregate qty per cycle
  *   3. Compute median over last 8 and last 4 cycles
  *   4. Blend: forecast = 30% × median_4 + 70% × median_8
- *   5. Apply baseline overrides
+ *   5. Cap at 1.5× median_8 to prevent outlier spikes
  *   6. Proportionally split to the selected restaurant
  *   7. Split to delivery days (Mon 60% / Thu 40%)
  *
@@ -411,7 +398,7 @@ export function buildRestaurantForecast(records, restaurantId, allRestaurants, c
         }
     });
 
-    // 3. Compute forecasts per item
+    // 3. Compute forecasts per item (purely data-driven)
     const results = [];
 
     console.log(`[Forecast] Building forecast for "${restaurantId}" | ${last8Cycles.length} order cycles | ${Object.keys(globalHistoryMap).length} unique items found`);
@@ -424,34 +411,20 @@ export function buildRestaurantForecast(records, restaurantId, allRestaurants, c
 
         const median8 = getMedian(qtyIn8);
         const median4 = getMedian(qtyIn4);
+        const cat = categoryMap[itemName] || '';
 
+        // Blend: 30% recent + 70% historical
         let forecastQty = (0.3 * median4) + (0.7 * median8);
         let predictedTotal = Math.ceil(forecastQty);
 
-        const override = BASELINE_OVERRIDES[itemName];
-        const cat = categoryMap[itemName] || '';
+        // Cap at 1.5× median_8 to prevent outlier spikes
+        const cap = Math.ceil(median8 * 1.5) || 0;
+        if (cap > 0 && predictedTotal > cap) predictedTotal = cap;
 
-        // Apply baseline override
-        if (override) {
-            predictedTotal = override.min;
-        } else {
-            const cap = Math.ceil(median8 * 1.5) || 1;
-            if (predictedTotal > cap) predictedTotal = cap;
-            if (itemName === 'Tomato' && predictedTotal < 1 && qtyIn8Filtered.length > 0) {
-                predictedTotal = Math.ceil(getMedian(qtyIn8Filtered));
-            }
-        }
-
-        // Filter: only include core items — item must appear in 6 of 8 cycles
-        let isCoreItem = !!override || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(cat);
-        if (!isCoreItem && !EXCLUDED_ITEMS.includes(itemName)) {
-            if ((qtyIn8Filtered.length >= 6 || itemName === 'Tomato') && predictedTotal > 0) {
-                isCoreItem = true;
-            }
-        }
-
-        if (!isCoreItem || predictedTotal <= 0) {
-            console.log(`[Forecast]   SKIP "${itemName}" | appeared in ${qtyIn8Filtered.length}/${last8Cycles.length} cycles (need 6) | predicted: ${predictedTotal}`);
+        // Qualify: item must appear in ≥3 of last 8 cycles with qty > 0
+        const MIN_APPEARANCES = 3;
+        if (qtyIn8Filtered.length < MIN_APPEARANCES || predictedTotal <= 0) {
+            console.log(`[Forecast]   SKIP "${itemName}" | appeared in ${qtyIn8Filtered.length}/${last8Cycles.length} cycles (need ${MIN_APPEARANCES}) | predicted: ${predictedTotal}`);
             return;
         }
 
@@ -484,10 +457,9 @@ export function buildRestaurantForecast(records, restaurantId, allRestaurants, c
         if (median4 > median8 * 1.2) trend = 'up';
         else if (median4 < median8 * 0.8) trend = 'down';
 
-        // Confidence
+        // Confidence (purely based on data availability)
         let confidence = 'Low';
-        if (override) confidence = 'High';
-        else if (qtyIn8Filtered.length >= 7) confidence = 'High';
+        if (qtyIn8Filtered.length >= 7) confidence = 'High';
         else if (qtyIn8Filtered.length >= 4) confidence = 'Medium';
 
         // 6. Apply learned corrections from forecastCorrections

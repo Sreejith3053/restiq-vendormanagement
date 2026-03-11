@@ -23,18 +23,6 @@ const ITEM_ALIAS_MAP = {
     'Carrot 50lbs': 'Carrot'
 };
 
-const V2_BASELINE_OVERRIDES = {
-    'Onion - Cooking': { min: 10, speed: 'Fast' },
-    'Onion - Red': { min: 5, speed: 'Fast' },
-    'Cabbage': { min: 3, speed: 'Fast' },
-    'Carrot': { min: 3, speed: 'Fast' },
-    'French Beans': { min: 3, speed: 'Fast' },
-    'Mint Leaves': { min: 3, speed: 'Medium' },
-    'Coriander Leaves': { min: 3, speed: 'Medium' },
-    'Lemon': { min: 2, speed: 'Medium' },
-    'Okra': { min: 2, speed: 'Medium' }
-};
-
 function normalizeItemName(name) {
     if (!name) return '';
     const n = name.trim().toLowerCase();
@@ -366,24 +354,14 @@ export default function GlobalSupplyControlTower() {
 
             let predictedTotal = Math.ceil((0.3 * getMedian(qtyIn4)) + (0.7 * getMedian(qtyIn8)));
 
-            const override = V2_BASELINE_OVERRIDES[itemName];
-            let isCoreItem = !!override || item.isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[itemName]?.category);
+            // Cap at 1.5× median to prevent outlier spikes
+            const cap = Math.ceil(getMedian(qtyIn8) * 1.5) || 0;
+            if (cap > 0 && predictedTotal > cap) predictedTotal = cap;
 
-            if (override) predictedTotal = override.min;
-            else {
-                const cap = Math.ceil(getMedian(qtyIn8) * 1.5) || 1;
-                if (predictedTotal > cap) predictedTotal = cap;
-                const qtyIn8Filtered = last8Cycles.map(date => item.orderHistoryMap[date] || 0).filter(q => q > 0);
-                if (itemName === 'Tomato' && predictedTotal < 1 && qtyIn8Filtered.length > 0) {
-                    predictedTotal = Math.ceil(getMedian(qtyIn8Filtered));
-                }
-
-                if (!isCoreItem && !['Capsicum Green', 'Beets', 'Ash Guard', 'Pepper Mix', 'Cauliflower'].includes(itemName)) {
-                    if ((qtyIn8Filtered.length >= 6 || itemName === 'Tomato') && predictedTotal > 0) {
-                        isCoreItem = true;
-                    }
-                }
-            }
+            // Qualify: item must appear in ≥3 of last 8 cycles
+            const qtyIn8Filtered = last8Cycles.map(date => item.orderHistoryMap[date] || 0).filter(q => q > 0);
+            const MIN_APPEARANCES = 3;
+            if (qtyIn8Filtered.length < MIN_APPEARANCES || predictedTotal <= 0) return;
 
             let monQty = Math.round(predictedTotal * 0.6);
             let thuQty = predictedTotal - monQty;
@@ -392,9 +370,7 @@ export default function GlobalSupplyControlTower() {
                 thuQty = predictedTotal - monQty;
             }
 
-            const isActiveForecast = predictedTotal > 0 || monQty > 0 || thuQty > 0;
-
-            if (isCoreItem && isActiveForecast) {
+            {
                 tActive++;
 
                 tMon += monQty; tThu += thuQty;

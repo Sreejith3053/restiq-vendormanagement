@@ -132,7 +132,7 @@ export default function ManageCatalogPage() {
 
     const handleLinkVendorItem = async (vendorItem, catalogItemId) => {
         try {
-            await updateDoc(doc(db, `vendors/${vendorItem.vendorId}/items`, vendorItem.itemDocId), { catalogItemId, updatedAt: new Date().toISOString() });
+            await updateDoc(doc(db, `vendors/${vendorItem.vendorId}/items`, vendorItem.itemDocId), { catalogItemId, updatedAt: serverTimestamp() });
             await logAdminChange({ entityType: 'vendorItem', entityId: vendorItem.itemDocId, action: 'mapped', changedBy: displayName, metadata: { catalogItemId, vendorId: vendorItem.vendorId } });
             toast.success(`Linked "${vendorItem.itemName}" → ${catalogItemId}`); fetchData();
         } catch (err) { toast.error(err.message); }

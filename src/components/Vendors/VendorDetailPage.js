@@ -160,7 +160,7 @@ export default function VendorDetailPage() {
                 address: editForm.address?.trim() || '',
                 notes: editForm.notes?.trim() || '',
                 status: editForm.status || 'active',
-                updatedAt: new Date().toISOString(),
+                updatedAt: serverTimestamp(),
             };
 
             if (isSuperAdmin && editForm.commissionPercent !== undefined) {
@@ -245,7 +245,7 @@ export default function VendorDetailPage() {
                 requestedBy: '',
                 requestedByName: '',
                 requestedAt: null,
-                updatedAt: new Date().toISOString(),
+                updatedAt: serverTimestamp(),
             };
 
             if ((item.changeType === 'edit' || item.changeType === 'add') && item.proposedData) {

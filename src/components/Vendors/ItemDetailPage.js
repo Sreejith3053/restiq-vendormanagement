@@ -91,7 +91,7 @@ export default function ItemDetailPage() {
             const url = await getDownloadURL(storageRef);
             // Save URL to item doc
             const itemRef = doc(db, `vendors/${vendorId}/items`, itemId);
-            await updateDoc(itemRef, { imageUrl: url, updatedAt: new Date().toISOString() });
+            await updateDoc(itemRef, { imageUrl: url, updatedAt: serverTimestamp() });
             setItem(prev => ({ ...prev, imageUrl: url }));
             await logAudit('image_uploaded', { itemName: item.name });
             toast.success('Image uploaded!');
@@ -215,7 +215,7 @@ export default function ItemDetailPage() {
                     ...proposedData,
                     status: 'active',
                     rejectionComment: '',
-                    updatedAt: new Date().toISOString(),
+                    updatedAt: serverTimestamp(),
                 });
                 setItem(prev => ({ ...prev, ...proposedData, status: 'active', rejectionComment: '' }));
                 await logAudit('edited_direct', { itemName: proposedData.name, originalData, proposedData });
@@ -386,7 +386,7 @@ export default function ItemDetailPage() {
                 requestedBy: '',
                 requestedByName: '',
                 requestedAt: null,
-                updatedAt: new Date().toISOString(),
+                updatedAt: serverTimestamp(),
             };
 
             if ((item.changeType === 'edit' || item.changeType === 'add') && item.proposedData) {
@@ -760,7 +760,7 @@ export default function ItemDetailPage() {
                     <div className="idp-stat">
                         <div className="idp-stat__icon">🕐</div>
                         <div className="idp-stat__label">Last Updated</div>
-                        <div className="idp-stat__value" style={{ fontSize: 14 }}>{item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</div>
+                        <div className="idp-stat__value" style={{ fontSize: 14 }}>{item.updatedAt ? (item.updatedAt.toDate ? item.updatedAt.toDate() : new Date(item.updatedAt)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}</div>
                     </div>
                 </div>
 

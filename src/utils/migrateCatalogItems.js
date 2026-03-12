@@ -168,7 +168,7 @@ export async function migrateCatalogItems(onProgress) {
                         try {
                             await updateDoc(doc(db, `vendors/${vi.vendorId}/items`, vi.itemDocId), {
                                 catalogItemId,
-                                updatedAt: new Date().toISOString(),
+                                updatedAt: serverTimestamp(),
                             });
                             log.vendorItemsLinked++;
                         } catch (linkErr) {

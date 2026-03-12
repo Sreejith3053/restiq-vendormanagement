@@ -46,7 +46,7 @@ export default function CatalogItemMappingReviewPage() {
 
     const handleMapExisting = async (review, catalogItemId) => {
         try {
-            await updateDoc(doc(db, `vendors/${review.vendorId}/items`, review.itemId), { catalogItemId, updatedAt: new Date().toISOString() });
+            await updateDoc(doc(db, `vendors/${review.vendorId}/items`, review.itemId), { catalogItemId, updatedAt: serverTimestamp() });
             await updateDoc(doc(db, 'catalogItemMappingReview', review.id), { status: 'mapped', resolvedCatalogItemId: catalogItemId, resolvedAt: serverTimestamp() });
             await logAdminChange({ entityType: 'mappingReview', entityId: review.id, action: 'mapped', changedBy: displayName, metadata: { catalogItemId, vendorId: review.vendorId, itemName: review.itemName } });
             toast.success(`Mapped "${review.itemName}" → ${catalogItemId}`);
@@ -74,7 +74,7 @@ export default function CatalogItemMappingReviewPage() {
                 createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
             });
 
-            await updateDoc(doc(db, `vendors/${review.vendorId}/items`, review.itemId), { catalogItemId: cid, updatedAt: new Date().toISOString() });
+            await updateDoc(doc(db, `vendors/${review.vendorId}/items`, review.itemId), { catalogItemId: cid, updatedAt: serverTimestamp() });
             await updateDoc(doc(db, 'catalogItemMappingReview', review.id), { status: 'mapped', resolvedCatalogItemId: cid, resolvedAt: serverTimestamp() });
             await logAdminChange({ entityType: 'mappingReview', entityId: review.id, action: 'mapped', changedBy: displayName, metadata: { catalogItemId: cid, action: 'created_and_mapped' } });
 
@@ -101,7 +101,7 @@ export default function CatalogItemMappingReviewPage() {
             for (const id of ids) {
                 const r = reviewItems.find(ri => ri.id === id);
                 if (!r) continue;
-                await updateDoc(doc(db, `vendors/${r.vendorId}/items`, r.itemId), { catalogItemId: bulkCatalogId, updatedAt: new Date().toISOString() });
+                await updateDoc(doc(db, `vendors/${r.vendorId}/items`, r.itemId), { catalogItemId: bulkCatalogId, updatedAt: serverTimestamp() });
                 await updateDoc(doc(db, 'catalogItemMappingReview', id), { status: 'mapped', resolvedCatalogItemId: bulkCatalogId, resolvedAt: serverTimestamp() });
             }
             await logAdminChange({ entityType: 'mappingReview', entityId: 'bulk', action: 'bulk_update', changedBy: displayName, metadata: { ids, catalogItemId: bulkCatalogId } });

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
 
@@ -54,8 +54,8 @@ export default function AddVendorPage() {
                 contactEmail: form.contactEmail.trim(),
                 address: form.address.trim(),
                 notes: form.notes.trim(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
             });
             toast.success('Vendor added successfully!');
             navigate(`/vendors/${docRef.id}`);

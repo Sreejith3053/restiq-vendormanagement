@@ -157,7 +157,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 await updateDoc(itemRef, {
                     ...payload,
                     rejectionComment: '',
-                    updatedAt: new Date().toISOString(),
+                    updatedAt: serverTimestamp(),
                     ...(catalogMatch ? { catalogItemId: catalogMatch.catalogItemId } : {}),
                 });
                 toast.success(`Item ${requestType === 'deactivate' ? 'deactivated' : 'updated'}!`);

@@ -88,7 +88,7 @@ export default function PendingReviewsDashboard() {
                 requestedBy: '',
                 requestedByName: '',
                 requestedAt: null,
-                updatedAt: new Date().toISOString(),
+                updatedAt: serverTimestamp(),
             };
 
             if ((item.changeType === 'edit' || item.changeType === 'add' || item.changeType === 'deactivate') && item.proposedData) {

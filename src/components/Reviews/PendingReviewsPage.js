@@ -50,7 +50,7 @@ export default function PendingReviewsPage() {
                     ...review.proposedData,
                     status: 'active',
                     rejectionComment: '',
-                    updatedAt: new Date().toISOString(),
+                    updatedAt: serverTimestamp(),
                 });
             } else if (review.changeType === 'delete') {
                 // Delete the item

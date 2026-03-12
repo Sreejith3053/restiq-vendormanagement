@@ -100,7 +100,7 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                 description: itemForm.description.trim(),
                 notes: itemForm.notes.trim(),
                 taxable: !!itemForm.taxable,
-                createdAt: new Date().toISOString(),
+                createdAt: serverTimestamp(),
                 imageUrl: '',
                 ...(catalogMatch ? { catalogItemId: catalogMatch.catalogItemId } : {}),
             };
@@ -140,7 +140,7 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                     const storageRef = ref(storage, `items/${vendorId}/${docId}.webp`);
                     await uploadBytes(storageRef, resized, { contentType: 'image/webp' });
                     const url = await getDownloadURL(storageRef);
-                    await updateDoc(doc(db, `vendors/${vendorId}/items`, docId), { imageUrl: url, updatedAt: new Date().toISOString() });
+                    await updateDoc(doc(db, `vendors/${vendorId}/items`, docId), { imageUrl: url, updatedAt: serverTimestamp() });
                     finalItem.imageUrl = url;
                     if (logAudit) await logAudit(vendorId, docId, 'image_uploaded', { itemName: itemData.name });
                 } catch (imgErr) {

@@ -146,6 +146,16 @@ export async function sendVendorDispatch(vendor, weekStart, weekEnd, weekLabel) 
         lineVendorPayout: i.lineVendorPayout || 0,
         lineRestaurantBilling: i.lineRestaurantBilling || 0,
         category: i.category || '',
+        // Snapshot fields for historical accuracy
+        vendorItemId: i.vendorItemId || i.itemId || null,
+        catalogItemId: i.catalogItemId || null,
+        itemNameSnapshot: i.itemName || 'Unknown Item',
+        priceSnapshot: Number(i.vendorPrice ?? i.price ?? i.catalogSellPrice ?? 0),
+        unitSnapshot: i.unit || i.packLabel || 'unit',
+        vendorNameSnapshot: vendor.name || null,
+        packSizeSnapshot: i.packQuantity || i.packSize || null,
+        categorySnapshot: i.category || null,
+        taxableSnapshot: !!i.taxable,
     }));
 
     const monItems = itemsPayload.filter(i => i.mondayQty > 0).map(i => ({ ...i, qty: i.mondayQty }));
@@ -168,7 +178,7 @@ export async function sendVendorDispatch(vendor, weekStart, weekEnd, weekLabel) 
         overallStatus: 'Sent',
         mondaySent: true,
         thursdaySent: true,
-        sentAt: new Date().toISOString(),
+        sentAt: serverTimestamp(),
         confirmedAt: null,
         deliveredAt: null,
         items: itemsPayload,
@@ -187,7 +197,7 @@ export async function sendVendorDispatch(vendor, weekStart, weekEnd, weekLabel) 
         routeDay: 'Monday',
         totalPacks: vendor.mon || 0,
         status: 'Sent',
-        sentAt: new Date().toISOString(),
+        sentAt: serverTimestamp(),
         confirmedAt: null,
         deliveredAt: null,
         warehouseStatus: null,
@@ -207,7 +217,7 @@ export async function sendVendorDispatch(vendor, weekStart, weekEnd, weekLabel) 
         routeDay: 'Thursday',
         totalPacks: vendor.thu || 0,
         status: 'Sent',
-        sentAt: new Date().toISOString(),
+        sentAt: serverTimestamp(),
         confirmedAt: null,
         deliveredAt: null,
         warehouseStatus: null,

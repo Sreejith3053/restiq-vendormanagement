@@ -153,7 +153,7 @@ export default function OrdersPage() {
                     auditLogEntries.push({
                         action: `Item "${item.name}" ${actionName} from ${originalItem.qty} to ${item.qty}`,
                         reason: reason,
-                        timestamp: new Date().toISOString(),
+                        timestamp: serverTimestamp(),
                         user: displayName || 'Admin'
                     });
                 }
@@ -265,7 +265,7 @@ export default function OrdersPage() {
             const auditEntry = {
                 action: actionLabel,
                 reason: cancelReason.trim(),
-                timestamp: new Date().toISOString(),
+                timestamp: serverTimestamp(),
                 user: displayName || 'Vendor'
             };
             const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
@@ -273,7 +273,7 @@ export default function OrdersPage() {
             const updatePayload = {
                 status: 'cancelled_by_vendor',
                 auditLog: updatedAuditLog,
-                cancelledAt: new Date().toISOString(),
+                cancelledAt: serverTimestamp(),
                 cancelReason: cancelReason.trim()
             };
 
@@ -298,14 +298,14 @@ export default function OrdersPage() {
             const auditEntry = {
                 action: 'Order marked as delivered — awaiting restaurant confirmation',
                 reason: 'Delivery completed',
-                timestamp: now.toISOString(),
+                timestamp: serverTimestamp(),
                 user: displayName || 'Vendor'
             };
             const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
 
             await updateDoc(orderRef, {
                 status: 'delivered_awaiting_confirmation',
-                deliveredAt: now.toISOString(),
+                deliveredAt: serverTimestamp(),
                 reviewWindowEndsAt,
                 auditLog: updatedAuditLog
             });
@@ -314,7 +314,7 @@ export default function OrdersPage() {
             setSelectedOrder(prev => prev ? {
                 ...prev,
                 status: 'delivered_awaiting_confirmation',
-                deliveredAt: now.toISOString(),
+                deliveredAt: serverTimestamp(),
                 reviewWindowEndsAt,
                 auditLog: updatedAuditLog
             } : null);
@@ -368,13 +368,13 @@ export default function OrdersPage() {
                 if (newQty === 0 && origQty > 0) {
                     itemAuditEntries.push({
                         action: `Item "${itemName}" removed (qty ${origQty} → 0)`,
-                        timestamp: now.toISOString(),
+                        timestamp: serverTimestamp(),
                         user: displayName || 'SuperAdmin'
                     });
                 } else if (newQty !== origQty) {
                     itemAuditEntries.push({
                         action: `Item "${itemName}" qty adjusted from ${origQty} to ${newQty}`,
-                        timestamp: now.toISOString(),
+                        timestamp: serverTimestamp(),
                         user: displayName || 'SuperAdmin'
                     });
                 }
@@ -382,7 +382,7 @@ export default function OrdersPage() {
                 if (newPrice !== origPrice && newQty > 0) {
                     itemAuditEntries.push({
                         action: `Item "${itemName}" price adjusted from $${origPrice.toFixed(2)} to $${newPrice.toFixed(2)}`,
-                        timestamp: now.toISOString(),
+                        timestamp: serverTimestamp(),
                         user: displayName || 'SuperAdmin'
                     });
                 }
@@ -392,7 +392,7 @@ export default function OrdersPage() {
             const resolutionEntry = {
                 action: `Issue resolved — ${resolutionAction.replace(/_/g, ' ')}`,
                 reason: resolutionNotes || 'Resolved by admin',
-                timestamp: now.toISOString(),
+                timestamp: serverTimestamp(),
                 user: displayName || 'SuperAdmin'
             };
 
@@ -406,9 +406,9 @@ export default function OrdersPage() {
                     type: resolutionAction,
                     details: resolutionNotes,
                     resolvedBy: displayName || 'SuperAdmin',
-                    resolvedAt: now.toISOString()
+                    resolvedAt: serverTimestamp()
                 },
-                resolvedAt: now.toISOString(),
+                resolvedAt: serverTimestamp(),
                 items: resolutionItems,
                 subtotalBeforeTax,
                 totalTax,
@@ -496,7 +496,7 @@ export default function OrdersPage() {
                 ...prev,
                 status: 'fulfilled',
                 issueStatus: 'resolved',
-                resolvedAt: now.toISOString(),
+                resolvedAt: serverTimestamp(),
                 items: resolutionItems,
                 subtotalBeforeTax,
                 totalTax,

@@ -76,7 +76,7 @@ export default function MigrationAdminPage() {
             // Link the vendor item
             await updateDoc(doc(db, `vendors/${reviewItem.vendorId}/items`, reviewItem.itemId), {
                 catalogItemId,
-                updatedAt: new Date().toISOString(),
+                updatedAt: serverTimestamp(),
             });
             // Mark review as resolved
             await updateDoc(doc(db, 'catalogItemMappingReview', reviewItem.id), {

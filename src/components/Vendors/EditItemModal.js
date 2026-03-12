@@ -1,12 +1,13 @@
 // src/components/Vendors/EditItemModal.js
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { UserContext } from '../../contexts/UserContext';
 import { db, storage } from '../../firebase';
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import PricingIntelligencePanel from './PricingIntelligencePanel';
 import CompetitivenessScorePanel from './CompetitivenessScorePanel';
+import { matchCatalogItem } from '../../utils/catalogUtils';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
@@ -35,6 +36,25 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
 
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [catalogItems, setCatalogItems] = useState([]);
+    const [catalogMatch, setCatalogMatch] = useState(null);
+
+    // Load catalog items for matching
+    useEffect(() => {
+        getDocs(collection(db, 'catalogItems')).then(snap => {
+            setCatalogItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }).catch(() => {});
+    }, []);
+
+    // Auto-match catalog item as name changes
+    useEffect(() => {
+        if (item.catalogItemId) {
+            const found = catalogItems.find(c => c.catalogItemId === item.catalogItemId);
+            if (found) { setCatalogMatch({ catalogItemId: found.catalogItemId, canonicalName: found.canonicalName, matchType: 'linked' }); return; }
+        }
+        if (!form.name.trim() || catalogItems.length === 0) { setCatalogMatch(null); return; }
+        setCatalogMatch(matchCatalogItem(form.name.trim(), catalogItems));
+    }, [form.name, catalogItems, item.catalogItemId]);
 
     const handleProofChange = (e) => {
         const files = Array.from(e.target.files || []);
@@ -138,6 +158,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                     ...payload,
                     rejectionComment: '',
                     updatedAt: new Date().toISOString(),
+                    ...(catalogMatch ? { catalogItemId: catalogMatch.catalogItemId } : {}),
                 });
                 toast.success(`Item ${requestType === 'deactivate' ? 'deactivated' : 'updated'}!`);
                 onItemUpdated({ ...item, ...payload, rejectionComment: '' });
@@ -216,6 +237,15 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                     {!isSuperAdmin && (
                         <div style={{ marginBottom: 12, fontSize: 12, color: '#5a6f8a', background: 'rgba(0,200,255,0.06)', padding: '8px 12px', borderRadius: 6 }}>
                             ℹ️ Changes will be submitted for super admin review before being applied.
+                        </div>
+                    )}
+
+                    {/* Catalog Item Mapping */}
+                    {catalogMatch && (
+                        <div style={{ marginBottom: 12, padding: '8px 14px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                            <span style={{ fontWeight: 700, color: '#10b981' }}>✓ Catalog:</span>
+                            <span style={{ color: '#f8fafc', fontWeight: 600 }}>{catalogMatch.canonicalName}</span>
+                            <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(255,255,255,0.05)', padding: '1px 6px', borderRadius: 4 }}>{catalogMatch.matchType}</span>
                         </div>
                     )}
 

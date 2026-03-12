@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { addDoc, collection, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { addDoc, collection, getDocs, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import PricingIntelligencePanel from './PricingIntelligencePanel';
+import { matchCatalogItem } from '../../utils/catalogUtils';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
@@ -16,6 +17,22 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
     const [itemSaving, setItemSaving] = useState(false);
     const fileInputRef = useRef(null);
     const proofInputRef = useRef(null);
+    const [catalogItems, setCatalogItems] = useState([]);
+    const [catalogMatch, setCatalogMatch] = useState(null); // { catalogItemId, canonicalName, matchType }
+
+    // Load catalog items on mount for auto-matching
+    useEffect(() => {
+        getDocs(collection(db, 'catalogItems')).then(snap => {
+            setCatalogItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }).catch(() => {});
+    }, []);
+
+    // Auto-match as user types item name
+    useEffect(() => {
+        if (!itemForm.name.trim() || catalogItems.length === 0) { setCatalogMatch(null); return; }
+        const match = matchCatalogItem(itemForm.name.trim(), catalogItems);
+        setCatalogMatch(match);
+    }, [itemForm.name, catalogItems]);
 
     const IMG_SIZE = 400;
 
@@ -84,7 +101,8 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                 notes: itemForm.notes.trim(),
                 taxable: !!itemForm.taxable,
                 createdAt: new Date().toISOString(),
-                imageUrl: ''
+                imageUrl: '',
+                ...(catalogMatch ? { catalogItemId: catalogMatch.catalogItemId } : {}),
             };
 
             let docId = '';
@@ -214,6 +232,19 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                         </div>
                     </div>
 
+                    {/* Catalog Match Indicator */}
+                    {catalogMatch && (
+                        <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✓ Catalog Match</span>
+                            <span style={{ fontSize: 12, color: '#f8fafc', fontWeight: 600 }}>{catalogMatch.canonicalName}</span>
+                            <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(255,255,255,0.05)', padding: '1px 6px', borderRadius: 4 }}>{catalogMatch.matchType}</span>
+                        </div>
+                    )}
+                    {itemForm.name.trim() && !catalogMatch && catalogItems.length > 0 && (
+                        <div style={{ marginTop: 12, padding: '8px 14px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 8, fontSize: 11, color: '#fbbf24' }}>
+                            ⚠️ No catalog match found. This item will need manual catalog linking.
+                        </div>
+                    )}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                         <div><label className="ui-label">Item Name *</label><input className="ui-input" placeholder="e.g. Turmeric Powder" value={itemForm.name} onChange={e => setItemForm(p => ({ ...p, name: e.target.value }))} /></div>
                         <div><label className="ui-label">Brand</label><input className="ui-input" placeholder="e.g. Eastern, Sakthi, MTR…" value={itemForm.brand} onChange={e => setItemForm(p => ({ ...p, brand: e.target.value }))} /></div>

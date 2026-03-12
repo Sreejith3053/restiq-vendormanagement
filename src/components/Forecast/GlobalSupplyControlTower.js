@@ -2,41 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
 import { collection, query, getDocs, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { getActiveWeekStart, getWeekEnd, formatWeekLabel, isInWeek, sendVendorDispatch } from './dispatchModel';
-import { fetchOrderHistory, fetchCorrectionHistory } from './forecastHelpers';
 import CombinedDemandPage from './CombinedDemandPage';
+import { fetchOrderHistory, getRestaurantList, buildRestaurantForecast } from './forecastHelpers';
+import { computeForecastAccuracy, computeCorrectionIntelligence } from './forecastAccuracyEngine';
 
 // Import Icons from react-icons
 import { FiRefreshCw, FiDownload, FiAlertCircle, FiTrendingUp, FiTrendingDown, FiActivity, FiBox, FiDollarSign } from 'react-icons/fi';
 
-const ITEM_ALIAS_MAP = {
-    'white onion': 'Onion - Cooking',
-    'red onion': 'Onion - Red',
-    'spring onion': 'Green Onion',
-    'garlic': 'Peeled Garlic',
-    'green plantain': 'Plantain Green',
-    'Coriander': 'Coriander Leaves',
-    'Mint': 'Mint Leaves',
-    'Onion Cooking': 'Onion - Cooking',
-    'Onion Cooking 50lbs': 'Onion - Cooking',
-    'Onion - Red': 'Onion - Red',
-    'Onion Red 25lbs': 'Onion - Red',
-    'Carrot 50lbs': 'Carrot'
-};
+// (forecast helpers removed — Control Tower now uses submittedOrders)
 
-function normalizeItemName(name) {
-    if (!name) return '';
-    const n = name.trim().toLowerCase();
-    const mappedKey = Object.keys(ITEM_ALIAS_MAP).find(k => k.toLowerCase() === n);
-    return mappedKey ? ITEM_ALIAS_MAP[mappedKey] : name.trim();
-}
-
-function getMedian(arr) {
-    if (!arr || arr.length === 0) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
-    return sorted[mid];
-}
+// AI Intelligence Engines
+import { computePriceIntelligence } from '../AI/priceIntelligenceEngine';
+import { computeRiskAlerts } from '../AI/riskEngine';
+import { computeSeasonalUplifts } from '../AI/seasonalUpliftEngine';
+import { computeDispatchOptimization } from '../AI/dispatchOptimizationEngine';
+import { generateWeeklySummary } from '../AI/aiSummaryEngine';
 
 const Toast = ({ message, type }) => (
     <div style={{ position: 'fixed', bottom: 24, right: 24, padding: '12px 24px', background: type === 'error' ? '#f43f5e' : '#10b981', color: '#fff', borderRadius: 8, fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999 }}>
@@ -133,8 +113,93 @@ export default function GlobalSupplyControlTower() {
     const [toast, setToast] = useState(null);
     const [modalVendor, setModalVendor] = useState(null);
 
+    // ── Per-restaurant forecast state ────────────────────────────────────────
+    const [forecastRestaurants, setForecastRestaurants] = useState([]);
+    const [selectedForecastRest, setSelectedForecastRest] = useState('');
+    const [forecastItems, setForecastItems] = useState([]);
+    const [forecastOrderRecords, setForecastOrderRecords] = useState([]);
+    const [forecastLoading, setForecastLoading] = useState(false);
+    const forecastLoadedRef = useRef(false);
+
+    // Load forecast data once (lazy — on first tab switch or after data loads)
+    useEffect(() => {
+        if (forecastLoadedRef.current || loading) return;
+        forecastLoadedRef.current = true;
+        setForecastLoading(true);
+        fetchOrderHistory(12).then(records => {
+            setForecastOrderRecords(records);
+            const restList = getRestaurantList(records);
+            setForecastRestaurants(restList);
+            if (restList.length > 0) setSelectedForecastRest(restList[0]);
+            setForecastLoading(false);
+        }).catch(() => setForecastLoading(false));
+    }, [loading]);
+
+    // Rebuild forecast when restaurant selection changes
+    useEffect(() => {
+        if (!selectedForecastRest || forecastOrderRecords.length === 0) return;
+        try {
+            const forecast = buildRestaurantForecast(forecastOrderRecords, selectedForecastRest);
+            const results = forecast
+                .filter(item => (item.mondayQty || 0) + (item.thursdayQty || 0) > 0)
+                .map(item => ({
+                    itemName: item.itemName,
+                    category: item.category || 'Produce',
+                    totalQty: (item.mondayQty || 0) + (item.thursdayQty || 0),
+                    mondayQty: item.mondayQty || 0,
+                    thursdayQty: item.thursdayQty || 0,
+                    trend: item.trend || 'stable',
+                    confidence: item.confidence || 'Medium',
+                }))
+                .sort((a, b) => b.totalQty - a.totalQty);
+            setForecastItems(results);
+        } catch (err) {
+            console.error('[Forecast] Build error:', err);
+            setForecastItems([]);
+        }
+    }, [selectedForecastRest, forecastOrderRecords]);
+
+    // ── Intelligence tab state (Forecast Accuracy + Correction Intelligence) ──
+    const [intelData, setIntelData] = useState({ accuracy: null, corrections: null });
+    const [intelLoading, setIntelLoading] = useState(false);
+    const intelLoadedRef = useRef(false);
+
+    useEffect(() => {
+        if (intelLoadedRef.current || loading) return;
+        intelLoadedRef.current = true;
+        setIntelLoading(true);
+        Promise.all([
+            computeForecastAccuracy().catch(() => null),
+            computeCorrectionIntelligence().catch(() => null),
+        ]).then(([accuracy, corrections]) => {
+            setIntelData({ accuracy, corrections });
+            setIntelLoading(false);
+        });
+    }, [loading]);
+
+    // ── AI Intelligence state (lazy-loaded) ──────────────────────────────────
+    const [aiData, setAiData] = useState({ summary: null, risk: null, price: null, seasonal: null, dispatch: null });
+    const [aiLoading, setAiLoading] = useState(false);
+    const aiLoadedRef = useRef(false);
+
+    useEffect(() => {
+        if (aiLoadedRef.current || loading) return;
+        aiLoadedRef.current = true;
+        setAiLoading(true);
+        Promise.all([
+            computePriceIntelligence().catch(() => null),
+            computeRiskAlerts().catch(() => null),
+            computeSeasonalUplifts().catch(() => null),
+            computeDispatchOptimization().catch(() => null),
+        ]).then(([price, risk, seasonal, dispatch]) => {
+            const summary = generateWeeklySummary({ priceData: price, riskData: risk, seasonalData: seasonal, dispatchData: dispatch, ordersStats: null });
+            setAiData({ summary, risk, price, seasonal, dispatch });
+            setAiLoading(false);
+        });
+    }, [loading]);
+
     // ── Active week (for pipeline filtering) ──────────────────────────────────
-    const [activeWeekStart] = useState(() => getActiveWeekStart());
+    const [activeWeekStart, setActiveWeekStart] = useState(() => getActiveWeekStart());
 
     // ── Order Pipeline — 4 live Firestore listeners, all week-aware ──────────
     const [orderPipeline, setOrderPipeline] = useState({
@@ -232,8 +297,7 @@ export default function GlobalSupplyControlTower() {
                     const itemSnap = await getDocs(collection(db, `vendors/${v.id}/items`));
                     itemSnap.docs.forEach(d => {
                         const itemData = d.data();
-                        const name = itemData.name?.trim();
-                        const exactName = normalizeItemName(name);
+                        const exactName = (itemData.name || '').trim();
                         if (exactName) {
                             const dbPrice = parseFloat(itemData.vendorPrice) || parseFloat(itemData.price) || 0;
                             catalogLookup[exactName] = {
@@ -278,14 +342,9 @@ export default function GlobalSupplyControlTower() {
             console.error('Failed to fetch dispatches for alerts:', err);
         }
 
-        const globalHistoryMap = {};
         const localDispatchStatusMap = {};
 
         try {
-            const today = new Date();
-            const tmw = new Date(today);
-            tmw.setDate(tmw.getDate() + 1);
-
             const dispatchSnap = await getDocs(collection(db, 'vendorDispatches'));
             dispatchSnap.docs.forEach(d => {
                 const data = d.data();
@@ -303,43 +362,36 @@ export default function GlobalSupplyControlTower() {
             console.warn('Failed to load dispatch statuses', err);
         }
 
-        Object.keys(catalogLookup).forEach(exactName => {
-            globalHistoryMap[exactName] = {
-                orderHistoryMap: {},
-                category: catalogLookup[exactName].category || 'Produce',
-                isPackaging: catalogLookup[exactName].isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[exactName].category)
-            };
-        });
-
-        // ── Fetch LIVE order history from Firestore marketplaceOrders ──
+        // ── Aggregate from submittedOrders (actual demand) ──────────────
+        let weekOrders = [];
         try {
-            const orderRecords = await fetchOrderHistory(12);
-            console.log(`[ControlTower] Loaded ${orderRecords.length} order records from Firestore`);
-
-            orderRecords.forEach(record => {
-                const exactName = normalizeItemName(record.itemName);
-                if (!exactName) return;
-                if (!globalHistoryMap[exactName]) {
-                    globalHistoryMap[exactName] = { orderHistoryMap: {}, category: 'Produce', isPackaging: false };
-                }
-                if (!globalHistoryMap[exactName].orderHistoryMap[record.date]) {
-                    globalHistoryMap[exactName].orderHistoryMap[record.date] = 0;
-                }
-                globalHistoryMap[exactName].orderHistoryMap[record.date] += (Number(record.qty) || 0);
-            });
+            const soSnap = await getDocs(collection(db, 'submittedOrders'));
+            const allOrders = soSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            weekOrders = allOrders.filter(o => o.weekStart === activeWeekStart);
+            console.log(`[ControlTower] ${weekOrders.length} submitted orders for week ${activeWeekStart}`);
         } catch (err) {
-            console.error('[ControlTower] Failed to fetch order history from Firestore:', err);
+            console.error('[ControlTower] Failed to fetch submitted orders:', err);
         }
 
-        // Build cycle lists from all collected dates
-        const globalDatesSet = new Set();
-        Object.values(globalHistoryMap).forEach(item => {
-            Object.keys(item.orderHistoryMap).forEach(d => globalDatesSet.add(d));
+        // Aggregate item lines from submitted orders
+        const itemAgg = {}; // itemName → { mondayQty, thursdayQty, category }
+        weekOrders.forEach(order => {
+            const deliveryDay = order.deliveryDay || 'Monday';
+            (order.items || []).forEach(line => {
+                const itemName = line.itemName;
+                if (!itemName) return;
+                const qty = Number(line.finalQty) || 0;
+                if (qty <= 0) return;
+                if (!itemAgg[itemName]) {
+                    itemAgg[itemName] = { mondayQty: 0, thursdayQty: 0, category: line.category || '' };
+                }
+                if (deliveryDay === 'Monday') {
+                    itemAgg[itemName].mondayQty += qty;
+                } else {
+                    itemAgg[itemName].thursdayQty += qty;
+                }
+            });
         });
-
-        const allCycles = [...globalDatesSet].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        const last8Cycles = allCycles.slice(0, 8);
-        const last4Cycles = allCycles.slice(0, 4);
 
         let tActive = 0, tMon = 0, tThu = 0, tBill = 0, tPay = 0, tComm = 0, tMiss = 0;
         let pDemand = { Produce: 0, Packaging: 0, 'Cleaning Supplies': 0 };
@@ -347,138 +399,111 @@ export default function GlobalSupplyControlTower() {
         let vMap = {};
         let allItemsList = [];
 
-        Object.keys(globalHistoryMap).forEach(itemName => {
-            const item = globalHistoryMap[itemName];
-            const qtyIn8 = last8Cycles.map(date => item.orderHistoryMap[date] || 0);
-            const qtyIn4 = last4Cycles.map(date => item.orderHistoryMap[date] || 0);
+        Object.keys(itemAgg).forEach(itemName => {
+            const agg = itemAgg[itemName];
+            const totalQty = agg.mondayQty + agg.thursdayQty;
+            if (totalQty <= 0) return;
 
-            let predictedTotal = Math.ceil((0.3 * getMedian(qtyIn4)) + (0.7 * getMedian(qtyIn8)));
+            tActive++;
+            tMon += agg.mondayQty;
+            tThu += agg.thursdayQty;
 
-            // Cap at 1.5× median to prevent outlier spikes
-            const cap = Math.ceil(getMedian(qtyIn8) * 1.5) || 0;
-            if (cap > 0 && predictedTotal > cap) predictedTotal = cap;
+            const catEntry = catalogLookup[itemName] || {};
+            let price = catEntry.price || 0;
+            if (price <= 0) tMiss++;
 
-            // Qualify: item must appear in ≥3 of last 8 cycles
-            const qtyIn8Filtered = last8Cycles.map(date => item.orderHistoryMap[date] || 0).filter(q => q > 0);
-            const MIN_APPEARANCES = 3;
-            if (qtyIn8Filtered.length < MIN_APPEARANCES || predictedTotal <= 0) return;
+            const isPackaging = catEntry.isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(agg.category || catEntry.category);
+            let catLabel = isPackaging ? 'Packaging' :
+                (['Cleaning', 'Cleaning Supplies'].includes(catEntry.category) ? 'Cleaning Supplies' : 'Produce');
 
-            let monQty = Math.round(predictedTotal * 0.6);
-            let thuQty = predictedTotal - monQty;
-            if (item.isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(catalogLookup[itemName]?.category)) {
-                monQty = Math.round(predictedTotal * 0.5);
-                thuQty = predictedTotal - monQty;
+            let lineBill = totalQty * price;
+            let lineComm = lineBill * 0.10;
+            let linePay = lineBill * 0.90;
+
+            tBill += lineBill; tComm += lineComm; tPay += linePay;
+            pDemand[catLabel] = (pDemand[catLabel] || 0) + totalQty;
+            pCost[catLabel] = (pCost[catLabel] || 0) + lineBill;
+
+            let vName = catEntry.vendor || 'Unknown Vendor';
+            let pkSize = catEntry.pack_size || 1;
+            let baseUnit = catEntry.base_unit || 'lb';
+            let rawPackLabel = catEntry.pack_label || baseUnit;
+            let displayVendorPackStr = `${pkSize}${baseUnit} ${rawPackLabel}`;
+            if (pkSize === 1 && !isPackaging) displayVendorPackStr = baseUnit;
+            if (isPackaging) displayVendorPackStr = `${pkSize} units / ${baseUnit}`;
+            else if (itemName.toLowerCase() === 'coriander leaves' || itemName.toLowerCase() === 'mint leaves' || itemName.toLowerCase() === 'leeks') displayVendorPackStr = `1 bunch`;
+            else if (itemName.toLowerCase() === 'celery') displayVendorPackStr = `1kg`;
+            else if (itemName.toLowerCase() === 'long beans') displayVendorPackStr = `1 pack = 1.5lb`;
+            else if (itemName.toLowerCase() === 'plantain green') displayVendorPackStr = `1 pack = 5lb`;
+            else if (itemName.toLowerCase() === 'lime') displayVendorPackStr = `1 pack = 3.64kg`;
+            else if (itemName.toLowerCase() === 'curry leaves') displayVendorPackStr = `1 box = 12 lb`;
+            else if (itemName.toLowerCase() === 'french beans') displayVendorPackStr = `1 bag = 1.5lb (680g)`;
+            else if (itemName.toLowerCase() === 'beets') displayVendorPackStr = `25lb bag`;
+            else if (itemName.toLowerCase() === 'ginger' || itemName.toLowerCase() === 'thai chilli') displayVendorPackStr = `30lb box`;
+            else if (itemName.toLowerCase() === 'onion - cooking' || itemName.toLowerCase() === 'cabbage' || itemName.toLowerCase() === 'carrot') displayVendorPackStr = `50lb bag`;
+            else if (itemName.toLowerCase() === 'onion - red') displayVendorPackStr = `25lb bag`;
+            else if (rawPackLabel.toLowerCase().includes('case') && pkSize === 100) displayVendorPackStr = `1 case = 100 units`;
+            else if (rawPackLabel.toLowerCase().includes('bag') && pkSize === 50) displayVendorPackStr = `50lb bag`;
+            else if (rawPackLabel.toLowerCase().includes('bag') && pkSize === 25) displayVendorPackStr = `25lb bag`;
+            else if (rawPackLabel.toLowerCase().includes('box') && pkSize === 25) displayVendorPackStr = `25lb box`;
+            else if (rawPackLabel.toLowerCase().includes('box') && pkSize === 30) displayVendorPackStr = `30lb box`;
+            else if (rawPackLabel.toLowerCase().includes('case') && pkSize === 18) displayVendorPackStr = `18lb case`;
+            else if (rawPackLabel.toLowerCase() === 'lb' || (pkSize === 1 && baseUnit === 'lb')) displayVendorPackStr = `1 lb`;
+            else if (rawPackLabel.includes(String(pkSize))) displayVendorPackStr = rawPackLabel;
+
+            if (!vMap[vName]) {
+                const normalizedName = vName.trim().toLowerCase();
+                const resolvedVendorId = localVendorIdMap[normalizedName] || vName.toLowerCase().replace(/\s+/g, '-');
+                vMap[vName] = {
+                    name: vName,
+                    vendorId: resolvedVendorId,
+                    dispatchStatus: localDispatchStatusMap[resolvedVendorId]?.status || null,
+                    monDelivered: localDispatchStatusMap[resolvedVendorId]?.monDelivered || false,
+                    thuDelivered: localDispatchStatusMap[resolvedVendorId]?.thuDelivered || false,
+                    activeItems: 0, mon: 0, thu: 0, total: 0, bill: 0, pay: 0, comm: 0,
+                    isPkg: vName.toLowerCase().includes('taas') || isPackaging,
+                    items: []
+                };
             }
 
-            {
-                tActive++;
+            vMap[vName].items.push({
+                itemName,
+                displayVendorPackStr,
+                mondayQty: agg.mondayQty,
+                thursdayQty: agg.thursdayQty,
+                totalQty,
+                catalogSellPrice: price,
+                lineRestaurantBilling: lineBill,
+                lineMarketplaceCommission: lineComm,
+                lineVendorPayout: linePay
+            });
 
-                tMon += monQty; tThu += thuQty;
+            vMap[vName].activeItems++;
+            vMap[vName].mon += agg.mondayQty;
+            vMap[vName].thu += agg.thursdayQty;
+            vMap[vName].total += totalQty;
+            vMap[vName].bill += lineBill;
+            vMap[vName].pay += linePay;
+            vMap[vName].comm += lineComm;
 
-                let price = catalogLookup[itemName]?.price || 0;
-                if (price <= 0) tMiss++;
-
-                let lineBill = predictedTotal * price;
-                let lineComm = lineBill * 0.10;
-                let linePay = lineBill * 0.90;
-
-                tBill += lineBill; tComm += lineComm; tPay += linePay;
-
-                let catLabel = item.isPackaging ? 'Packaging' :
-                    (['Cleaning', 'Cleaning Supplies'].includes(catalogLookup[itemName]?.category) ? 'Cleaning Supplies' : 'Produce');
-                pDemand[catLabel] = (pDemand[catLabel] || 0) + predictedTotal;
-                pCost[catLabel] = (pCost[catLabel] || 0) + lineBill;
-
-                let vName = catalogLookup[itemName]?.vendor || 'Unknown Vendor';
-                let pkSize = catalogLookup[itemName]?.pack_size || 1;
-                let baseUnit = catalogLookup[itemName]?.base_unit || 'lb';
-                let rawPackLabel = catalogLookup[itemName]?.pack_label || baseUnit;
-                let displayVendorPackStr = `${pkSize}${baseUnit} ${rawPackLabel}`;
-                if (pkSize === 1 && !item.isPackaging) displayVendorPackStr = baseUnit;
-                if (item.isPackaging) displayVendorPackStr = `${pkSize} units / ${baseUnit}`;
-                else if (itemName.toLowerCase() === 'coriander leaves' || itemName.toLowerCase() === 'mint leaves' || itemName.toLowerCase() === 'leeks') displayVendorPackStr = `1 bunch`;
-                else if (itemName.toLowerCase() === 'celery') displayVendorPackStr = `1kg`;
-                else if (itemName.toLowerCase() === 'long beans') displayVendorPackStr = `1 pack = 1.5lb`;
-                else if (itemName.toLowerCase() === 'plantain green') displayVendorPackStr = `1 pack = 5lb`;
-                else if (itemName.toLowerCase() === 'lime') displayVendorPackStr = `1 pack = 3.64kg`;
-                else if (itemName.toLowerCase() === 'curry leaves') displayVendorPackStr = `1 box = 12 lb`;
-                else if (itemName.toLowerCase() === 'french beans') displayVendorPackStr = `1 bag = 1.5lb (680g)`;
-                else if (itemName.toLowerCase() === 'beets') displayVendorPackStr = `25lb bag`;
-                else if (itemName.toLowerCase() === 'ginger' || itemName.toLowerCase() === 'thai chilli') displayVendorPackStr = `30lb box`;
-                else if (itemName.toLowerCase() === 'onion - cooking' || itemName.toLowerCase() === 'cabbage' || itemName.toLowerCase() === 'carrot') displayVendorPackStr = `50lb bag`;
-                else if (itemName.toLowerCase() === 'onion - red') displayVendorPackStr = `25lb bag`;
-                else if (rawPackLabel.toLowerCase().includes('case') && pkSize === 100) displayVendorPackStr = `1 case = 100 units`;
-                else if (rawPackLabel.toLowerCase().includes('bag') && pkSize === 50) displayVendorPackStr = `50lb bag`;
-                else if (rawPackLabel.toLowerCase().includes('bag') && pkSize === 25) displayVendorPackStr = `25lb bag`;
-                else if (rawPackLabel.toLowerCase().includes('box') && pkSize === 25) displayVendorPackStr = `25lb box`;
-                else if (rawPackLabel.toLowerCase().includes('box') && pkSize === 30) displayVendorPackStr = `30lb box`;
-                else if (rawPackLabel.toLowerCase().includes('case') && pkSize === 18) displayVendorPackStr = `18lb case`;
-                else if (rawPackLabel.toLowerCase() === 'lb' || (pkSize === 1 && baseUnit === 'lb')) displayVendorPackStr = `1 lb`;
-                else if (rawPackLabel.includes(String(pkSize))) displayVendorPackStr = rawPackLabel;
-
-                if (!vMap[vName]) {
-                    const normalizedName = vName.trim().toLowerCase();
-                    const resolvedVendorId = localVendorIdMap[normalizedName] || vName.toLowerCase().replace(/\s+/g, '-');
-                    vMap[vName] = {
-                        name: vName,
-                        vendorId: resolvedVendorId,
-                        dispatchStatus: localDispatchStatusMap[resolvedVendorId]?.status || null,
-                        monDelivered: localDispatchStatusMap[resolvedVendorId]?.monDelivered || false,
-                        thuDelivered: localDispatchStatusMap[resolvedVendorId]?.thuDelivered || false,
-                        activeItems: 0, mon: 0, thu: 0, total: 0, bill: 0, pay: 0, comm: 0,
-                        isPkg: vName.toLowerCase().includes('taas') || item.isPackaging,
-                        items: []
-                    };
-                }
-
-                vMap[vName].items.push({
-                    itemName,
-                    displayVendorPackStr,
-                    mondayQty: monQty,
-                    thursdayQty: thuQty,
-                    totalQty: predictedTotal,
-                    catalogSellPrice: price,
-                    lineRestaurantBilling: lineBill,
-                    lineMarketplaceCommission: lineComm,
-                    lineVendorPayout: linePay
-                });
-
-                vMap[vName].activeItems++;
-                vMap[vName].mon += monQty;
-                vMap[vName].thu += thuQty;
-                vMap[vName].total += predictedTotal;
-                vMap[vName].bill += lineBill;
-                vMap[vName].pay += linePay;
-                vMap[vName].comm += lineComm;
-
-                allItemsList.push({
-                    name: itemName,
-                    demand: predictedTotal,
-                    bill: lineBill,
-                    comm: lineComm,
-                    category: catLabel,
-                    vendor: vName,
-                    price
-                });
-            }
+            allItemsList.push({
+                name: itemName,
+                demand: totalQty,
+                bill: lineBill,
+                comm: lineComm,
+                category: catLabel,
+                vendor: vName,
+                price
+            });
         });
 
-        // ── Compute accuracy from real forecast/corrections/entries ──
-        let accuracyScore = null;
-        try {
-            const corrections = await fetchCorrectionHistory('oruma-takeout', 'Monday');
-            if (corrections.length > 0) {
-                const unchangedCount = corrections.filter(c => c.deltaType === 'Unchanged').length;
-                accuracyScore = Math.round((unchangedCount / corrections.length) * 100);
-            }
-        } catch (err) {
-            console.warn('[ControlTower] Could not compute accuracy:', err.message);
-        }
+        // Restaurants count for accuracy/insight
+        const restaurantCount = new Set(weekOrders.map(o => o.restaurantName || o.restaurantId)).size;
 
         setMetrics({
             activeItems: tActive, totalMonday: tMon, totalThursday: tThu,
             billing: tBill, payout: tPay, commission: tComm, missingPrices: tMiss,
-            accuracyScore: accuracyScore ?? '—'
+            accuracyScore: restaurantCount > 0 ? `${restaurantCount} rest.` : '—'
         });
 
         setVendors(Object.values(vMap).sort((a, b) => b.total - a.total));
@@ -538,7 +563,8 @@ export default function GlobalSupplyControlTower() {
     // ── KPI click helper ───────────────────────────────────────────────
     const goTab = (tab, filter = null) => { setActiveTab(tab); setTabFilter(filter); };
 
-    useEffect(() => { fetchData(); }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { fetchData(); }, [activeWeekStart]);
 
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() + 1);
@@ -548,20 +574,21 @@ export default function GlobalSupplyControlTower() {
 
     // ── KPI card definitions (with tab routing) ─────────────────────────
     const KPI_CARDS = [
-        { label: 'Forecast Active Items', value: metrics.activeItems, icon: '📦', color: '#38bdf8', tab: 'forecast', filter: { item: null } },
+        { label: 'Ordered Items', value: metrics.activeItems, icon: '📦', color: '#38bdf8', tab: 'forecast', filter: { item: null } },
         { label: 'Total Monday Demand', value: `${metrics.totalMonday} packs`, icon: '📅', color: '#818cf8', tab: 'combined', filter: { day: 'Monday' } },
         { label: 'Total Thursday Demand', value: `${metrics.totalThursday} packs`, icon: '📅', color: '#a78bfa', tab: 'combined', filter: { day: 'Thursday' } },
         { label: 'Total Restaurant Billing', value: `$${metrics.billing.toFixed(2)}`, icon: '💰', color: '#ec4899', tab: 'combined', filter: { view: 'billing' } },
         { label: 'Total Vendor Payout', value: `$${metrics.payout.toFixed(2)}`, icon: '💰', color: '#f59e0b', tab: 'dispatch', filter: null },
         { label: 'Marketplace Commission', value: `$${metrics.commission.toFixed(2)}`, icon: '💰', color: '#10b981', tab: 'combined', filter: { view: 'commission' } },
-        { label: 'Forecast Accuracy Score', value: `${metrics.accuracyScore}%`, icon: '🎯', color: '#10b981', tab: 'intelligence', filter: { section: 'accuracy' } },
+        { label: 'Restaurants Ordered', value: metrics.accuracyScore, icon: '🏪', color: '#10b981', tab: 'forecast', filter: null },
         { label: 'Items Missing Price', value: metrics.missingPrices, icon: '⚠️', color: metrics.missingPrices > 0 ? '#f43f5e' : '#94a3b8', tab: 'combined', filter: { view: 'missingPrice' } },
     ];
 
     // ── Tab definitions ──────────────────────────────────────────────────
     const TABS = [
         { id: 'overview', label: '📊 Overview' },
-        { id: 'forecast', label: '🧮 Forecast' },
+        { id: 'forecast', label: '📋 Ordered Items' },
+        { id: 'restforecast', label: '📈 Forecast' },
         { id: 'combined', label: '🛒 Combined Demand' },
         { id: 'dispatch', label: '🚚 Vendor Dispatch' },
         { id: 'warehouse', label: '🏭 Warehouse' },
@@ -698,7 +725,7 @@ export default function GlobalSupplyControlTower() {
 
                             {/* Top Items */}
                             <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 22, marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px 0', color: '#e2e8f0' }}>Top 10 High-Spend Items <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>(click to filter in Forecast tab)</span></h3>
+                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px 0', color: '#e2e8f0' }}>Top 10 High-Spend Items <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>(click to filter in Ordered Items tab)</span></h3>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>
@@ -800,7 +827,7 @@ export default function GlobalSupplyControlTower() {
                                         </div>
                                     )}
                                     <div style={{ background: 'rgba(56,189,248,0.08)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #38bdf8', fontSize: 13 }}>
-                                        <strong>Confidence:</strong> Forecast accuracy holding at {metrics.accuracyScore}% this week.
+                                        <strong>Orders:</strong> {metrics.accuracyScore} submitted orders this week.
                                     </div>
                                     <div style={{ background: 'rgba(16,185,129,0.08)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #10b981', fontSize: 13 }}>
                                         <strong>Correction Engine:</strong> 8 active learning profiles tracked.
@@ -840,7 +867,7 @@ export default function GlobalSupplyControlTower() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                                            {['Item', 'Category', 'Mon Forecast', 'Thu Forecast', 'Weekly Total', 'Confidence', 'Vendor'].map(h => (
+                                            {['Item', 'Category', 'Mon Qty', 'Thu Qty', 'Weekly Total', 'Confidence', 'Vendor'].map(h => (
                                                 <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
                                             ))}
                                         </tr>
@@ -863,6 +890,89 @@ export default function GlobalSupplyControlTower() {
                                 </table>
                             </div>
                         </>
+                    )}
+
+                    {/* ═══════════════ RESTAURANT FORECAST TAB ═══════════════ */}
+                    {activeTab === 'restforecast' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            {/* Restaurant Selector */}
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <select
+                                    value={selectedForecastRest}
+                                    onChange={e => setSelectedForecastRest(e.target.value)}
+                                    style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', outline: 'none', cursor: 'pointer', fontSize: 13, minWidth: 220 }}
+                                >
+                                    {forecastRestaurants.map(r => (
+                                        <option key={r} value={r}>{r}</option>
+                                    ))}
+                                </select>
+                                <span style={{ fontSize: 13, color: '#64748b' }}>{forecastItems.length} predicted items</span>
+                                {forecastLoading && <span style={{ fontSize: 12, color: '#94a3b8' }}>Loading forecasts...</span>}
+                            </div>
+
+                            {/* Summary KPIs */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+                                {[
+                                    { label: 'Predicted Items', value: forecastItems.length, color: '#38bdf8' },
+                                    { label: 'Monday Total', value: forecastItems.reduce((s, r) => s + r.mondayQty, 0), color: '#818cf8' },
+                                    { label: 'Thursday Total', value: forecastItems.reduce((s, r) => s + r.thursdayQty, 0), color: '#a78bfa' },
+                                    { label: 'Weekly Total', value: forecastItems.reduce((s, r) => s + r.totalQty, 0), color: '#34d399' },
+                                ].map(k => (
+                                    <div key={k.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 18 }}>
+                                        <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
+                                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{k.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Forecast Table */}
+                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, overflow: 'hidden' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                    <thead>
+                                        <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                            {['Item', 'Category', 'Mon Forecast', 'Thu Forecast', 'Weekly Total', 'Trend', 'Confidence'].map(h => (
+                                                <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {forecastItems.map((row, idx) => {
+                                            const trendCfg = { up: { color: '#10b981', label: '↑ Increasing' }, down: { color: '#3b82f6', label: '↓ Decreasing' }, stable: { color: '#f59e0b', label: '→ Stable' } };
+                                            const t = trendCfg[row.trend] || trendCfg.stable;
+                                            const confCfg = { High: '#10b981', Medium: '#f59e0b', Low: '#f43f5e' };
+                                            const catColors = { Produce: '#34d399', Packaging: '#38bdf8', 'Cleaning Supplies': '#fb923c' };
+                                            return (
+                                                <tr key={idx}
+                                                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.1s' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                    <td style={{ padding: '11px 14px', fontWeight: 600, color: '#f8fafc' }}>{row.itemName}</td>
+                                                    <td style={{ padding: '11px 14px' }}>
+                                                        <span style={{ color: catColors[row.category] || '#94a3b8', background: (catColors[row.category] || '#94a3b8') + '18', padding: '2px 9px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{row.category}</span>
+                                                    </td>
+                                                    <td style={{ padding: '11px 14px', color: '#818cf8', fontWeight: 600 }}>{row.mondayQty}</td>
+                                                    <td style={{ padding: '11px 14px', color: '#a78bfa', fontWeight: 600 }}>{row.thursdayQty}</td>
+                                                    <td style={{ padding: '11px 14px', fontWeight: 700, color: '#f8fafc', fontSize: 15 }}>{row.totalQty}</td>
+                                                    <td style={{ padding: '11px 14px' }}>
+                                                        <span style={{ background: `${t.color}20`, color: t.color, padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>{t.label}</span>
+                                                    </td>
+                                                    <td style={{ padding: '11px 14px' }}>
+                                                        <span style={{ color: confCfg[row.confidence] || '#94a3b8', fontWeight: 700, fontSize: 12 }}>● {row.confidence}</span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {forecastItems.length === 0 && !forecastLoading && (
+                                            <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No forecast data for this restaurant. Forecasts require order history.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.1)', borderRadius: 8, padding: '10px 16px', fontSize: 12, color: '#64748b' }}>
+                                💡 Predictions use a 12-week median-blend algorithm (30% last 4 weeks + 70% last 8 weeks) from actual order history. Corrections are automatically learned.
+                            </div>
+                        </div>
                     )}
 
                     {/* ═══════════════ COMBINED DEMAND TAB ═══════════════ */}
@@ -947,46 +1057,231 @@ export default function GlobalSupplyControlTower() {
                                 </div>
                                 <div style={{ marginTop: 20, fontSize: 13, color: '#64748b' }}>💡 For detailed line-item pick operations, use the <strong style={{ color: '#38bdf8' }}>Warehouse Pick List</strong> page in Dispatch &amp; Logistics.</div>
                             </div>
+
+                            {/* ── AI DISPATCH OPTIMIZATION PANEL ────── */}
+                            {aiData.dispatch && aiData.dispatch.suggestions.length > 0 && (
+                                <div style={{ background: 'rgba(56,189,248,0.04)', border: '1px solid rgba(56,189,248,0.12)', borderRadius: 12, padding: '18px 22px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>🚚 Dispatch Optimization Suggestions <span style={{ fontSize: 11, fontWeight: 600, background: 'rgba(56,189,248,0.15)', color: '#38bdf8', padding: '2px 8px', borderRadius: 6 }}>{aiData.dispatch.suggestions.length} groups</span></h3>
+                                        <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(56,189,248,0.08)', padding: '2px 8px', borderRadius: 6 }}>AI logistics</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        {aiData.dispatch.suggestions.slice(0, 4).map(g => (
+                                            <div key={g.id} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '14px 16px', borderLeft: `3px solid ${g.efficiencyColor}` }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{g.vendor} — {g.day}</div>
+                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${g.efficiencyColor}22`, color: g.efficiencyColor }}>{g.efficiency}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 6 }}>
+                                                    {g.items.slice(0, 6).map((item, i) => (
+                                                        <span key={i} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.15)', color: '#38bdf8' }}>
+                                                            {item.itemName} ×{item.qty}
+                                                        </span>
+                                                    ))}
+                                                    {g.items.length > 6 && <span style={{ fontSize: 11, color: '#64748b' }}>+{g.items.length - 6} more</span>}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>💡 {g.reason}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {aiLoading && (
+                                <div style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.08)', borderRadius: 10, padding: '12px 18px', marginTop: 16, fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <FiRefreshCw className="spin" size={12} /> Loading dispatch optimization...
+                                </div>
+                            )}
                         </div>
                     )}
 
                     {/* ═══════════════ INTELLIGENCE TAB ═══════════════ */}
                     {activeTab === 'intelligence' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                            {/* Accuracy Summary */}
+                            {/* Accuracy Summary — REAL DATA */}
                             <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 16px 0', color: '#e2e8f0' }}>🎯 Forecast Accuracy</h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
-                                    {[{ label: 'Accuracy', value: `${metrics.accuracyScore}%`, color: '#34d399' }, { label: 'Correct', value: 38, color: '#38bdf8' }, { label: 'Over-predicted', value: 4, color: '#fbbf24' }, { label: 'Under-predicted', value: 2, color: '#f87171' }].map(k => (
-                                        <div key={k.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
-                                            <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.value}</div>
-                                            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{k.label}</div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                    <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: '#e2e8f0' }}>🎯 Forecast Accuracy</h3>
+                                    <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(52,211,153,0.08)', padding: '2px 8px', borderRadius: 6 }}>vs actual orders</span>
+                                </div>
+                                {intelLoading && (
+                                    <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
+                                        <FiRefreshCw className="spin" size={12} style={{ marginRight: 6 }} /> Computing accuracy from real orders...
+                                    </div>
+                                )}
+                                {intelData.accuracy && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 18 }}>
+                                        {[
+                                            { label: 'Accuracy', value: `${intelData.accuracy.accuracy}%`, color: intelData.accuracy.accuracy >= 70 ? '#34d399' : intelData.accuracy.accuracy >= 40 ? '#fbbf24' : '#f87171' },
+                                            { label: 'Correct', value: intelData.accuracy.correct, color: '#38bdf8' },
+                                            { label: 'Over-predicted', value: intelData.accuracy.overPredicted, color: '#fbbf24' },
+                                            { label: 'Under-predicted', value: intelData.accuracy.underPredicted, color: '#f87171' },
+                                        ].map(k => (
+                                            <div key={k.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: 16, textAlign: 'center' }}>
+                                                <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.value}</div>
+                                                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{k.label}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {intelData.accuracy && intelData.accuracy.details.length > 0 && (
+                                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                                    {['Item', 'Predicted', 'Actual', 'Diff', 'Status'].map(h => (
+                                                        <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{h}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {intelData.accuracy.details.slice(0, 8).map((d, i) => {
+                                                    const statusCfg = { correct: { label: '✓ Correct', color: '#34d399' }, over: { label: '↑ Over', color: '#fbbf24' }, under: { label: '↓ Under', color: '#f87171' } };
+                                                    const s = statusCfg[d.status] || statusCfg.correct;
+                                                    return (
+                                                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                                            <td style={{ padding: '6px 10px', fontWeight: 600, color: '#f8fafc' }}>{d.itemName}</td>
+                                                            <td style={{ padding: '6px 10px', color: '#94a3b8' }}>{d.predicted}</td>
+                                                            <td style={{ padding: '6px 10px', color: '#94a3b8' }}>{d.actual}</td>
+                                                            <td style={{ padding: '6px 10px', color: d.diff > 0 ? '#fbbf24' : d.diff < 0 ? '#f87171' : '#34d399', fontWeight: 600 }}>{d.diff > 0 ? '+' : ''}{d.diff}</td>
+                                                            <td style={{ padding: '6px 10px' }}><span style={{ fontSize: 10, fontWeight: 700, color: s.color }}>{s.label}</span></td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                            {/* Correction Intelligence — REAL DATA */}
+                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                    <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: '#e2e8f0' }}>🧠 Correction Intelligence</h3>
+                                    <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(56,189,248,0.08)', padding: '2px 8px', borderRadius: 6 }}>learning engine</span>
+                                </div>
+                                {intelLoading && (
+                                    <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>
+                                        <FiRefreshCw className="spin" size={12} style={{ marginRight: 6 }} /> Loading correction data...
+                                    </div>
+                                )}
+                                {intelData.corrections && (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
+                                            {[
+                                                { label: 'Learning Active Items', value: intelData.corrections.activeItems, color: '#38bdf8' },
+                                                { label: 'Avg Correction Delta', value: intelData.corrections.avgDelta, color: '#34d399' },
+                                                { label: 'Convergence Rate', value: intelData.corrections.improvementPct, color: '#34d399' },
+                                                { label: 'Most Corrected', value: intelData.corrections.mostCorrected, color: '#fbbf24' },
+                                                { label: 'Most Increased', value: intelData.corrections.mostIncreased, color: '#a78bfa' },
+                                                { label: 'Most Reduced', value: intelData.corrections.mostReduced, color: '#f87171' },
+                                            ].map(k => (
+                                                <div key={k.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: 14 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 700, color: k.color, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.value}</div>
+                                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{k.label}</div>
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                        {intelData.corrections.activeItems === 0 && (
+                                            <div style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.12)', borderRadius: 8, padding: '10px 16px', fontSize: 12, color: '#64748b' }}>
+                                                💡 No correction history yet. As you approve or edit forecast orders, the correction engine will learn and improve predictions automatically.
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
-                            {/* Correction Intelligence */}
-                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px 0', color: '#e2e8f0' }}>🧠 Correction Intelligence</h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 }}>
-                                    {[{ label: 'Learning Active Items', value: '11', color: '#38bdf8' }, { label: 'Avg Correction Delta', value: '+0.8', color: '#34d399' }, { label: 'Improvement %', value: '+12%', color: '#34d399' }, { label: 'Most Corrected', value: 'Onion - Cooking', color: '#fbbf24' }, { label: 'Most Increased', value: 'French Beans', color: '#a78bfa' }, { label: 'Most Reduced', value: 'Peeled Garlic', color: '#f87171' }].map(k => (
-                                        <div key={k.label} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: 14 }}>
-                                            <div style={{ fontSize: 16, fontWeight: 700, color: k.color, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.value}</div>
-                                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{k.label}</div>
+                            {/* ── AI PRICE INTELLIGENCE PANEL ─────── */}
+                            {aiData.price && aiData.price.priceIntelligence.length > 0 && (
+                                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                        <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>💰 Vendor Price Intelligence</h3>
+                                        <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(52,211,153,0.08)', padding: '2px 8px', borderRadius: 6 }}>AI pricing</span>
+                                    </div>
+                                    {/* Price Alerts */}
+                                    {aiData.price.priceAlerts.length > 0 && (
+                                        <div style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.12)', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
+                                            <div style={{ fontSize: 12, fontWeight: 700, color: '#f87171', marginBottom: 4 }}>🔔 Price Alerts</div>
+                                            {aiData.price.priceAlerts.slice(0, 3).map((a, i) => (
+                                                <div key={i} style={{ fontSize: 12, color: '#cbd5e1', marginBottom: 2 }}>
+                                                    <strong>{a.itemName}</strong> — {a.alerts[0]?.vendorName} is +{a.alerts[0]?.percentAbove}% above market average
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
+                                    )}
+                                    {/* Savings Summary */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+                                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: 20, fontWeight: 700, color: '#38bdf8' }}>{aiData.price.summary.totalItems}</div>
+                                            <div style={{ fontSize: 10, color: '#94a3b8' }}>Items Analyzed</div>
+                                        </div>
+                                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: 20, fontWeight: 700, color: '#34d399' }}>${aiData.price.summary.totalMonthlySavings.toFixed(0)}</div>
+                                            <div style={{ fontSize: 10, color: '#94a3b8' }}>Monthly Savings</div>
+                                        </div>
+                                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: 20, fontWeight: 700, color: '#fbbf24' }}>${aiData.price.summary.avgSpread.toFixed(2)}</div>
+                                            <div style={{ fontSize: 10, color: '#94a3b8' }}>Avg Spread</div>
+                                        </div>
+                                    </div>
+                                    {/* Top Items Table */}
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                                {['Item', 'Cheapest Vendor', 'Price', 'Avg', 'Savings/Unit'].map(h => <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>{h}</th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {aiData.price.priceIntelligence.slice(0, 8).map((r, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                                    <td style={{ padding: '8px 10px', fontWeight: 600, color: '#f8fafc' }}>{r.itemName}</td>
+                                                    <td style={{ padding: '8px 10px', color: '#34d399', fontWeight: 600 }}>{r.cheapestVendor}</td>
+                                                    <td style={{ padding: '8px 10px', color: '#34d399' }}>${r.cheapestPrice.toFixed(2)}</td>
+                                                    <td style={{ padding: '8px 10px', color: '#94a3b8' }}>${r.avgPrice.toFixed(2)}</td>
+                                                    <td style={{ padding: '8px 10px', color: r.savingsPerUnit > 0 ? '#34d399' : '#64748b' }}>${r.savingsPerUnit.toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {aiData.price.priceIntelligence.length > 8 && (
+                                        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#64748b' }}>+ {aiData.price.priceIntelligence.length - 8} more items — visit AI Intelligence Hub for full analysis</div>
+                                    )}
                                 </div>
-                                <div style={{ background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.12)', borderRadius: 8, padding: '10px 16px', fontSize: 13, color: '#94a3b8' }}>💡 For full correction history and engine settings, visit <strong style={{ color: '#38bdf8' }}>Forecast Intelligence</strong> in Supply Planning.</div>
-                            </div>
-                            {/* Opportunity Alerts summary */}
-                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 12px 0', color: '#e2e8f0' }}>🚨 Active Alerts</h3>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    <div style={{ background: 'rgba(56,189,248,0.07)', borderLeft: '3px solid #38bdf8', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}><strong style={{ color: '#38bdf8' }}>Price Opportunity:</strong> ON Thyme pricing 18% below 8-week average on Onion Cooking. Consider bulk.</div>
-                                    <div style={{ background: 'rgba(251,146,60,0.07)', borderLeft: '3px solid #fb923c', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}><strong style={{ color: '#fb923c' }}>Demand Spike:</strong> French Beans demand +34% vs 4-week baseline.</div>
-                                    <div style={{ background: 'rgba(52,211,153,0.07)', borderLeft: '3px solid #34d399', padding: '10px 14px', borderRadius: 6, fontSize: 13 }}><strong style={{ color: '#34d399' }}>Savings:</strong> T28 container order 8 units below volume discount threshold.</div>
+                            )}
+
+                            {/* ── AI SEASONAL DEMAND INSIGHTS PANEL ── */}
+                            {aiData.seasonal && aiData.seasonal.uplifts.length > 0 && (
+                                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                        <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>🎄 Seasonal Demand Insights</h3>
+                                        <span style={{ fontSize: 10, color: '#64748b', background: 'rgba(251,191,36,0.08)', padding: '2px 8px', borderRadius: 6 }}>AI seasonal</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        {aiData.seasonal.uplifts.map(evt => (
+                                            <div key={evt.id} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '14px 16px', borderLeft: `3px solid ${evt.statusColor}` }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>🎉 {evt.eventName}</div>
+                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${evt.statusColor}22`, color: evt.statusColor }}>{evt.status}{!evt.isActive ? ` — ${evt.daysUntil}d` : ''}</span>
+                                                </div>
+                                                {evt.rules.length > 0 ? (
+                                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                        {evt.rules.map((r, i) => (
+                                                            <span key={i} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)' }}>
+                                                                <strong style={{ color: '#a78bfa' }}>{r.category}</strong> <span style={{ color: '#34d399', fontWeight: 700 }}>+{r.upliftPercent}%</span>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>No uplift rules — configure in Festival Calendar</div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {aiLoading && (
+                                <div style={{ background: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.08)', borderRadius: 10, padding: '12px 18px', marginTop: 12, fontSize: 12, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <FiRefreshCw className="spin" size={12} /> Loading AI intelligence panels...
+                                </div>
+                            )}
                         </div>
                     )}
                 </>

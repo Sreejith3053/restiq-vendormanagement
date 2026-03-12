@@ -28,9 +28,9 @@ import VendorExpectedAllocation from './components/Vendors/VendorExpectedAllocat
 import VendorCapacityPlanning from './components/Vendors/VendorCapacityPlanning';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
-import AdminItemsPage from './components/Admin/AdminItemsPage';
+
 import AdminRestaurantsPage from './components/Admin/AdminRestaurantsPage';
-import AdminRequestsPage from './components/Admin/AdminRequestsPage';
+
 import AdminRestaurantDetailPage from './components/Admin/AdminRestaurantDetailPage';
 import MarketplaceIntelligencePage from './components/Admin/MarketplaceIntelligencePage';
 import VendorCompetitivenessDashboard from './components/Admin/VendorCompetitivenessDashboard';
@@ -61,6 +61,16 @@ import DispatchConfirmationsPage from './components/Forecast/DispatchConfirmatio
 import WarehousePickListPage from './components/Forecast/WarehousePickListPage';
 import DeliveryStatusPage from './components/Forecast/DeliveryStatusPage';
 import IssuesDisputesPage from './components/Forecast/IssuesDisputesPage';
+
+// AI Intelligence Layer
+import AIIntelligenceHub from './components/AI/AIIntelligenceHub';
+
+// Master Collections Admin
+import ManageRestaurantsPage from './components/Admin/ManageRestaurantsPage';
+import ManageCatalogPage from './components/Admin/ManageCatalogPage';
+import MigrationAdminPage from './components/Admin/MigrationAdminPage';
+import CatalogItemMappingReviewPage from './components/Admin/CatalogItemMappingReviewPage';
+import PendingReviewsDashboard from './components/Admin/PendingReviewsDashboard';
 
 
 
@@ -125,10 +135,11 @@ function App() {
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/users" element={<UserManagementPage />} />
                                 <Route path="/settings/permissions" element={<RolePermissionsPage />} />
-                                <Route path="/admin/items" element={<AdminItemsPage />} />
+
                                 <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
                                 <Route path="/admin/restaurants/:restaurantId" element={<AdminRestaurantDetailPage />} />
-                                <Route path="/admin/requests" element={<AdminRequestsPage />} />
+                                <Route path="/admin/pending-reviews" element={<PendingReviewsDashboard />} />
+
                                 <Route path="/admin/marketplace-intelligence" element={<MarketplaceIntelligencePage />} />
                                 <Route path="/admin/vendor-competitiveness" element={<VendorCompetitivenessDashboard />} />
                                 <Route path="/admin/vendor-allocation" element={<VendorAllocationDashboard />} />
@@ -157,6 +168,15 @@ function App() {
                                 <Route path="/admin/dispatch/warehouse" element={<WarehousePickListPage />} />
                                 <Route path="/admin/dispatch/delivery" element={<DeliveryStatusPage />} />
                                 <Route path="/admin/dispatch/issues" element={<IssuesDisputesPage />} />
+
+                                {/* AI Intelligence */}
+                                <Route path="/admin/ai-intelligence" element={<AIIntelligenceHub />} />
+
+                                {/* Master Collections */}
+                                <Route path="/admin/manage-restaurants" element={<ManageRestaurantsPage />} />
+                                <Route path="/admin/manage-catalog" element={<ManageCatalogPage />} />
+                                <Route path="/admin/migration" element={<MigrationAdminPage />} />
+                                <Route path="/admin/mapping-review" element={<CatalogItemMappingReviewPage />} />
 
                                 <Route path="/" element={<Navigate to="/admin/forecast/control-tower" />} />
                             </>

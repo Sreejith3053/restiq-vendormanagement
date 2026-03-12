@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { db } from '../firebase';
@@ -6,10 +6,112 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import restiqLogo from '../assets/restiq-logo-sidebar.png';
 import './Sidebar.css';
 
+// ── Navigation group definitions for SuperAdmin ─────────────────────
+// Pinned top-level link (not in a collapsible group)
+const PINNED_LINK = { to: '/admin/forecast/control-tower', icon: '🗼', label: 'Control Tower' };
+
+const NAV_GROUPS = [
+    {
+        id: 'operations',
+        label: 'Operations',
+        icon: '⚙️',
+        defaultOpen: true,
+        links: [
+            { to: '/admin/forecast/submitted-orders', icon: '✅', label: 'Submitted Orders' },
+            { to: '/admin/dispatch/confirmations', icon: '📋', label: 'Dispatch Confirmations' },
+            { to: '/admin/dispatch/delivery', icon: '📍', label: 'Delivery Status' },
+            { to: '/admin/dispatch/issues', icon: '🚨', label: 'Issues & Disputes' },
+        ],
+    },
+    {
+        id: 'marketplace',
+        label: 'Marketplace',
+        icon: '🏪',
+        defaultOpen: true,
+        links: [
+            { to: '/vendors', icon: '🏢', label: 'All Vendors', end: true },
+            { to: '/vendors/add', icon: '➕', label: 'Add Vendor' },
+            { to: '/admin/invoices', icon: '🧾', label: 'Vendor Invoices' },
+            { to: '/admin/manage-catalog', icon: '📦', label: 'Catalog Items' },
+            { to: '/admin/mapping-review', icon: '🔍', label: 'Mapping Review' },
+            { to: '/admin/vendor-competitiveness', icon: '🏆', label: 'Vendor Scores' },
+        ],
+    },
+    {
+        id: 'intelligence',
+        label: 'Intelligence',
+        icon: '🧠',
+        defaultOpen: false,
+        links: [
+            { to: '/admin/ai-intelligence', icon: '🤖', label: 'AI Intelligence Hub' },
+            { to: '/admin/marketplace-intelligence', icon: '📊', label: 'Marketplace Intelligence' },
+            { to: '/admin/vendor-allocation', icon: '📦', label: 'Vendor Allocation' },
+            { to: '/admin/supply-capacity', icon: '🛡️', label: 'Supply Capacity' },
+            { to: '/admin/forecast/festivals', icon: '🎄', label: 'Festival Calendar' },
+        ],
+    },
+    {
+        id: 'administration',
+        label: 'Administration',
+        icon: '🔧',
+        defaultOpen: false,
+        links: [
+            { to: '/admin/restaurants', icon: '🏪', label: 'All Restaurants' },
+            { to: '/admin/restaurant-invoices', icon: '🧾', label: 'Restaurant Invoices' },
+            { to: '/admin/manage-restaurants', icon: '🏪', label: 'Master Restaurants' },
+            { to: '/admin/pending-reviews', icon: '📋', label: 'Pending Reviews' },
+            { to: '/users', icon: '👥', label: 'Users & Roles' },
+            { to: '/settings/permissions', icon: '⚙️', label: 'Role Permissions' },
+            { to: '/admin/migration', icon: '🔧', label: 'Migration Tools' },
+        ],
+    },
+];
+
+// ── Collapsible Nav Group Component ─────────────────────────────────
+function NavGroup({ group, onClose, searchFilter }) {
+    const [open, setOpen] = useState(group.defaultOpen);
+
+    // If searching, show all groups open
+    const isOpen = searchFilter ? true : open;
+
+    const links = searchFilter
+        ? group.links.filter(l => l.label.toLowerCase().includes(searchFilter))
+        : group.links;
+
+    if (searchFilter && links.length === 0) return null;
+
+    return (
+        <div className="sidebar-group">
+            <button className={`sidebar-group-header ${isOpen ? 'open' : ''}`} onClick={() => setOpen(o => !o)}>
+                <span className="group-icon">{group.icon}</span>
+                <span className="group-label">{group.label}</span>
+                <span className={`group-chevron ${isOpen ? 'open' : ''}`}>›</span>
+            </button>
+            {isOpen && (
+                <div className="sidebar-group-links">
+                    {links.map(link => (
+                        <NavLink
+                            key={link.to + link.label}
+                            to={link.to}
+                            end={link.end || false}
+                            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                            onClick={onClose}
+                        >
+                            <span className="link-icon">{link.icon}</span>
+                            {link.label}
+                        </NavLink>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function Sidebar({ isOpen, onClose }) {
     const { displayName, vendorName, vendorId, isSuperAdmin, isAdmin, logout } = useContext(UserContext);
     const navigate = useNavigate();
     const [pendingDispatches, setPendingDispatches] = useState(0);
+    const [search, setSearch] = useState('');
 
     useEffect(() => {
         if (isSuperAdmin || !vendorId) return;
@@ -43,6 +145,21 @@ export default function Sidebar({ isOpen, onClose }) {
         .slice(0, 2);
 
     const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Vendor Admin' : 'User';
+    const searchFilter = search.trim().toLowerCase() || '';
+
+    // Flatten all links for quick page search results
+    const searchResults = useMemo(() => {
+        if (!searchFilter) return [];
+        const results = [];
+        NAV_GROUPS.forEach(g => {
+            g.links.forEach(l => {
+                if (l.label.toLowerCase().includes(searchFilter)) {
+                    results.push({ ...l, group: g.label });
+                }
+            });
+        });
+        return results;
+    }, [searchFilter]);
 
     return (
         <>
@@ -61,110 +178,76 @@ export default function Sidebar({ isOpen, onClose }) {
 
                 {/* Navigation */}
                 {isSuperAdmin ? (
-                    <>
-                        {/* Home */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Home</div>
-                            <NavLink to="/admin/forecast/control-tower" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🗼</span> Control Tower
-                            </NavLink>
+                    <div className="sidebar-nav-scroll">
+                        {/* Search */}
+                        <div className="sidebar-search-wrap">
+                            <div className="sidebar-search">
+                                <span className="search-icon">🔍</span>
+                                <input
+                                    type="text"
+                                    placeholder="Search pages..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    className="sidebar-search-input"
+                                />
+                                {search && (
+                                    <button className="search-clear" onClick={() => setSearch('')}>✕</button>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Order Planning */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Order Planning</div>
-                            <NavLink to="/admin/forecast/suggested-order-review" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📝</span> Suggested Orders
-                            </NavLink>
-                            <NavLink to="/admin/forecast/submitted-orders" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">✅</span> Submitted Orders
-                            </NavLink>
-                            <NavLink to="/admin/forecast/combined" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🛒</span> Combined Demand
-                            </NavLink>
-                        </div>
+                        {/* Search results mode */}
+                        {searchFilter && searchResults.length > 0 ? (
+                            <div className="sidebar-section">
+                                <div className="sidebar-section-title">Search Results</div>
+                                {searchResults.map(r => (
+                                    <NavLink
+                                        key={r.to + r.label}
+                                        to={r.to}
+                                        end={r.end || false}
+                                        className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+                                        onClick={() => { setSearch(''); onClose(); }}
+                                    >
+                                        <span className="link-icon">{r.icon}</span>
+                                        <span style={{ flex: 1 }}>{r.label}</span>
+                                        <span className="search-group-badge">{r.group}</span>
+                                    </NavLink>
+                                ))}
+                            </div>
+                        ) : searchFilter && searchResults.length === 0 ? (
+                            <div className="sidebar-empty-search">
+                                <span style={{ fontSize: 20 }}>🔍</span>
+                                <span>No pages match "{search}"</span>
+                            </div>
+                        ) : (
+                            /* Normal grouped navigation */
+                            <>
+                                {/* Pinned Control Tower */}
+                                <div className="sidebar-pinned">
+                                    <NavLink
+                                        to={PINNED_LINK.to}
+                                        className={({ isActive }) => `sidebar-link sidebar-link-pinned ${isActive ? 'active' : ''}`}
+                                        onClick={onClose}
+                                    >
+                                        <span className="link-icon">{PINNED_LINK.icon}</span>
+                                        {PINNED_LINK.label}
+                                    </NavLink>
+                                </div>
 
-                        {/* Dispatch & Logistics */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Dispatch &amp; Logistics</div>
-                            <NavLink to="/admin/forecast/vendors" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🚚</span> Vendor Dispatch
-                            </NavLink>
-                            <NavLink to="/admin/dispatch/confirmations" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📋</span> Dispatch Confirmations
-                            </NavLink>
-                            <NavLink to="/admin/dispatch/warehouse" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏭</span> Warehouse Pick List
-                            </NavLink>
-                            <NavLink to="/admin/dispatch/delivery" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📍</span> Delivery Status
-                            </NavLink>
-                            <NavLink to="/admin/dispatch/issues" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🚨</span> Issues &amp; Disputes
-                            </NavLink>
-                        </div>
-
-                        {/* Vendors */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Vendors</div>
-                            <NavLink to="/vendors" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏢</span> All Vendors
-                            </NavLink>
-                            <NavLink to="/vendors/add" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">➕</span> Add Vendor
-                            </NavLink>
-                            <NavLink to="/admin/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🧾</span> Vendor Invoices
-                            </NavLink>
-                        </div>
-
-                        {/* Restaurants */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Restaurants</div>
-                            <NavLink to="/admin/restaurants" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏪</span> All Restaurants
-                            </NavLink>
-                            <NavLink to="/admin/restaurant-invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🧾</span> Restaurant Invoices
-                            </NavLink>
-                        </div>
-
-                        {/* Catalog & Requests */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Catalog &amp; Requests</div>
-                            <NavLink to="/admin/items" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📋</span> All Items
-                            </NavLink>
-                            <NavLink to="/admin/requests" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📩</span> Requests
-                            </NavLink>
-                            <NavLink to="/admin/marketplace-intelligence" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📊</span> Marketplace Intelligence
-                            </NavLink>
-                            <NavLink to="/admin/vendor-competitiveness" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏆</span> Vendor Competitiveness
-                            </NavLink>
-                            <NavLink to="/admin/vendor-allocation" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📦</span> Vendor Allocation
-                            </NavLink>
-                            <NavLink to="/admin/supply-capacity" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🛡️</span> Supply Capacity
-                            </NavLink>
-                        </div>
-
-                        {/* Administration */}
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Administration</div>
-                            <NavLink to="/users" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">👥</span> User Management
-                            </NavLink>
-                            <NavLink to="/settings/permissions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">⚙️</span> Role Permissions
-                            </NavLink>
-                        </div>
-                    </>
+                                {NAV_GROUPS.map(group => (
+                                    <NavGroup
+                                        key={group.id}
+                                        group={group}
+                                        onClose={onClose}
+                                        searchFilter={searchFilter}
+                                    />
+                                ))}
+                            </>
+                        )}
+                    </div>
                 ) : (
-                    <>
+                    /* ── Vendor sidebar (unchanged) ──────────────── */
+                    <div className="sidebar-nav-scroll">
                         <div className="sidebar-section">
                             <div className="sidebar-section-title">Main</div>
                             <NavLink to="/" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
@@ -217,7 +300,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                 </>
                             )}
                         </div>
-                    </>
+                    </div>
                 )}
 
                 {/* Bottom — user info & logout */}

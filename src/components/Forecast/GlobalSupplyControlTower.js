@@ -463,7 +463,7 @@ export default function GlobalSupplyControlTower() {
             }
         });
 
-        // ── Compute accuracy from real forecastCorrections ──
+        // ── Compute accuracy from real forecast/corrections/entries ──
         let accuracyScore = null;
         try {
             const corrections = await fetchCorrectionHistory('oruma-takeout', 'Monday');

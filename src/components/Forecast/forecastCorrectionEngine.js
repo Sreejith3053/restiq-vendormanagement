@@ -7,14 +7,14 @@
  * No manual trigger or AI prompt required.
  *
  * Simplified pipeline (Option B — 2 collections only):
- *  1. Write item-level correction rows to `forecastCorrections`
+ *  1. Write item-level correction rows to `forecast/corrections/entries`
  *  2. Write full order record to `submittedOrders`
  *
  * Collections:
- *  - forecastCorrections  (item-level: predicted vs final per item per week)
+ *  - forecast/corrections/entries  (item-level: predicted vs final per item per week)
  *  - submittedOrders      (full order snapshot for pipeline tracking)
  *
- * The forecast engine reads `forecastCorrections` on next cycle and applies
+ * The forecast engine reads `forecast/corrections/entries` on next cycle and applies
  * learned corrections inside buildRestaurantForecast() automatically.
  */
 
@@ -67,7 +67,7 @@ export async function runCorrectionEngine({
     const weekLabel = formatWeekLabel(weekStart);
     const orderDocId = suggestionId || `sug_${restaurantId}_${weekLabel}_${deliveryDay}`;
 
-    // ── STEP 1: Write item-level corrections to forecastCorrections ──────
+    // ── STEP 1: Write item-level corrections to forecast/corrections/entries ──────
     const correctionsBatch = writeBatch(db);
     const profilesUpdated = [];
 
@@ -76,7 +76,7 @@ export async function runCorrectionEngine({
         const deltaType = getDeltaType(line.rawPrediction ?? line.predictedQty, line.finalQty);
         const catalogPrice = catalogPrices[line.itemName] || 0;
 
-        const correctionRef = doc(collection(db, 'forecastCorrections'));
+        const correctionRef = doc(collection(db, 'forecast', 'corrections', 'entries'));
 
         correctionsBatch.set(correctionRef, {
             correctionId: correctionRef.id,

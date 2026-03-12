@@ -6,6 +6,7 @@ const { runDeterministicForecast, aggregateForecasts, generateVendorRollups } = 
 const { checkForecastAccuracy } = require("./forecastAccuracy");
 const { updateCatalogPrices } = require("./updatePrices");
 const { sendOrderConfirmationEmail, SENDGRID_API_KEY, SENDGRID_ORDER_CONFIRMATION_TEMPLATE_ID } = require("./sendGridIntegration");
+const { runSuggestedForecastJob } = require("./suggestedForecastJob");
 
 const app = admin.initializeApp();
 const db = getFirestore(app, "restiq-vendormanagement");
@@ -115,5 +116,27 @@ exports.sendOrderConfirmationEmailFn = onCall({
     } catch (error) {
         console.error(`Failed to send confirmation email for ${orderId}:`, error);
         throw new HttpsError("internal", error.message || "Failed to send email.");
+    }
+});
+
+// 4. Suggested Forecast Job — Runs every Wednesday at 6PM EST
+//    Writes per-restaurant forecast data to `forecast/weekly/entries` for RMS consumption
+exports.suggestedForecastSchedule = onSchedule({
+    schedule: "0 18 * * 3",
+    timeZone: "America/New_York",
+}, async () => {
+    console.log("Starting scheduled suggested forecast job (Wednesday 6PM EST)...");
+    await runSuggestedForecastJob(db);
+});
+
+// 5. Suggested Forecast — Manual trigger (callable from frontend)
+exports.runSuggestedForecastNow = onCall(async (request) => {
+    console.log("Manual trigger: running suggested forecast job...");
+    try {
+        const result = await runSuggestedForecastJob(db);
+        return { success: true, ...result };
+    } catch (err) {
+        console.error("Manual forecast run failed:", err);
+        throw new HttpsError("internal", err.message || "Forecast engine failed");
     }
 });

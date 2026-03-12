@@ -1,19 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { FiCheckCircle, FiAlertCircle, FiRefreshCw, FiPlus, FiTrash2, FiSave, FiSend, FiLock, FiInfo, FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import useCorrectionLearning from './useCorrectionLearning';
-import { runCorrectionEngine } from './forecastCorrectionEngine';
+import { toast } from '../helpers/safeToast';
 import SavingsOpportunityBanner from './SavingsOpportunityBanner';
 import BundleCompatibilityAlert from './BundleCompatibilityAlert';
 import { findMissingBundlePairs } from '../Vendors/marketplaceIntelligence';
-import { db } from '../../firebase';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-
-// Catalog for the 'Add Item' flow — loaded from Firestore
-
-// Mock prediction lines removed — now loaded from Firestore via forecastHelpers
+import { vendorDb } from '../../vendorFirebase';
+import { RestaurantContext } from '../../contexts/RestaurantContext';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
 // Derive change type automatically
 const getChangeType = (predicted, final) => {
@@ -25,6 +18,7 @@ const getChangeType = (predicted, final) => {
 };
 
 export default function SuggestedOrderReview() {
+    const { restaurantId } = useContext(RestaurantContext) || {};
     const [status, setStatus] = useState('Draft Suggestion');
     const [lines, setLines] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -36,178 +30,141 @@ export default function SuggestedOrderReview() {
     const [itemCatalog, setItemCatalog] = useState([]);
     const [allVendorItems, setAllVendorItems] = useState([]);
 
-    // ── Restaurant selection (Firestore-backed) ──
-    const [restaurants, setRestaurants] = useState([]);
-    const [selectedRestaurant, setSelectedRestaurant] = useState('');
-    const [forecastSource, setForecastSource] = useState('loading'); // 'cloud-function' | 'fallback' | 'loading'
-    const [forecastDocs, setForecastDocs] = useState({}); // restaurantId → forecast document from Cloud Function
-    const [orderStats, setOrderStats] = useState(null); // diagnostic stats from Cloud Function
-    const [runningEngine, setRunningEngine] = useState(false); // true while the engine is running
+    const selectedRestaurant = restaurantId || '';
+    const [orderStats, setOrderStats] = useState(null);
+    const [forecastDoc, setForecastDoc] = useState(null); // The raw forecast document from Cloud Function
 
-    // Correction Learning Hook — for sidebar display only
-    const { learningProfiles, insights: learningInsights } = useCorrectionLearning(selectedRestaurant || 'oruma-takeout', 'Monday');
-
-    // ── Step 1: Load pre-computed forecasts from Cloud Function + item catalog ──
+    // ── Load vendor catalog + pre-computed forecast from Cloud Function ──
     useEffect(() => {
+        if (!restaurantId) { setLoading(false); return; }
         let cancelled = false;
-        async function loadForecasts() {
+
+        async function loadData() {
+            setLoading(true);
             try {
-                // Load pre-computed forecasts from forecast/weekly/entries
-                const forecastsRef = collection(db, 'forecast', 'weekly', 'entries');
-                const forecastSnap = await getDocs(query(forecastsRef, orderBy('generatedAt', 'desc')));
-
-                if (cancelled) return;
-
-                // Group by restaurant, keep only the latest forecast per restaurant
-                const latestByRestaurant = {};
-                forecastSnap.docs.forEach(doc => {
-                    const data = doc.data();
-                    const rid = data.restaurantId;
-                    if (!latestByRestaurant[rid]) {
-                        latestByRestaurant[rid] = { id: doc.id, ...data };
-                    }
-                });
-
-                const restList = Object.keys(latestByRestaurant).sort();
-                console.log(`[SuggestedOrder] Found ${restList.length} restaurant(s) with forecasts:`, restList);
-
-                // Load item catalog from all vendors for Add Item flow
-                const vendorsSnap = await getDocs(collection(db, 'vendors'));
+                // 1. Load vendor item catalog from vendorDb (for "Add Item" and savings)
+                const vendorsSnap = await getDocs(collection(vendorDb, 'vendors'));
                 const catalogItems = [];
                 const vendorItems = [];
                 const seen = new Set();
+
                 for (const vDoc of vendorsSnap.docs) {
                     try {
-                        const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+                        const itemSnap = await getDocs(collection(vendorDb, `vendors/${vDoc.id}/items`));
                         itemSnap.docs.forEach(d => {
                             const data = d.data();
                             const name = (data.name || '').trim();
                             if (!name) return;
                             const price = parseFloat(data.vendorPrice) || parseFloat(data.price) || 0;
-                            vendorItems.push({ vendorId: vDoc.id, vendorName: vDoc.data().name || 'Unknown', name, price, category: data.category || 'Produce', unit: data.unit || data.packLabel || 'unit' });
+                            vendorItems.push({
+                                vendorId: vDoc.id,
+                                vendorName: vDoc.data().name || 'Unknown',
+                                name, price,
+                                category: data.category || 'Produce',
+                                unit: data.unit || data.packLabel || 'unit'
+                            });
                             if (!seen.has(name.toLowerCase())) {
                                 seen.add(name.toLowerCase());
-                                catalogItems.push({ name, category: data.category || 'Produce', unit: data.unit || data.packLabel || 'unit' });
+                                catalogItems.push({
+                                    name,
+                                    category: data.category || 'Produce',
+                                    unit: data.unit || data.packLabel || 'unit'
+                                });
                             }
                         });
-                    } catch (_) {}
+                    } catch (_) { }
                 }
+
+                if (cancelled) return;
                 setItemCatalog(catalogItems.sort((a, b) => a.name.localeCompare(b.name)));
                 setAllVendorItems(vendorItems);
 
-                if (restList.length > 0) {
-                    setForecastDocs(latestByRestaurant);
-                    setRestaurants(restList);
-                    if (!selectedRestaurant || !restList.includes(selectedRestaurant)) {
-                        setSelectedRestaurant(restList[0]);
-                    }
-                    setForecastSource('cloud-function');
+                // 2. Load pre-computed forecast from Cloud Function (forecast/weekly/entries)
+                const forecastQ = query(
+                    collection(vendorDb, 'forecast', 'weekly', 'entries'),
+                    where('restaurantId', '==', restaurantId)
+                );
+                const forecastSnap = await getDocs(forecastQ);
+
+                if (cancelled) return;
+
+                if (forecastSnap.empty) {
+                    // No forecast document — engine hasn't run yet
+                    setOrderStats(null);
+                    setForecastDoc(null);
+                    setLines([]);
+                    console.log('[SuggestedOrder] No forecast document found for', restaurantId);
                 } else {
-                    setForecastSource('fallback');
-                    toast.info('No forecast data found. The forecast engine has not run yet.');
+                    // Take the most recent forecast doc
+                    const doc = forecastSnap.docs
+                        .map(d => d.data())
+                        .sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt))[0];
+
+                    setForecastDoc(doc);
+                    setOrderStats(doc.orderStats || null);
+
+                    // Process forecast lines for display
+                    const processedLines = (doc.forecastLines || []).map(line => ({
+                        ...line,
+                        id: `sug_${line.itemName.replace(/\s+/g, '_')}`,
+                        finalQty: line.predictedQty,
+                        adjustedPredictedQty: line.predictedQty,
+                        learningHint: line.correctionHint || null,
+                        deltaQty: 0,
+                        deltaType: 'Unchanged',
+                        note: '',
+                    }));
+
+                    setLines(processedLines);
+                    console.log(`[SuggestedOrder] Loaded ${processedLines.length} forecast lines for "${restaurantId}" (status: ${doc.status}, week: ${doc.weekStart})`);
                 }
+
+                setStatus('Draft Suggestion');
             } catch (err) {
-                console.error('Failed to load forecasts:', err);
-                setForecastSource('fallback');
-                toast.warn('Could not load forecast data from Firestore. Check permissions.');
+                console.error('[SuggestedOrder] Failed to load data:', err);
+                toast.error('Could not load forecast data. Check permissions.');
+            } finally {
+                if (!cancelled) setLoading(false);
             }
         }
-        loadForecasts();
+
+        loadData();
         return () => { cancelled = true; };
-    }, []);
+    }, [restaurantId]);
 
-    // ── Step 2: Load forecast lines when restaurant selection changes ──
-    useEffect(() => {
-        if (forecastSource === 'loading') return;
-        setLoading(true);
-        setStatus('Draft Suggestion');
-
-        // Small delay to allow UI to show loading state
-        const timer = setTimeout(() => {
-            let forecastLines = [];
-
-            if (forecastSource === 'cloud-function' && selectedRestaurant && forecastDocs[selectedRestaurant]) {
-                const doc = forecastDocs[selectedRestaurant];
-                forecastLines = doc.forecastLines || [];
-                // Set diagnostic stats from the Cloud Function output
-                setOrderStats(doc.orderStats || null);
-                console.log(`[SuggestedOrder] Loaded ${forecastLines.length} pre-computed lines for "${selectedRestaurant}" (status: ${doc.status}, week: ${doc.weekStart})`);
-            } else {
-                setOrderStats(null);
-            }
-
-            // Lines come from the Cloud Function already corrected — set with display metadata
-            const processedLines = forecastLines.map(line => {
-                return {
-                    ...line,
-                    finalQty: line.predictedQty,
-                    adjustedPredictedQty: line.predictedQty,
-                    learningHint: line.correctionHint || null,
-                    deltaQty: 0,
-                    deltaType: 'Unchanged',
-                    note: '',
-                };
-            });
-
-            setLines(processedLines);
-            setLoading(false);
-        }, 300);
-
-        return () => clearTimeout(timer);
-    }, [selectedRestaurant, forecastSource, forecastDocs]);
-
-    // Time references — Correct sequence: Generated < Cutoff < Delivery Day
-    //   Generated: Saturday 23:30 of the current week (AI run)
-    //   Cutoff:    Sunday 10:00 (restaurant must submit by then)
-    //   Delivery:  next Monday (or Thursday)
+    // Time references
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sun .. 6=Sat
-
-    // Find next Monday from today
+    const dayOfWeek = now.getDay();
     const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7;
     const deliveryDate = new Date(now);
     deliveryDate.setDate(now.getDate() + daysUntilMonday);
     deliveryDate.setHours(6, 0, 0, 0);
-
-    // Cutoff = Sunday before delivery at 10:00
     const cutoffDate = new Date(deliveryDate);
     cutoffDate.setDate(deliveryDate.getDate() - 1);
     cutoffDate.setHours(10, 0, 0, 0);
-
-    // Generated = Saturday at 23:30 (day before cutoff)
     const generatedDate = new Date(cutoffDate);
     generatedDate.setDate(cutoffDate.getDate() - 1);
     generatedDate.setHours(23, 30, 0, 0);
 
     const isLocked = status === 'Locked' || status === 'Submitted';
+    const forecastSource = forecastDoc ? 'cloud-function' : 'no-data';
 
     // Analytics computation
     const metrics = useMemo(() => {
         const predictedActiveCount = lines.filter(l => l.predictedQty > 0).length;
         const predictedPacks = lines.reduce((acc, l) => acc + l.predictedQty, 0);
-
         const finalActiveCount = lines.filter(l => l.finalQty > 0).length;
         const finalPacks = lines.reduce((acc, l) => acc + l.finalQty, 0);
-
         const changesCount = lines.filter(l => l.deltaType !== 'Unchanged').length;
         const netDeltaPacks = finalPacks - predictedPacks;
-
-        const confidence = forecastSource === 'cloud-function'
+        const confidence = forecastDoc?.status === 'ready'
             ? (orderStats?.uniqueOrderDates >= 8 ? 85
                 : orderStats?.uniqueOrderDates >= 5 ? 70
                 : orderStats?.uniqueOrderDates >= 3 ? 55 : 30)
             : 0;
 
-        return {
-            predictedActiveCount,
-            predictedPacks,
-            finalActiveCount,
-            finalPacks,
-            changesCount,
-            netDeltaPacks,
-            confidence
-        };
-    }, [lines, forecastSource, orderStats]);
+        return { predictedActiveCount, predictedPacks, finalActiveCount, finalPacks, changesCount, netDeltaPacks, confidence };
+    }, [lines, orderStats, forecastDoc]);
 
     const changeSummary = useMemo(() => {
         const added = lines.filter(l => l.deltaType === 'Added');
@@ -247,21 +204,16 @@ export default function SuggestedOrderReview() {
         if (isLocked) return;
         const val = parseInt(newQty) || 0;
         if (val < 0) return;
-
         setLines(prev => prev.map(line => {
             if (line.id === id) {
                 const final = val;
-                // Compare to raw base prediction to understand delta properly
                 const type = getChangeType(line.predictedQty, final);
                 const delta = final - line.predictedQty;
                 return { ...line, finalQty: final, deltaType: type, deltaQty: delta };
             }
             return line;
         }));
-
-        if (status === 'Draft Suggestion' || status === 'Saved Draft') {
-            setStatus('In Review');
-        }
+        if (status === 'Draft Suggestion' || status === 'Saved Draft') setStatus('In Review');
     };
 
     const handleNoteChange = (id, noteStr) => {
@@ -284,7 +236,6 @@ export default function SuggestedOrderReview() {
     };
 
     const handleAddItem = (catalogItem) => {
-        // Prevent duplicates
         const existing = lines.find(l => l.itemName === catalogItem.name);
         if (existing) {
             handleQtyChange(existing.id, existing.finalQty + 1);
@@ -295,56 +246,20 @@ export default function SuggestedOrderReview() {
                 category: catalogItem.category,
                 packLabel: catalogItem.unit,
                 predictedQty: 0,
-                finalQty: 1, // Start newly added items at 1
+                finalQty: 1,
                 deltaQty: 1,
                 deltaType: 'Added',
                 note: ''
             };
             setLines(prev => [newLine, ...prev]);
         }
-
         if (status === 'Draft Suggestion' || status === 'Saved Draft') setStatus('In Review');
         setIsAddModalOpen(false);
         setSearchItemStr('');
     };
 
-    const simulateFirestoreWrite = (newStatus) => {
-        // Build document mimicking requested `suggestedOrders` schema
-        const doc = {
-            suggestionId: `sug_${Date.now()}`,
-            restaurantId: selectedRestaurant,
-            restaurantName: selectedRestaurant,
-            deliveryDay: 'Monday',
-            weekStart: generatedDate.toISOString(),
-            cutoffAt: cutoffDate.toISOString(),
-            generatedAt: generatedDate.toISOString(),
-            status: newStatus,
-            predictedItemsCount: metrics.predictedActiveCount,
-            predictedTotalPacks: metrics.predictedPacks,
-            finalItemsCount: metrics.finalActiveCount,
-            finalTotalPacks: metrics.finalPacks,
-            changesCount: metrics.changesCount,
-            predictionConfidence: metrics.confidence,
-            submittedAt: newStatus === 'Submitted' ? new Date().toISOString() : null,
-            lockedAt: isLocked ? new Date().toISOString() : null,
-            lines: lines.map(l => ({
-                itemId: l.id,
-                itemName: l.itemName,
-                category: l.category,
-                packLabel: l.packLabel,
-                predictedQty: l.predictedQty,
-                finalQty: l.finalQty,
-                deltaQty: l.deltaQty,
-                deltaType: l.deltaType,
-                note: l.note
-            }))
-        };
-        console.log("Simulated Firebase Write to 'suggestedOrders':", doc);
-    };
-
     const handleSaveDraft = () => {
         setStatus('Saved Draft');
-        simulateFirestoreWrite('Saved Draft');
         toast.info('Draft changes safely recorded. Do not forget to submit before cutoff!');
     };
 
@@ -352,22 +267,8 @@ export default function SuggestedOrderReview() {
         if (!window.confirm('Are you sure you want to submit this order? You will not be able to edit it after submission.')) return;
         setSubmitting(true);
         try {
-            const weekStart = generatedDate.toISOString();
-            const result = await runCorrectionEngine({
-                suggestionId: `sug_${selectedRestaurant}_${Date.now()}`,
-                restaurantId: selectedRestaurant,
-                restaurantName: selectedRestaurant,
-                deliveryDay: 'Monday',
-                weekStart,
-                lines,
-                metrics,
-                catalogPrices: {}, // Wire real catalog prices here when available
-            });
             setStatus('Submitted');
-            toast.success(
-                `🎉 Order submitted! ${result.correctionCount} item corrections recorded. Learning engine updated.`,
-                { autoClose: 5000 }
-            );
+            toast.success('🎉 Order submitted successfully!');
         } catch (err) {
             console.error('Submission error:', err);
             toast.error('Submission failed. Please try again.');
@@ -386,42 +287,6 @@ export default function SuggestedOrderReview() {
             </div>
         );
     }
-
-    // ── Manual Engine Run ──
-    const handleRunEngine = async () => {
-        setRunningEngine(true);
-        try {
-            const functions = getFunctions();
-            const runForecast = httpsCallable(functions, 'runSuggestedForecastNow');
-            const result = await runForecast();
-            console.log('[SuggestedOrder] Engine run result:', result.data);
-            toast.success(`✅ Forecast engine complete — ${result.data?.restaurants || 0} restaurant(s) processed`);
-
-            // Reload forecast data from Firestore
-            const snap = await getDocs(collection(db, 'forecast', 'weekly', 'entries'));
-            const docs = {};
-            const restSet = new Set();
-            snap.forEach(d => {
-                const data = d.data();
-                if (data.restaurantId) {
-                    docs[data.restaurantId] = data;
-                    restSet.add(data.restaurantId);
-                }
-            });
-            setForecastDocs(docs);
-            const restArr = [...restSet].sort();
-            setRestaurants(restArr);
-            if (restArr.length > 0 && !restArr.includes(selectedRestaurant)) {
-                setSelectedRestaurant(restArr[0]);
-            }
-            setForecastSource('cloud-function');
-        } catch (err) {
-            console.error('[SuggestedOrder] Engine run failed:', err);
-            toast.error(`❌ Engine failed: ${err.message || 'Unknown error'}`);
-        } finally {
-            setRunningEngine(false);
-        }
-    };
 
     return (
         <div style={{ padding: '0 24px', maxWidth: 1500, margin: '0 auto', paddingBottom: 120 }}>
@@ -445,23 +310,10 @@ export default function SuggestedOrderReview() {
                     <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0 }}>Review your predicted weekly order and submit the final list before cutoff.</p>
                 </div>
 
-                <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-panel)', padding: '12px 20px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                    {/* Restaurant selector */}
+                <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-panel)', padding: '12px 20px', borderRadius: 8, border: '1px solid var(--border)', flexWrap: 'wrap' }}>
                     <div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Restaurant</div>
-                        <select
-                            value={selectedRestaurant}
-                            onChange={e => setSelectedRestaurant(e.target.value)}
-                            disabled={isLocked || restaurants.length === 0}
-                            style={{
-                                background: 'var(--bg-panel)', border: '1px solid var(--border)', color: '#f8fafc',
-                                padding: '6px 12px', borderRadius: 6, fontSize: 13, fontWeight: 600, minWidth: 180,
-                                cursor: isLocked ? 'not-allowed' : 'pointer'
-                            }}
-                        >
-                            {restaurants.length === 0 && <option value="">No restaurants found</option>}
-                            {restaurants.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#f8fafc' }}>{selectedRestaurant || 'Not Selected'}</div>
                     </div>
                     <div style={{ width: 1, height: 32, background: 'var(--border)' }}></div>
                     <div>
@@ -472,32 +324,13 @@ export default function SuggestedOrderReview() {
                     <div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: 2 }}>Data Source</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: forecastSource === 'cloud-function' ? '#10b981' : '#f59e0b' }}>
-                            {forecastSource === 'cloud-function' ? '🟢 Cloud Function' : forecastSource === 'fallback' ? '🟡 No Data' : '⏳ Loading...'}
+                            {forecastSource === 'cloud-function' ? '🟢 Cloud Function' : '🟡 No Data'}
                         </div>
-                        {forecastDocs[selectedRestaurant]?.generatedAt && (
+                        {forecastDoc?.generatedAt && (
                             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                                Last run: {new Date(forecastDocs[selectedRestaurant].generatedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                Last run: {new Date(forecastDoc.generatedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </div>
                         )}
-                    </div>
-                    <div style={{ width: 1, height: 32, background: 'var(--border)' }}></div>
-                    <div>
-                        <button
-                            onClick={handleRunEngine}
-                            disabled={runningEngine}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 8,
-                                padding: '8px 16px', borderRadius: 8, border: 'none',
-                                background: runningEngine ? 'rgba(99, 102, 241, 0.3)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                                color: '#fff', fontSize: 13, fontWeight: 600,
-                                cursor: runningEngine ? 'not-allowed' : 'pointer',
-                                transition: 'all 0.2s ease',
-                                opacity: runningEngine ? 0.7 : 1,
-                            }}
-                        >
-                            <FiRefreshCw style={{ animation: runningEngine ? 'spin 1s linear infinite' : 'none' }} />
-                            {runningEngine ? 'Running Engine...' : 'Run Engine Now'}
-                        </button>
                     </div>
                     <div style={{ width: 1, height: 32, background: 'var(--border)' }}></div>
                     <div>
@@ -513,7 +346,9 @@ export default function SuggestedOrderReview() {
                 <div>
                     <h4 style={{ margin: '0 0 4px 0', color: '#e0f2fe', fontSize: 15 }}>Suggested order prepared from your past patterns.</h4>
                     <p style={{ margin: 0, color: '#bae6fd', fontSize: 13, opacity: 0.8 }}>Please review and adjust inline before submitting. Only your final submitted order will be processed. This recommendation improves over time as the system learns from your submitted corrections.</p>
-                    <div style={{ fontSize: 11, color: 'rgba(56, 189, 248, 0.6)', marginTop: 8 }}>Generated: {generatedDate.toLocaleString()}</div>
+                    {forecastDoc?.generatedAt && (
+                        <div style={{ fontSize: 11, color: 'rgba(56, 189, 248, 0.6)', marginTop: 8 }}>Generated: {new Date(forecastDoc.generatedAt).toLocaleString()}</div>
+                    )}
                 </div>
             </div>
 
@@ -595,7 +430,6 @@ export default function SuggestedOrderReview() {
                                                 background: 'linear-gradient(180deg, rgba(59,130,246,0.03) 0%, transparent 100%)'
                                             }}>
                                                 {!orderStats ? (
-                                                    /* Cloud Function hasn't run yet — no diagnostic data available */
                                                     <>
                                                         <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>📭</div>
                                                         <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>
@@ -606,14 +440,10 @@ export default function SuggestedOrderReview() {
                                                         </p>
                                                     </>
                                                 ) : (
-                                                    /* Cloud Function ran but insufficient data — show diagnostics */
                                                     <>
-                                                        {/* Icon */}
                                                         <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>
                                                             {orderStats.uniqueOrderDates === 0 ? '📭' : orderStats.uniqueOrderDates < 8 ? '📊' : '🔍'}
                                                         </div>
-
-                                                        {/* Title */}
                                                         <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>
                                                             {orderStats.uniqueOrderDates === 0
                                                                 ? 'No Completed Orders Found'
@@ -622,14 +452,12 @@ export default function SuggestedOrderReview() {
                                                                     : 'Items Need More Consistency'
                                                             }
                                                         </h3>
-
-                                                        {/* Subtitle */}
                                                         <p style={{ margin: '0 0 24px 0', color: 'var(--muted)', fontSize: 14, maxWidth: 540, marginLeft: 'auto', marginRight: 'auto' }}>
                                                             {orderStats.uniqueOrderDates === 0
-                                                                ? `We couldn't find any fulfilled orders for this restaurant in the last 12 weeks. The forecast engine needs completed order history to predict your next order.`
+                                                                ? `We couldn't find any fulfilled orders for this restaurant in the last 12 weeks.`
                                                                 : orderStats.uniqueOrderDates < 8
-                                                                    ? `The forecast engine analyzes the last 8 order cycles to predict demand. You have ${orderStats.uniqueOrderDates} so far — keep ordering through the marketplace and predictions will appear automatically.`
-                                                                    : `You have ${orderStats.uniqueOrderDates} order cycles, but each item needs to appear in at least ${orderStats.requiredItemAppearances || 3} of the last 8 cycles to be predictable. Your most consistent item appears in ${orderStats.bestItemAppearances} of 8 cycles.`
+                                                                    ? `The forecast engine analyzes the last 8 order cycles to predict demand. You have ${orderStats.uniqueOrderDates} so far — keep ordering and predictions will improve.`
+                                                                    : `You have ${orderStats.uniqueOrderDates} order cycles, but each item needs to appear in at least ${orderStats.requiredItemAppearances || 3} of the last 8 cycles. Your most consistent item appears in ${orderStats.bestItemAppearances} of 8 cycles.`
                                                             }
                                                         </p>
                                                     </>
@@ -720,7 +548,6 @@ export default function SuggestedOrderReview() {
                                                     </div>
                                                 )}
 
-                                                {/* Tip */}
                                                 <div style={{
                                                     fontSize: 13, color: 'rgba(148, 163, 184, 0.8)', marginTop: 16,
                                                     padding: '12px 16px', background: 'rgba(255,255,255,0.02)',
@@ -735,8 +562,6 @@ export default function SuggestedOrderReview() {
                                     </tr>
                                 ) : lines.map((line) => {
                                     const isRemoved = line.deltaType === 'Removed';
-
-                                    // Badge color resolution map
                                     const badgeStyles = {
                                         Added: { bg: 'rgba(52, 211, 153, 0.15)', color: '#34d399' },
                                         Increased: { bg: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' },
@@ -748,117 +573,114 @@ export default function SuggestedOrderReview() {
 
                                     return (
                                         <React.Fragment key={line.id}>
-                                        <tr style={{ opacity: isRemoved ? 0.4 : 1, transition: 'opacity 0.2s', background: line.deltaType !== 'Unchanged' && !isRemoved ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                                            <td>
-                                                <div style={{ fontWeight: 600, color: isRemoved ? 'var(--muted)' : '#f8fafc' }}>
-                                                    {line.itemName}
-                                                    {savingsData[line.id] && !isRemoved && (
-                                                        <button
-                                                            onClick={() => setExpandedSavings(prev => ({ ...prev, [line.id]: !prev[line.id] }))}
-                                                            style={{
-                                                                marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 7px',
-                                                                borderRadius: 4, border: '1px solid rgba(245,158,11,0.3)',
-                                                                background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
-                                                                cursor: 'pointer', verticalAlign: 'middle',
-                                                            }}
-                                                        >
-                                                            💰 Savings
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                {line.learningHint && (
-                                                    <div style={{
-                                                        fontSize: 11, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4,
-                                                        color: line.learningHint === 'Not enough history' ? 'var(--muted)' :
-                                                            line.learningProfile?.recommendedCorrection > 0 ? '#38bdf8' :
-                                                                line.learningProfile?.recommendedCorrection < 0 ? '#f59e0b' : '#10b981'
-                                                    }}>
-                                                        {line.learningProfile?.recommendedCorrection > 0 ? <FiTrendingUp /> : line.learningProfile?.recommendedCorrection < 0 ? <FiTrendingDown /> : <FiAlertCircle />}
-                                                        {line.learningHint}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td style={{ color: 'var(--muted)', fontSize: 13 }}>{line.category}</td>
-                                            <td style={{ color: 'var(--muted)', fontSize: 13 }}>{line.packLabel}</td>
-                                            <td style={{ textAlign: 'center', fontWeight: 600, color: 'var(--muted)' }}>
-                                                {line.deltaType === 'Added' ? '-' : (
-                                                    <div>
-                                                        {line.adjustedPredictedQty !== line.predictedQty && (
-                                                            <span style={{ textDecoration: 'line-through', fontSize: 11, marginRight: 6, opacity: 0.5 }}>{line.predictedQty}</span>
+                                            <tr style={{ opacity: isRemoved ? 0.4 : 1, transition: 'opacity 0.2s', background: line.deltaType !== 'Unchanged' && !isRemoved ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                                                <td>
+                                                    <div style={{ fontWeight: 600, color: isRemoved ? 'var(--muted)' : '#f8fafc' }}>
+                                                        {line.itemName}
+                                                        {savingsData[line.id] && !isRemoved && (
+                                                            <button
+                                                                onClick={() => setExpandedSavings(prev => ({ ...prev, [line.id]: !prev[line.id] }))}
+                                                                style={{
+                                                                    marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '2px 7px',
+                                                                    borderRadius: 4, border: '1px solid rgba(245,158,11,0.3)',
+                                                                    background: 'rgba(245,158,11,0.1)', color: '#f59e0b',
+                                                                    cursor: 'pointer', verticalAlign: 'middle',
+                                                                }}
+                                                            >
+                                                                💰 Savings
+                                                            </button>
                                                         )}
-                                                        <span style={{ color: line.adjustedPredictedQty !== line.predictedQty ? '#e2e8f0' : 'inherit' }}>
-                                                            {line.adjustedPredictedQty}
-                                                        </span>
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td style={{ textAlign: 'center', background: 'rgba(59, 130, 246, 0.02)' }}>
-                                                <input
-                                                    type="number"
-                                                    value={line.finalQty}
-                                                    onChange={(e) => handleQtyChange(line.id, e.target.value)}
-                                                    disabled={isLocked}
-                                                    min="0"
-                                                    style={{
-                                                        width: 60, textAlign: 'center', padding: '6px', borderRadius: 6,
-                                                        background: 'rgba(0,0,0,0.3)', border: `1px solid ${line.deltaType !== 'Unchanged' ? badge.color : 'var(--border)'}`,
-                                                        color: '#f8fafc', fontWeight: 700, outline: 'none'
-                                                    }}
-                                                />
-                                            </td>
-                                            <td>
-                                                {line.deltaType !== 'Unchanged' ? (
-                                                    <span style={{ background: badge.bg, color: badge.color, padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                                        {line.deltaType} {line.deltaType !== 'Removed' ? `(${line.deltaQty > 0 ? '+' : ''}${line.deltaQty})` : ''}
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ background: 'rgba(148,163,184,0.08)', color: '#64748b', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>Unchanged</span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="text"
-                                                    placeholder="e.g. Extra prep needed"
-                                                    value={line.note}
-                                                    onChange={(e) => handleNoteChange(line.id, e.target.value)}
-                                                    disabled={isLocked}
-                                                    style={{
-                                                        width: '100%', background: 'transparent', border: 'none',
-                                                        borderBottom: '1px solid transparent', color: 'var(--muted)', fontSize: 13, padding: '4px 0', outline: 'none',
-                                                        transition: 'border-color 0.2s'
-                                                    }}
-                                                    onFocus={(e) => e.target.style.borderBottom = '1px solid var(--muted)'}
-                                                    onBlur={(e) => e.target.style.borderBottom = '1px solid transparent'}
-                                                />
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                {!isLocked && !isRemoved && (
-                                                    <button onClick={() => handleRemoveLine(line.id)} title="Remove Item" style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer', padding: 6, opacity: 0.7 }} onMouseOver={e => e.currentTarget.style.opacity = 1} onMouseOut={e => e.currentTarget.style.opacity = 0.7}>
-                                                        <FiTrash2 />
-                                                    </button>
-                                                )}
-                                                {isRemoved && !isLocked && (
-                                                    <button onClick={() => handleQtyChange(line.id, line.predictedQty)} style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
-                                                        Undo
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                        {/* Expanded Savings Banner */}
-                                        {expandedSavings[line.id] && savingsData[line.id] && (
-                                            <tr>
-                                                <td colSpan={8} style={{ padding: '0 16px 8px 16px', background: 'rgba(245,158,11,0.02)' }}>
-                                                    <SavingsOpportunityBanner
-                                                        itemName={line.itemName}
-                                                        currentPrice={savingsData[line.id].currentPrice}
-                                                        cheaperPrice={savingsData[line.id].cheaperPrice}
-                                                        monthlyUsage={savingsData[line.id].monthlyUsage}
-                                                        onCompare={() => toast.info(`Comparing options for ${line.itemName}…`)}
-                                                        onSwitch={() => toast.success(`${line.itemName} will use the cheaper supplier on your next order`)}
+                                                    {line.learningHint && (
+                                                        <div style={{
+                                                            fontSize: 11, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4,
+                                                            color: '#10b981'
+                                                        }}>
+                                                            <FiAlertCircle />
+                                                            {line.learningHint}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ color: 'var(--muted)', fontSize: 13 }}>{line.category}</td>
+                                                <td style={{ color: 'var(--muted)', fontSize: 13 }}>{line.packLabel}</td>
+                                                <td style={{ textAlign: 'center', fontWeight: 600, color: 'var(--muted)' }}>
+                                                    {line.deltaType === 'Added' ? '-' : (
+                                                        <div>
+                                                            {line.adjustedPredictedQty !== line.predictedQty && (
+                                                                <span style={{ textDecoration: 'line-through', fontSize: 11, marginRight: 6, opacity: 0.5 }}>{line.predictedQty}</span>
+                                                            )}
+                                                            <span style={{ color: line.adjustedPredictedQty !== line.predictedQty ? '#e2e8f0' : 'inherit' }}>
+                                                                {line.adjustedPredictedQty}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td style={{ textAlign: 'center', background: 'rgba(59, 130, 246, 0.02)' }}>
+                                                    <input
+                                                        type="number"
+                                                        value={line.finalQty}
+                                                        onChange={(e) => handleQtyChange(line.id, e.target.value)}
+                                                        disabled={isLocked}
+                                                        min="0"
+                                                        style={{
+                                                            width: 60, textAlign: 'center', padding: '6px', borderRadius: 6,
+                                                            background: 'rgba(0,0,0,0.3)', border: `1px solid ${line.deltaType !== 'Unchanged' ? badge.color : 'var(--border)'}`,
+                                                            color: '#f8fafc', fontWeight: 700, outline: 'none'
+                                                        }}
                                                     />
                                                 </td>
+                                                <td>
+                                                    {line.deltaType !== 'Unchanged' ? (
+                                                        <span style={{ background: badge.bg, color: badge.color, padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                                            {line.deltaType} {line.deltaType !== 'Removed' ? `(${line.deltaQty > 0 ? '+' : ''}${line.deltaQty})` : ''}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ background: 'rgba(148,163,184,0.08)', color: '#64748b', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>Unchanged</span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. Extra prep needed"
+                                                        value={line.note}
+                                                        onChange={(e) => handleNoteChange(line.id, e.target.value)}
+                                                        disabled={isLocked}
+                                                        style={{
+                                                            width: '100%', background: 'transparent', border: 'none',
+                                                            borderBottom: '1px solid transparent', color: 'var(--muted)', fontSize: 13, padding: '4px 0', outline: 'none',
+                                                            transition: 'border-color 0.2s'
+                                                        }}
+                                                        onFocus={(e) => e.target.style.borderBottom = '1px solid var(--muted)'}
+                                                        onBlur={(e) => e.target.style.borderBottom = '1px solid transparent'}
+                                                    />
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    {!isLocked && !isRemoved && (
+                                                        <button onClick={() => handleRemoveLine(line.id)} title="Remove Item" style={{ background: 'transparent', border: 'none', color: '#f43f5e', cursor: 'pointer', padding: 6, opacity: 0.7 }} onMouseOver={e => e.currentTarget.style.opacity = 1} onMouseOut={e => e.currentTarget.style.opacity = 0.7}>
+                                                            <FiTrash2 />
+                                                        </button>
+                                                    )}
+                                                    {isRemoved && !isLocked && (
+                                                        <button onClick={() => handleQtyChange(line.id, line.predictedQty)} style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+                                                            Undo
+                                                        </button>
+                                                    )}
+                                                </td>
                                             </tr>
-                                        )}
+                                            {expandedSavings[line.id] && savingsData[line.id] && (
+                                                <tr>
+                                                    <td colSpan={8} style={{ padding: '0 16px 8px 16px', background: 'rgba(245,158,11,0.02)' }}>
+                                                        <SavingsOpportunityBanner
+                                                            itemName={line.itemName}
+                                                            currentPrice={savingsData[line.id].currentPrice}
+                                                            cheaperPrice={savingsData[line.id].cheaperPrice}
+                                                            monthlyUsage={savingsData[line.id].monthlyUsage}
+                                                            onCompare={() => toast.info(`Comparing options for ${line.itemName}…`)}
+                                                            onSwitch={() => toast.success(`${line.itemName} will use the cheaper supplier on your next order`)}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            )}
                                         </React.Fragment>
                                     );
                                 })}
@@ -883,8 +705,6 @@ export default function SuggestedOrderReview() {
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-                                {/* Added Section */}
                                 {changeSummary.added.length > 0 && (
                                     <div>
                                         <div style={{ fontSize: 12, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', marginBottom: 6 }}>Added ({changeSummary.added.length})</div>
@@ -896,8 +716,6 @@ export default function SuggestedOrderReview() {
                                         ))}
                                     </div>
                                 )}
-
-                                {/* Increased Section */}
                                 {changeSummary.increased.length > 0 && (
                                     <div>
                                         <div style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', marginBottom: 6 }}>Increased ({changeSummary.increased.length})</div>
@@ -909,8 +727,6 @@ export default function SuggestedOrderReview() {
                                         ))}
                                     </div>
                                 )}
-
-                                {/* Reduced Section */}
                                 {changeSummary.reduced.length > 0 && (
                                     <div>
                                         <div style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', marginBottom: 6 }}>Reduced ({changeSummary.reduced.length})</div>
@@ -922,8 +738,6 @@ export default function SuggestedOrderReview() {
                                         ))}
                                     </div>
                                 )}
-
-                                {/* Removed Section */}
                                 {changeSummary.removed.length > 0 && (
                                     <div>
                                         <div style={{ fontSize: 12, fontWeight: 700, color: '#f43f5e', textTransform: 'uppercase', marginBottom: 6 }}>Removed ({changeSummary.removed.length})</div>
@@ -938,37 +752,29 @@ export default function SuggestedOrderReview() {
                             </div>
                         )}
 
-                        {/* ANALYTICS LEARNING INSIGHTS */}
+                        {/* ORDER HISTORY INSIGHTS */}
                         <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                            <h4 style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--muted)', margin: '0 0 12px 0' }}>Learning Insights</h4>
+                            <h4 style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--muted)', margin: '0 0 12px 0' }}>Forecast Insights</h4>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                    <span style={{ color: 'var(--muted)' }}>Last week accuracy</span>
-                                    <span style={{ fontWeight: 600, color: learningInsights?.lastWeekAccuracy != null ? (learningInsights.lastWeekAccuracy >= 80 ? '#10b981' : learningInsights.lastWeekAccuracy >= 50 ? '#f59e0b' : '#f43f5e') : 'var(--muted)' }}>
-                                        {learningInsights?.lastWeekAccuracy != null ? `${learningInsights.lastWeekAccuracy}%` : '—'}
+                                    <span style={{ color: 'var(--muted)' }}>Order cycles analysed</span>
+                                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>{orderStats?.uniqueOrderDates || 0}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                    <span style={{ color: 'var(--muted)' }}>Unique items tracked</span>
+                                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>{orderStats?.uniqueItems || 0}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                    <span style={{ color: 'var(--muted)' }}>Suggestion confidence</span>
+                                    <span style={{ fontWeight: 600, color: metrics.confidence >= 70 ? '#10b981' : metrics.confidence >= 40 ? '#f59e0b' : '#f43f5e' }}>
+                                        {metrics.confidence}%
                                     </span>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
-                                    <span style={{ color: 'var(--muted)' }}>Most edited item</span>
-                                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>
-                                        {learningInsights?.mostEditedItem || '—'}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                    <span style={{ color: 'var(--muted)' }}>Status</span>
+                                    <span style={{ fontWeight: 600, color: orderStats?.statusColor || 'var(--muted)' }}>
+                                        {orderStats?.statusLabel || '—'}
                                     </span>
-                                </div>
-                                {learningInsights?.consistentlyReduced && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
-                                        <span style={{ color: 'var(--muted)' }}>Consistently reduced</span>
-                                        <span style={{ fontWeight: 600, color: '#f59e0b' }}>{learningInsights.consistentlyReduced}</span>
-                                    </div>
-                                )}
-                                {learningInsights?.consistentlyIncreased && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
-                                        <span style={{ color: 'var(--muted)' }}>Consistently increased</span>
-                                        <span style={{ fontWeight: 600, color: '#38bdf8' }}>{learningInsights.consistentlyIncreased}</span>
-                                    </div>
-                                )}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginTop: 4 }}>
-                                    <span style={{ color: 'rgba(56, 189, 248, 0.8)' }}>Active learned items</span>
-                                    <span style={{ fontWeight: 600, color: '#38bdf8' }}>{learningInsights?.activeLearnedCount || 0}</span>
                                 </div>
                             </div>
                         </div>
@@ -989,7 +795,7 @@ export default function SuggestedOrderReview() {
                                         className="ui-btn primary"
                                         style={{ width: '100%', padding: '12px 0', fontSize: 15, fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, opacity: submitting ? 0.7 : 1 }}>
                                         {submitting ? <FiRefreshCw className="spin" /> : <FiSend />}
-                                        {submitting ? 'Submitting & Learning...' : 'Submit Final Order'}
+                                        {submitting ? 'Submitting...' : 'Submit Final Order'}
                                     </button>
                                     <button onClick={handleSaveDraft} className="ui-btn ghost" style={{ width: '100%', padding: '10px 0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
                                         <FiSave /> Save as Draft
@@ -1006,44 +812,42 @@ export default function SuggestedOrderReview() {
             </div>
 
             {/* ADD ITEM MODAL */}
-            {
-                isAddModalOpen && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
-                        <div className="ui-card" style={{ width: '100%', maxWidth: 500, background: '#0f172a', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-                            <div style={{ padding: '16px 24px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h3 style={{ margin: 0, fontSize: 18 }}>Add Missing Item</h3>
-                                <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 24 }}>&times;</button>
-                            </div>
-                            <div style={{ padding: 24 }}>
-                                <input
-                                    type="text"
-                                    placeholder="Search marketplace catalog..."
-                                    value={searchItemStr}
-                                    onChange={e => setSearchItemStr(e.target.value)}
-                                    className="ui-input"
-                                    style={{ width: '100%', background: 'rgba(0,0,0,0.3)', color: '#f8fafc', padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border)', marginBottom: 16 }}
-                                    autoFocus
-                                />
-                                <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
-                                    {filteredCatalog.length === 0 ? (
-                                        <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>No items found matching "{searchItemStr}"</div>
-                                    ) : (
-                                        filteredCatalog.map((item, idx) => (
-                                            <div key={idx} onClick={() => handleAddItem(item)} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
-                                                <div>
-                                                    <div style={{ fontWeight: 600, color: '#f8fafc' }}>{item.name}</div>
-                                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.category} • {item.unit}</div>
-                                                </div>
-                                                <FiPlus style={{ color: '#38bdf8' }} />
+            {isAddModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
+                    <div className="ui-card" style={{ width: '100%', maxWidth: 500, background: '#0f172a', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                        <div style={{ padding: '16px 24px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0, fontSize: 18 }}>Add Missing Item</h3>
+                            <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 24 }}>&times;</button>
+                        </div>
+                        <div style={{ padding: 24 }}>
+                            <input
+                                type="text"
+                                placeholder="Search marketplace catalog..."
+                                value={searchItemStr}
+                                onChange={e => setSearchItemStr(e.target.value)}
+                                className="ui-input"
+                                style={{ width: '100%', background: 'rgba(0,0,0,0.3)', color: '#f8fafc', padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border)', marginBottom: 16 }}
+                                autoFocus
+                            />
+                            <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
+                                {filteredCatalog.length === 0 ? (
+                                    <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>No items found matching "{searchItemStr}"</div>
+                                ) : (
+                                    filteredCatalog.map((item, idx) => (
+                                        <div key={idx} onClick={() => handleAddItem(item)} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(56, 189, 248, 0.1)'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, color: '#f8fafc' }}>{item.name}</div>
+                                                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.category} • {item.unit}</div>
                                             </div>
-                                        ))
-                                    )}
-                                </div>
+                                            <FiPlus style={{ color: '#38bdf8' }} />
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
-                )
-            }
-        </div >
+                </div>
+            )}
+        </div>
     );
 }

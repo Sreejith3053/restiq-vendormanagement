@@ -211,14 +211,14 @@ export function getOrderStats(records, restaurantId) {
 // ─── Correction Learning ──────────────────────────────────────────────────────
 
 /**
- * Fetch correction history from Firestore `forecast/corrections/entries` for a restaurant.
+ * Fetch correction history from Firestore `correctionEntries` for a restaurant.
  * Returns raw correction rows grouped by itemId.
  */
 export async function fetchCorrectionHistory(restaurantId, deliveryDay = 'Monday') {
     if (!restaurantId) return [];
 
     try {
-        const correctionsRef = collection(db, 'forecast', 'corrections', 'entries');
+        const correctionsRef = collection(db, 'correctionEntries');
         const q = query(
             correctionsRef,
             where('restaurantId', '==', restaurantId),

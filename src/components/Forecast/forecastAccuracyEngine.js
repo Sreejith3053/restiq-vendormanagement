@@ -37,26 +37,23 @@ export async function computeForecastAccuracy() {
             });
         }
 
-        // 2. Get actual submitted orders for current week
-        const submittedSnap = await getDocs(collection(db, 'submittedOrders'));
+        // 2. Get actual completed orders for comparison
+        const ordersRef = collection(db, 'marketplaceOrders');
         const now = new Date();
-        const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
-        weekStart.setHours(0, 0, 0, 0);
+        const twoWeeksAgo = new Date(now);
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+        const ordersQ = query(
+            ordersRef,
+            where('status', '==', 'completed'),
+            where('createdAt', '>=', twoWeeksAgo),
+            orderBy('createdAt', 'desc')
+        );
+        const ordersSnap = await getDocs(ordersQ);
 
         const actualMap = {}; // itemName → actual qty
-        submittedSnap.docs.forEach(doc => {
+        ordersSnap.docs.forEach(doc => {
             const order = doc.data();
-            // Check if in current week
-            let orderDate = null;
-            if (order.submittedAt?.toDate) orderDate = order.submittedAt.toDate();
-            else if (order.submittedAt) orderDate = new Date(order.submittedAt);
-            else if (order.createdAt?.toDate) orderDate = order.createdAt.toDate();
-
-            // Include orders from last 2 weeks for comparison
-            const twoWeeksAgo = new Date(now);
-            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-            if (orderDate && orderDate < twoWeeksAgo) return;
 
             (order.items || []).forEach(item => {
                 const name = item.name || item.itemName || '';
@@ -132,7 +129,7 @@ function getEmptyAccuracy() {
 export async function computeCorrectionIntelligence() {
     try {
         // Fetch all correction entries (not filtered by restaurant)
-        const correctionsRef = collection(db, 'forecast', 'corrections', 'entries');
+        const correctionsRef = collection(db, 'correctionEntries');
         const q = query(correctionsRef, orderBy('submittedAt', 'desc'), limit(500));
         const snap = await getDocs(q);
 
@@ -140,10 +137,10 @@ export async function computeCorrectionIntelligence() {
 
         const corrections = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Group by itemId
+        // Group by catalogItemId
         const byItem = {};
         corrections.forEach(c => {
-            const key = c.itemId || c.itemName;
+            const key = c.catalogItemId || c.itemId || c.itemName;
             if (!byItem[key]) byItem[key] = { itemId: key, itemName: c.itemName || key, edits: [] };
             byItem[key].edits.push(c);
         });

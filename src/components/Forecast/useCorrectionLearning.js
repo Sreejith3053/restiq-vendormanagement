@@ -4,7 +4,7 @@ import { fetchCorrectionHistory, computeCorrectionProfiles } from './forecastHel
 /**
  * useCorrectionLearning Hook
  *
- * Reads real correction data from Firestore `forecast/corrections/entries` collection
+ * Reads real correction data from Firestore `correctionEntries` collection
  * and computes learning profiles for display in the sidebar.
  *
  * This hook is used ONLY for UI display (Learning Insights sidebar).

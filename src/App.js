@@ -129,6 +129,7 @@ function App() {
                         {isSuperAdmin && (
                             <>
                                 <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
+                                <Route path="/orders" element={<OrdersPage />} />
                                 <Route path="/vendors" element={<VendorListPage />} />
                                 <Route path="/vendors/add" element={<AddVendorPage />} />
                                 <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />

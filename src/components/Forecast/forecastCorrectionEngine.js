@@ -67,7 +67,7 @@ export async function runCorrectionEngine({
     const weekLabel = formatWeekLabel(weekStart);
     const orderDocId = suggestionId || `sug_${restaurantId}_${weekLabel}_${deliveryDay}`;
 
-    // ── STEP 1: Write item-level corrections to forecast/corrections/entries ──────
+    // ── STEP 1: Write item-level corrections to correctionEntries ──────
     const correctionsBatch = writeBatch(db);
     const profilesUpdated = [];
 
@@ -76,7 +76,7 @@ export async function runCorrectionEngine({
         const deltaType = getDeltaType(line.rawPrediction ?? line.predictedQty, line.finalQty);
         const catalogPrice = catalogPrices[line.itemName] || 0;
 
-        const correctionRef = doc(collection(db, 'forecast', 'corrections', 'entries'));
+        const correctionRef = doc(collection(db, 'correctionEntries'));
 
         correctionsBatch.set(correctionRef, {
             correctionId: correctionRef.id,

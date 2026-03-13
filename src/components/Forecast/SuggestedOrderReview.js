@@ -52,8 +52,8 @@ export default function SuggestedOrderReview() {
         let cancelled = false;
         async function loadForecasts() {
             try {
-                // Load pre-computed forecasts from forecast/weekly/entries
-                const forecastsRef = collection(db, 'forecast', 'weekly', 'entries');
+                // Load pre-computed forecasts from suggestedOrderAIForcast_Model
+                const forecastsRef = collection(db, 'suggestedOrderAIForcast_Model');
                 const forecastSnap = await getDocs(query(forecastsRef, orderBy('generatedAt', 'desc')));
 
                 if (cancelled) return;
@@ -398,7 +398,7 @@ export default function SuggestedOrderReview() {
             toast.success(`✅ Forecast engine complete — ${result.data?.restaurants || 0} restaurant(s) processed`);
 
             // Reload forecast data from Firestore
-            const snap = await getDocs(collection(db, 'forecast', 'weekly', 'entries'));
+            const snap = await getDocs(collection(db, 'suggestedOrderAIForcast_Model'));
             const docs = {};
             const restSet = new Set();
             snap.forEach(d => {

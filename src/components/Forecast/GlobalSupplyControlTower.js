@@ -9,7 +9,7 @@ import { computeForecastAccuracy, computeCorrectionIntelligence } from './foreca
 // Import Icons from react-icons
 import { FiRefreshCw, FiDownload, FiAlertCircle, FiTrendingUp, FiTrendingDown, FiActivity, FiBox, FiDollarSign } from 'react-icons/fi';
 
-// (forecast helpers removed — Control Tower now uses submittedOrders)
+// (forecast helpers removed — Control Tower now uses marketplaceOrders)
 
 // AI Intelligence Engines
 import { computePriceIntelligence } from '../AI/priceIntelligenceEngine';
@@ -217,15 +217,15 @@ export default function GlobalSupplyControlTower() {
             vendorConfirmed, warehouseReady, openIssues,
         });
 
-        // 1. submittedOrders — Submitted Orders + Pending Aggregation counts
-        const unsubSO = onSnapshot(collection(db, 'submittedOrders'), snap => {
+        // 1. marketplaceOrders — Order pipeline counts
+        const unsubSO = onSnapshot(collection(db, 'marketplaceOrders'), snap => {
             const docs = snap.docs.map(d => d.data());
-            const weekDocs = docs.filter(d => isInWeek(d.submittedAt, activeWeekStart));
+            const weekDocs = docs.filter(d => isInWeek(d.createdAt, activeWeekStart));
             submitted = weekDocs.filter(d =>
-                ['Submitted', 'Locked', 'Aggregated', 'Sent to Vendor'].includes(d.status)
+                ['pending_confirmation', 'pending_fulfillment', 'pending_customer_approval'].includes(d.status)
             ).length;
             pendingAgg = weekDocs.filter(d =>
-                ['Submitted', 'Locked'].includes(d.status) && !d.aggregatedAt
+                ['pending_confirmation'].includes(d.status)
             ).length;
             flush();
         }, () => { });
@@ -362,25 +362,30 @@ export default function GlobalSupplyControlTower() {
             console.warn('Failed to load dispatch statuses', err);
         }
 
-        // ── Aggregate from submittedOrders (actual demand) ──────────────
+        // ── Aggregate from marketplaceOrders (actual demand) ──────────────
         let weekOrders = [];
         try {
-            const soSnap = await getDocs(collection(db, 'submittedOrders'));
+            const soSnap = await getDocs(collection(db, 'marketplaceOrders'));
             const allOrders = soSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            weekOrders = allOrders.filter(o => o.weekStart === activeWeekStart);
-            console.log(`[ControlTower] ${weekOrders.length} submitted orders for week ${activeWeekStart}`);
+            // Filter to current week based on createdAt
+            weekOrders = allOrders.filter(o => {
+                const createdAt = o.createdAt?.toDate ? o.createdAt.toDate() : (o.createdAt ? new Date(o.createdAt) : null);
+                if (!createdAt) return false;
+                return isInWeek(o.createdAt, activeWeekStart);
+            });
+            console.log(`[ControlTower] ${weekOrders.length} marketplace orders for week ${activeWeekStart}`);
         } catch (err) {
-            console.error('[ControlTower] Failed to fetch submitted orders:', err);
+            console.error('[ControlTower] Failed to fetch marketplace orders:', err);
         }
 
-        // Aggregate item lines from submitted orders
+        // Aggregate item lines from marketplace orders
         const itemAgg = {}; // itemName → { mondayQty, thursdayQty, category }
         weekOrders.forEach(order => {
             const deliveryDay = order.deliveryDay || 'Monday';
             (order.items || []).forEach(line => {
-                const itemName = line.itemName;
+                const itemName = line.name || line.itemName;
                 if (!itemName) return;
-                const qty = Number(line.finalQty) || 0;
+                const qty = Number(line.qty) || 0;
                 if (qty <= 0) return;
                 if (!itemAgg[itemName]) {
                     itemAgg[itemName] = { mondayQty: 0, thursdayQty: 0, category: line.category || '' };

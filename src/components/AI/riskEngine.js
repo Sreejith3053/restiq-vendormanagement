@@ -4,7 +4,7 @@
  * Detects operational supply risks across the marketplace.
  * Risk types: Supply Shortage, Single Vendor Dependency, Vendor Reliability.
  *
- * Input:  vendors/{id}/items, submittedOrders, vendorDispatchRoutes, issuesDisputes
+ * Input:  vendors/{id}/items, marketplaceOrders, vendorDispatchRoutes, issuesDisputes
  * Output: riskAlerts[] sorted by severity
  */
 import { db } from '../../firebase';
@@ -58,21 +58,29 @@ export async function computeRiskAlerts() {
         } catch (e) { /* skip */ }
     }
 
-    // 2. Load submitted orders for current week demand
+    // 2. Load marketplace orders for current week demand
     let weekDemand = {}; // itemName(lower) → totalQty
     try {
-        const soSnap = await getDocs(collection(db, 'submittedOrders'));
+        const soSnap = await getDocs(collection(db, 'marketplaceOrders'));
         soSnap.docs.forEach(d => {
             const data = d.data();
-            if (data.weekStart !== weekStart) return;
+            // Filter by status and week
+            if (!['completed', 'fulfilled', 'pending_fulfillment', 'delivery_in_route', 'delivered_awaiting_confirmation'].includes(data.status)) return;
+            const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
+            if (!createdAt) return;
+            const orderWeek = createdAt.toISOString().slice(0, 10);
+            // Only count orders from the last 2 weeks
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            if (createdAt < twoWeeksAgo) return;
             (data.items || []).forEach(line => {
-                const name = (line.itemName || '').trim().toLowerCase();
+                const name = (line.name || line.itemName || '').trim().toLowerCase();
                 if (!name) return;
-                weekDemand[name] = (weekDemand[name] || 0) + (Number(line.finalQty) || 0);
+                weekDemand[name] = (weekDemand[name] || 0) + (Number(line.qty) || 0);
             });
         });
     } catch (e) {
-        console.warn('[RiskEngine] Could not load submitted orders:', e);
+        console.warn('[RiskEngine] Could not load marketplace orders:', e);
     }
 
     // 3. RISK TYPE 1 — Single Vendor Dependency

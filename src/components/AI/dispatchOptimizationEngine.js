@@ -4,7 +4,7 @@
  * Identifies dispatch consolidation opportunities to reduce logistics complexity.
  * Groups dispatches by vendor + delivery day and suggests combining items.
  *
- * Input:  submittedOrders, vendors/{id}/items
+ * Input:  marketplaceOrders, vendors/{id}/items
  * Output: dispatchSuggestions[]
  */
 import { db } from '../../firebase';
@@ -54,15 +54,20 @@ export async function computeDispatchOptimization() {
         console.warn('[DispatchOpt] Could not load catalog:', e);
     }
 
-    // 2. Load submitted orders for current week
+    // 2. Load marketplace orders for current week
     let weekOrders = [];
     try {
-        const soSnap = await getDocs(collection(db, 'submittedOrders'));
+        const soSnap = await getDocs(collection(db, 'marketplaceOrders'));
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
         weekOrders = soSnap.docs
             .map(d => ({ id: d.id, ...d.data() }))
-            .filter(o => o.weekStart === weekStart);
+            .filter(o => {
+                const createdAt = o.createdAt?.toDate ? o.createdAt.toDate() : (o.createdAt ? new Date(o.createdAt) : null);
+                return createdAt && createdAt >= twoWeeksAgo;
+            });
     } catch (e) {
-        console.warn('[DispatchOpt] Could not load submitted orders:', e);
+        console.warn('[DispatchOpt] Could not load marketplace orders:', e);
     }
 
     // 3. Aggregate items by vendor + delivery day
@@ -72,9 +77,9 @@ export async function computeDispatchOptimization() {
     weekOrders.forEach(order => {
         const day = order.deliveryDay || 'Monday';
         (order.items || []).forEach(line => {
-            const itemName = line.itemName;
+            const itemName = line.name || line.itemName;
             if (!itemName) return;
-            const qty = Number(line.finalQty) || 0;
+            const qty = Number(line.qty) || 0;
             if (qty <= 0) return;
 
             const cat = catalogLookup[itemName] || {};

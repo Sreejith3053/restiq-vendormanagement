@@ -153,7 +153,7 @@ export default function OrdersPage() {
                     auditLogEntries.push({
                         action: `Item "${item.name}" ${actionName} from ${originalItem.qty} to ${item.qty}`,
                         reason: reason,
-                        timestamp: serverTimestamp(),
+                        timestamp: new Date().toISOString(),
                         user: displayName || 'Admin'
                     });
                 }
@@ -265,7 +265,7 @@ export default function OrdersPage() {
             const auditEntry = {
                 action: actionLabel,
                 reason: cancelReason.trim(),
-                timestamp: serverTimestamp(),
+                timestamp: new Date().toISOString(),
                 user: displayName || 'Vendor'
             };
             const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
@@ -298,7 +298,7 @@ export default function OrdersPage() {
             const auditEntry = {
                 action: 'Order marked as delivered — awaiting restaurant confirmation',
                 reason: 'Delivery completed',
-                timestamp: serverTimestamp(),
+                timestamp: new Date().toISOString(),
                 user: displayName || 'Vendor'
             };
             const updatedAuditLog = [...(selectedOrder.auditLog || []), auditEntry];
@@ -368,13 +368,13 @@ export default function OrdersPage() {
                 if (newQty === 0 && origQty > 0) {
                     itemAuditEntries.push({
                         action: `Item "${itemName}" removed (qty ${origQty} → 0)`,
-                        timestamp: serverTimestamp(),
+                        timestamp: new Date().toISOString(),
                         user: displayName || 'SuperAdmin'
                     });
                 } else if (newQty !== origQty) {
                     itemAuditEntries.push({
                         action: `Item "${itemName}" qty adjusted from ${origQty} to ${newQty}`,
-                        timestamp: serverTimestamp(),
+                        timestamp: new Date().toISOString(),
                         user: displayName || 'SuperAdmin'
                     });
                 }
@@ -382,7 +382,7 @@ export default function OrdersPage() {
                 if (newPrice !== origPrice && newQty > 0) {
                     itemAuditEntries.push({
                         action: `Item "${itemName}" price adjusted from $${origPrice.toFixed(2)} to $${newPrice.toFixed(2)}`,
-                        timestamp: serverTimestamp(),
+                        timestamp: new Date().toISOString(),
                         user: displayName || 'SuperAdmin'
                     });
                 }
@@ -392,7 +392,7 @@ export default function OrdersPage() {
             const resolutionEntry = {
                 action: `Issue resolved — ${resolutionAction.replace(/_/g, ' ')}`,
                 reason: resolutionNotes || 'Resolved by admin',
-                timestamp: serverTimestamp(),
+                timestamp: new Date().toISOString(),
                 user: displayName || 'SuperAdmin'
             };
 

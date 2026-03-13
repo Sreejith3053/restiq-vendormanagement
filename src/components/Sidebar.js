@@ -17,6 +17,8 @@ const NAV_GROUPS = [
         icon: '⚙️',
         defaultOpen: true,
         links: [
+            { to: '/orders', icon: '📦', label: 'All Orders' },
+            { to: '/admin/forecast/suggested-order-review', icon: '📝', label: 'Suggested Orders' },
             { to: '/admin/forecast/submitted-orders', icon: '✅', label: 'Submitted Orders' },
             { to: '/admin/dispatch/confirmations', icon: '📋', label: 'Dispatch Confirmations' },
             { to: '/admin/dispatch/delivery', icon: '📍', label: 'Delivery Status' },
@@ -31,7 +33,6 @@ const NAV_GROUPS = [
         links: [
             { to: '/vendors', icon: '🏢', label: 'All Vendors', end: true },
             { to: '/vendors/add', icon: '➕', label: 'Add Vendor' },
-            { to: '/admin/invoices', icon: '🧾', label: 'Vendor Invoices' },
             { to: '/admin/manage-catalog', icon: '📦', label: 'Catalog Items' },
             { to: '/admin/mapping-review', icon: '🔍', label: 'Mapping Review' },
             { to: '/admin/vendor-competitiveness', icon: '🏆', label: 'Vendor Scores' },
@@ -58,6 +59,7 @@ const NAV_GROUPS = [
         links: [
             { to: '/admin/restaurants', icon: '🏪', label: 'All Restaurants' },
             { to: '/admin/restaurant-invoices', icon: '🧾', label: 'Restaurant Invoices' },
+            { to: '/admin/invoices', icon: '🧾', label: 'Vendor Invoices' },
             { to: '/admin/manage-restaurants', icon: '🏪', label: 'Master Restaurants' },
             { to: '/admin/pending-reviews', icon: '📋', label: 'Pending Reviews' },
             { to: '/users', icon: '👥', label: 'Users & Roles' },

@@ -8,7 +8,7 @@
  * 1.5× cap, ≥3 appearances filter, proportional restaurant split,
  * Mon/Thu delivery day split, + correction learning.
  *
- * Writes to: `forecast/weekly/entries/{restaurantId}_{weekStart}`
+ * Writes to: `suggestedOrderAIForcast_Model/{restaurantId}_{weekStart}`
  *
  * Scheduled: Every Wednesday at 6PM EST via Cloud Scheduler.
  */
@@ -29,7 +29,7 @@ const ITEM_ALIAS_MAP = {
     'carrot 50lbs': 'Carrot',
 };
 
-const FULFILLED_STATUSES = ['fulfilled', 'completed', 'delivered', 'delivered_awaiting_confirmation', 'pending_fulfillment'];
+const FULFILLED_STATUSES = ['completed', 'fulfilled'];
 const MIN_APPEARANCES = 3;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -88,8 +88,10 @@ async function fetchOrderHistory(db, weeksBack = 12) {
                 date: dateStr,
                 restaurantId: order.restaurantId || '',
                 itemName: normalizedName,
+                catalogItemId: item.catalogItemId || '',
                 qty: Number(item.qty) || 0,
-                unit: item.unit || '',
+                unit: item.unit || item.packLabel || '',
+                packLabel: item.packLabel || item.unit || '',
                 category: item.category || '',
                 vendor: order.vendorName || '',
             });
@@ -105,7 +107,7 @@ async function fetchCorrectionHistory(db, restaurantId, deliveryDay = 'Monday') 
     if (!restaurantId) return [];
 
     try {
-        const snapshot = await db.collection('forecast').doc('corrections').collection('entries')
+        const snapshot = await db.collection('correctionEntries')
             .where('restaurantId', '==', restaurantId)
             .where('deliveryDay', '==', deliveryDay)
             .orderBy('submittedAt', 'desc')
@@ -126,7 +128,7 @@ function computeCorrectionProfiles(corrections) {
 
     const byItem = {};
     corrections.forEach(c => {
-        const key = c.itemId;
+        const key = c.catalogItemId || c.itemId;
         if (!byItem[key]) byItem[key] = { itemId: key, itemName: c.itemName || '', edits: [] };
         byItem[key].edits.push(c);
     });
@@ -216,12 +218,16 @@ function buildRestaurantForecast(records, restaurantId, allRestaurants, correcti
     const globalHistoryMap = {};
     const restHistoryMap = {};
     const categoryMap = {};
+    const packLabelMap = {};
+    const catalogItemIdMap = {};
 
     records.forEach(r => {
         const name = r.itemName;
         if (!name) return;
 
         if (r.category && !categoryMap[name]) categoryMap[name] = r.category;
+        if (r.packLabel && !packLabelMap[name]) packLabelMap[name] = r.packLabel;
+        if (r.catalogItemId && !catalogItemIdMap[name]) catalogItemIdMap[name] = r.catalogItemId;
 
         if (!globalHistoryMap[name]) {
             globalHistoryMap[name] = { orderHistoryMap: {}, totalVolume8Wks: 0 };
@@ -295,8 +301,8 @@ function buildRestaurantForecast(records, restaurantId, allRestaurants, correcti
         if (qtyIn8Filtered.length >= 7) confidence = 'High';
         else if (qtyIn8Filtered.length >= 4) confidence = 'Medium';
 
-        // Apply learned corrections
-        const itemId = itemName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        // Apply learned corrections (match by catalogItemId)
+        const itemId = catalogItemIdMap[itemName] || itemName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const corrProfile = correctionProfiles[itemId];
         let learnedCorrection = 0;
         let correctionHint = null;
@@ -312,8 +318,10 @@ function buildRestaurantForecast(records, restaurantId, allRestaurants, correcti
 
         results.push({
             id: itemId,
+            catalogItemId: catalogItemIdMap[itemName] || '',
             itemName,
             category: cat || 'Produce',
+            packLabel: packLabelMap[itemName] || 'unit',
             predictedQty: correctedQty,
             rawPrediction: restAllocatedTotal,
             mondayQty,
@@ -441,7 +449,7 @@ async function runSuggestedForecastJob(db) {
 
         // Write document — even if no qualifying items (with status + diagnostics)
         const docId = `${restaurantId}_${weekStart}`;
-        const docRef = db.collection('forecast').doc('weekly').collection('entries').doc(docId);
+        const docRef = db.collection('suggestedOrderAIForcast_Model').doc(docId);
 
         if (forecastLines.length === 0) {
             // Insufficient data — write diagnostic doc
@@ -480,7 +488,7 @@ async function runSuggestedForecastJob(db) {
     }
 
     await batch.commit();
-    console.log(`[SuggestedForecast] ✅ Complete — wrote forecasts for ${restaurantCount} restaurant(s) to forecast/weekly/entries`);
+    console.log(`[SuggestedForecast] ✅ Complete — wrote forecasts for ${restaurantCount} restaurant(s) to suggestedOrderAIForcast_Model`);
 
     return { success: true, restaurants: restaurantCount, weekStart };
 }

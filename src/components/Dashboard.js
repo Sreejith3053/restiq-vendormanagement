@@ -333,25 +333,25 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* 2. Pending Orders */}
-                <div className="ui-card" onClick={() => navigate('/orders?status=pending_confirmation,pending_customer_approval,pending_fulfillment,delivery_in_route')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
-                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Pending Orders</div>
-                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{kpiData.pending}</div>
-                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Requires action</div>
-                </div>
-
-                {/* 3. Total Items */}
+                {/* 2. Total Items */}
                 <div className="ui-card" onClick={() => navigate('/items')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Items</div>
                     <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{stats.items}</div>
                     <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Live in catalog</div>
                 </div>
 
-                {/* 4. Fulfilled Orders */}
-                <div className="ui-card" onClick={() => navigate('/orders?status=fulfilled')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid #2A2A2A', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
-                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)', fontWeight: 600 }}>Fulfilled Orders</div>
-                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{kpiData.fulfilled}</div>
-                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>All-time delivered</div>
+                {/* 3. Dispatch Requests */}
+                <div className="ui-card" onClick={() => navigate('/dispatch-requests')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid rgba(56,189,248,0.3)', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                    <div style={{ fontSize: '14px', color: '#38bdf8', fontWeight: 600 }}>Pending Dispatches</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{dispatchStats.pending}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Awaiting confirmation</div>
+                </div>
+
+                {/* 4. Delivered */}
+                <div className="ui-card" onClick={() => navigate('/dispatch-requests')} style={{ display: 'flex', flexDirection: 'column', padding: '24px', cursor: 'pointer', background: '#1E1E1E', border: '1px solid rgba(16,185,129,0.3)', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
+                    <div style={{ fontSize: '14px', color: '#10b981', fontWeight: 600 }}>Delivered</div>
+                    <div style={{ fontSize: '32px', fontWeight: 700, margin: '8px 0', color: 'var(--text-primary)' }}>{dispatchStats.delivered}</div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Completed dispatches</div>
                 </div>
             </div>
 
@@ -450,40 +450,33 @@ export default function Dashboard() {
 
                 {/* Right Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                    {/* Recent Orders */}
+                    {/* Recent Dispatches */}
                     <div className="ui-card" style={{ background: '#1E1E1E', border: '1px solid #2A2A2A', padding: '24px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <div className="ui-card-title" style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Recent Orders</div>
-                            <button className="ui-btn ghost" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => navigate('/orders')}>View All</button>
+                            <div className="ui-card-title" style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Recent Dispatches</div>
+                            <button className="ui-btn ghost" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => navigate('/dispatch-requests')}>View All</button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                            {derivedData.recentOrders.length === 0 ? (
-                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>No orders found</div>
+                            {allDispatches.length === 0 ? (
+                                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px 0' }}>No dispatch requests yet</div>
                             ) : (
-                                derivedData.recentOrders.map(order => {
+                                allDispatches.slice(0, 5).map(dispatch => {
                                     let badgeColor = 'rgba(255,255,255,0.1)';
                                     let badgeText = '#fff';
-                                    const lowerStatus = (order.status || '').toLowerCase();
-
-                                    if (lowerStatus.includes('reject')) {
-                                        badgeColor = 'rgba(239, 68, 68, 0.15)';
-                                        badgeText = '#ef4444';
-                                    } else if (lowerStatus.includes('fulfill') || lowerStatus === 'delivered') {
-                                        badgeColor = 'rgba(74, 222, 128, 0.15)';
-                                        badgeText = '#4ade80';
-                                    } else if (lowerStatus.includes('pending') || lowerStatus.includes('review') || lowerStatus.includes('route')) {
-                                        badgeColor = 'rgba(250, 204, 21, 0.15)';
-                                        badgeText = '#facc15';
-                                    }
+                                    if (dispatch.status === 'Sent') { badgeColor = 'rgba(56,189,248,0.15)'; badgeText = '#38bdf8'; }
+                                    else if (dispatch.status === 'Confirmed') { badgeColor = 'rgba(16,185,129,0.15)'; badgeText = '#10b981'; }
+                                    else if (dispatch.status === 'Partially Confirmed') { badgeColor = 'rgba(245,158,11,0.15)'; badgeText = '#f59e0b'; }
+                                    else if (dispatch.status === 'Rejected') { badgeColor = 'rgba(244,63,94,0.15)'; badgeText = '#f43f5e'; }
+                                    else if (dispatch.status === 'Delivered') { badgeColor = 'rgba(74,222,128,0.15)'; badgeText = '#4ade80'; }
 
                                     return (
                                         <div
-                                            key={order.id}
-                                            onClick={() => navigate('/orders')}
+                                            key={dispatch.id}
+                                            onClick={() => navigate(`/dispatch-requests/${dispatch.id}`)}
                                             style={{
                                                 display: 'flex',
                                                 flexDirection: 'column',
-                                                padding: '16px',
+                                                padding: '14px 16px',
                                                 background: 'rgba(255,255,255,0.02)',
                                                 border: '1px solid rgba(255,255,255,0.05)',
                                                 borderRadius: '8px',
@@ -493,26 +486,25 @@ export default function Dashboard() {
                                             onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                                             onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
                                         >
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                    <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{order.orderGroupId || order.id.slice(-8).toUpperCase()}</span>
-                                                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>• {timeAgo(order.createdAt)}</span>
-                                                </div>
-                                                <span style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>{formatCurrency(order.total)}</span>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>
+                                                    {dispatch.weekLabel || dispatch.weekStart || dispatch.id.slice(-8).toUpperCase()}
+                                                </span>
+                                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#fbbf24' }}>
+                                                    {formatCurrency(dispatch.vendorPayoutTotal || dispatch.vendorPayout || 0)}
+                                                </span>
                                             </div>
-                                            <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+                                                    <span>Mon: <b style={{ color: '#3b82f6' }}>{dispatch.mondayTotalPacks || 0}</b></span>
+                                                    <span>Thu: <b style={{ color: '#8b5cf6' }}>{dispatch.thursdayTotalPacks || 0}</b></span>
+                                                </div>
                                                 <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '4px 12px',
-                                                    borderRadius: '6px',
-                                                    fontSize: '11px',
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    background: badgeColor,
-                                                    color: badgeText
+                                                    display: 'inline-block', padding: '3px 10px', borderRadius: '6px',
+                                                    fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px', background: badgeColor, color: badgeText
                                                 }}>
-                                                    {order.status?.replace(/_/g, ' ') || 'unknown'}
+                                                    {dispatch.status || 'Sent'}
                                                 </span>
                                             </div>
                                         </div>
@@ -563,13 +555,13 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
 
-                    {kpiData.pending > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ padding: '8px', background: 'rgba(250, 204, 21, 0.15)', borderRadius: '50%', color: '#facc15', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                ⚠
+                    {dispatchStats.pending > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }} onClick={() => navigate('/dispatch-requests')}>
+                            <div style={{ padding: '8px', background: 'rgba(56, 189, 248, 0.15)', borderRadius: '50%', color: '#38bdf8', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                🚚
                             </div>
                             <div style={{ fontSize: '14px', color: 'var(--text-primary)' }}>
-                                You have <strong style={{ color: '#facc15' }}>{kpiData.pending} pending orders</strong> that require immediate fulfillment.
+                                You have <strong style={{ color: '#38bdf8' }}>{dispatchStats.pending} dispatch request{dispatchStats.pending > 1 ? 's' : ''}</strong> awaiting your confirmation.
                             </div>
                         </div>
                     )}

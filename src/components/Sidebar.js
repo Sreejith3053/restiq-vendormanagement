@@ -34,8 +34,10 @@ const NAV_GROUPS = [
             { to: '/vendors', icon: '🏢', label: 'All Vendors', end: true },
             { to: '/vendors/add', icon: '➕', label: 'Add Vendor' },
             { to: '/admin/manage-catalog', icon: '📦', label: 'Catalog Items' },
-            { to: '/admin/mapping-review', icon: '🔍', label: 'Mapping Review' },
+            { to: '/admin/mapping-review',   icon: '🔍', label: 'Mapping Review' },
+            { to: '/admin/catalog-review',    icon: '🗂️', label: 'Catalog Review Queue' },
             { to: '/admin/vendor-competitiveness', icon: '🏆', label: 'Vendor Scores' },
+            { to: '/admin/unmapped-items',          icon: '🔗', label: 'Unmapped Items' },
         ],
     },
     {
@@ -261,8 +263,11 @@ export default function Sidebar({ isOpen, onClose }) {
                             <NavLink to="/items" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">📋</span> Items
                             </NavLink>
-                            <NavLink to="/orders" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📦</span> Orders
+                            <NavLink to="/vendor/import" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📥</span> Import Catalog
+                            </NavLink>
+                            <NavLink to="/vendor/import/history" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🕐</span> Import History
                             </NavLink>
                             <NavLink to="/dispatch-requests" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <span><span className="link-icon">🚚</span> Dispatch Requests</span>
@@ -285,7 +290,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <span className="link-icon">🏆</span> Competitiveness Score
                             </NavLink>
                             <NavLink to="/vendor/allocation" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📦</span> Expected Allocation
+                                <span className="link-icon">📅</span> Combined Forecast
                             </NavLink>
                             <NavLink to="/vendor/capacity" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🛡️</span> Capacity Planning

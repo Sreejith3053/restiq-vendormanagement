@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { UserContext } from '../../contexts/UserContext';
 import { generateCatalogItemId, normalizeItemKey } from '../../utils/catalogUtils';
 import { logAdminChange } from '../../utils/adminAuditLogger';
@@ -17,6 +17,7 @@ export default function CatalogItemMappingReviewPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('pending');
+    const [pendingUnmap, setPendingUnmap] = useState(null); // id of row awaiting confirm
 
     // Bulk
     const [selected, setSelected] = useState(new Set());
@@ -91,6 +92,36 @@ export default function CatalogItemMappingReviewPage() {
             await logAdminChange({ entityType: 'mappingReview', entityId: review.id, action: 'ignored', changedBy: displayName, metadata: { itemName: review.itemName } });
             toast.info('Ignored'); fetchData();
         } catch (err) { toast.error(err.message); }
+    };
+
+    const handleUnmap = async (review) => {
+        console.log('[Unmap] Starting unmap for:', review.id, '| vendorId:', review.vendorId, '| itemId:', review.itemId, '| itemName:', review.itemName);
+        setPendingUnmap(null);
+        if (!review.vendorId || !review.itemId) {
+            toast.error('Cannot unmap: vendorId or itemId is missing from this review record.');
+            console.error('[Unmap] Missing fields — review doc:', review);
+            return;
+        }
+        try {
+            // Clear the catalogItemId from the vendor item
+            await updateDoc(doc(db, `vendors/${review.vendorId}/items`, review.itemId), {
+                catalogItemId: deleteField(),
+                mappingStatus: 'unmapped',
+                updatedAt: serverTimestamp(),
+            });
+            // Reset the review record back to pending
+            await updateDoc(doc(db, 'catalogItemMappingReview', review.id), {
+                status: 'pending',
+                resolvedCatalogItemId: deleteField(),
+                resolvedAt: deleteField(),
+            });
+            await logAdminChange({ entityType: 'mappingReview', entityId: review.id, action: 'unmapped', changedBy: displayName, metadata: { itemName: review.itemName } });
+            toast.success(`✅ "${review.itemName}" unmapped — back to Pending`);
+            fetchData();
+        } catch (err) {
+            console.error('[Unmap] Error:', err);
+            toast.error('Unmap failed: ' + err.message);
+        }
     };
 
     // ---------- BULK ----------
@@ -244,7 +275,30 @@ export default function CatalogItemMappingReviewPage() {
                                             </>
                                         )}
                                         {r.status === 'mapped' && r.resolvedCatalogItemId && (
-                                            <span style={{ fontSize: 11, color: '#10b981', fontFamily: 'monospace' }}>→ {r.resolvedCatalogItemId}</span>
+                                            <>
+                                                <span style={{ fontSize: 11, color: '#10b981', fontFamily: 'monospace' }}>→ {r.resolvedCatalogItemId}</span>
+                                                {pendingUnmap === r.id ? (
+                                                    <>
+                                                        <span style={{ fontSize: 10, color: '#fb923c', fontWeight: 600 }}>Sure?</span>
+                                                        <button
+                                                            onClick={() => handleUnmap(r)}
+                                                            style={{ padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.4)', color: '#f43f5e', cursor: 'pointer', marginLeft: 2 }}
+                                                        >Yes, Unmap</button>
+                                                        <button
+                                                            onClick={() => setPendingUnmap(null)}
+                                                            style={{ padding: '3px 7px', borderRadius: 6, fontSize: 10, background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#64748b', cursor: 'pointer' }}
+                                                        >Cancel</button>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setPendingUnmap(r.id)}
+                                                        title="Undo this mapping"
+                                                        style={{ padding: '3px 9px', borderRadius: 6, fontSize: 10, fontWeight: 700, background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)', color: '#fb923c', cursor: 'pointer', marginLeft: 4 }}
+                                                    >
+                                                        ↩️ Unmap
+                                                    </button>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>

@@ -6,6 +6,7 @@ import { generateCatalogItemId, normalizeItemKey, validateCatalogItem } from '..
 import { migrateCatalogItems } from '../../utils/migrateCatalogItems';
 import { logAdminChange } from '../../utils/adminAuditLogger';
 import { toast } from 'react-toastify';
+import CatalogMergeModal from '../CatalogReview/CatalogMergeModal';
 
 const CATEGORIES = ['Produce', 'Meat', 'Seafood', 'Dairy', 'Spices', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'bag', 'bunch', 'box', 'case', 'unit', 'dozen', 'packet', 'L', 'mL'];
@@ -37,6 +38,7 @@ export default function ManageCatalogPage() {
     // Migration
     const [migrating, setMigrating] = useState(false);
     const [migrationLog, setMigrationLog] = useState([]);
+    const [showMergeModal, setShowMergeModal] = useState(false);
 
     function getEmptyForm() {
         return {
@@ -82,11 +84,16 @@ export default function ManageCatalogPage() {
     const handleSave = async () => {
         const cid = form.catalogItemId || generateCatalogItemId(form.canonicalName);
         const aliases = form.aliases.split(',').map(a => a.trim()).filter(Boolean);
+        const aliasNormalized = aliases.map(a => a.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim());
         const searchKeywords = form.searchKeywords.split(',').map(a => a.trim()).filter(Boolean);
+        const canonicalNameNormalized = (form.canonicalName || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
         const docData = {
             ...form, catalogItemId: cid,
             normalizedKey: normalizeItemKey(form.canonicalName),
-            aliases, searchKeywords,
+            canonicalNameNormalized,
+            aliases,
+            aliasNormalized,
+            searchKeywords,
         };
         const { valid, errors } = validateCatalogItem(docData);
         if (!valid) { toast.warn(errors[0]); return; }
@@ -193,6 +200,9 @@ export default function ManageCatalogPage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={handleMigrate} disabled={migrating} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(56,189,248,0.1)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                         {migrating ? '⏳ Migrating...' : '🔄 Auto-Populate from Vendors'}
+                    </button>
+                    <button onClick={() => setShowMergeModal(true)} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(168,85,247,0.1)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                        🔀 Merge Items
                     </button>
                     <button onClick={() => { setForm(getEmptyForm()); setEditingId(null); setShowModal(true); }} style={{ padding: '8px 14px', borderRadius: 8, background: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>+ Add Catalog Item</button>
                 </div>
@@ -415,6 +425,14 @@ export default function ManageCatalogPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Merge Modal */}
+            {showMergeModal && (
+                <CatalogMergeModal
+                    onClose={() => setShowMergeModal(false)}
+                    onMerged={() => { setShowMergeModal(false); fetchData(); }}
+                />
             )}
         </div>
     );

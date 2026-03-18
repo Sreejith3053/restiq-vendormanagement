@@ -299,6 +299,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                                     originalPrice={item.vendorPrice ?? item.price ?? 0}
                                     isEdit={true}
                                     onApplyPrice={(price) => handleChange('vendorPrice', String(price))}
+                                    vendorId={vendorId}
                                 />
                                 {/* Vendor Competitiveness Score */}
                                 <CompetitivenessScorePanel

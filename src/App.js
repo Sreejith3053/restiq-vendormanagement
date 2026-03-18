@@ -26,6 +26,9 @@ import DispatchDetailPage from './components/Vendors/DispatchDetailPage';
 import VendorScoreDashboard from './components/Vendors/VendorScoreDashboard';
 import VendorExpectedAllocation from './components/Vendors/VendorExpectedAllocation';
 import VendorCapacityPlanning from './components/Vendors/VendorCapacityPlanning';
+import VendorImportPage from './components/BulkImport/VendorImportPage';
+import VendorImportPreviewPage from './components/BulkImport/VendorImportPreviewPage';
+import VendorImportHistoryPage from './components/BulkImport/VendorImportHistoryPage';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 
@@ -71,6 +74,8 @@ import ManageCatalogPage from './components/Admin/ManageCatalogPage';
 import MigrationAdminPage from './components/Admin/MigrationAdminPage';
 import CatalogItemMappingReviewPage from './components/Admin/CatalogItemMappingReviewPage';
 import PendingReviewsDashboard from './components/Admin/PendingReviewsDashboard';
+import UnmappedVendorItemsPage from './components/Admin/UnmappedVendorItemsPage';
+import SuperadminCatalogReviewQueuePage from './components/CatalogReview/SuperadminCatalogReviewQueuePage';
 
 
 
@@ -190,7 +195,6 @@ function App() {
                                 <Route path="/items" element={<ItemCatalogPage />} />
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
                                 <Route path="/profile" element={<VendorDetailPage />} />
-                                <Route path="/orders" element={<OrdersPage />} />
                                 <Route path="/dispatch-requests" element={<DispatchRequestsPage />} />
                                 <Route path="/dispatch-requests/:dispatchId" element={<DispatchDetailPage />} />
                                 <Route path="/vendor/invoices" element={<VendorInvoicesPage />} />
@@ -198,12 +202,23 @@ function App() {
                                 <Route path="/vendor/competitiveness" element={<VendorScoreDashboard />} />
                                 <Route path="/vendor/allocation" element={<VendorExpectedAllocation />} />
                                 <Route path="/vendor/capacity" element={<VendorCapacityPlanning />} />
+                                <Route path="/vendor/import" element={<VendorImportPage />} />
+                                <Route path="/vendor/import/preview" element={<VendorImportPreviewPage />} />
+                                <Route path="/vendor/import/history" element={<VendorImportHistoryPage />} />
                                 {isAdmin && (
                                     <>
                                         <Route path="/users" element={<UserManagementPage />} />
                                         <Route path="/settings/permissions" element={<RolePermissionsPage />} />
                                     </>
                                 )}
+                            </>
+                        )}
+
+                        {/* ── Catalog Review Queue (SuperAdmin only) ── */}
+                        {isSuperAdmin && (
+                            <>
+                                <Route path="/admin/catalog-review" element={<SuperadminCatalogReviewQueuePage />} />
+                                <Route path="/admin/unmapped-items" element={<UnmappedVendorItemsPage />} />
                             </>
                         )}
 

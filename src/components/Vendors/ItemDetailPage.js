@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 import { getTaxRate } from '../../constants/taxRates';
 import { formatItemSize } from './VendorDetailPage';
 import ConfirmDialog from '../ConfirmDialog';
+import PricingIntelligencePanel from './PricingIntelligencePanel';
 import './ItemDetailPage.css';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
@@ -232,7 +233,7 @@ export default function ItemDetailPage() {
                     requestedAt: serverTimestamp(),
                 });
                 setItem(prev => ({ ...prev, status: 'in-review', rejectionComment: '', changeType: 'edit', proposedData, originalData }));
-                await logAudit('edit_requested', { itemName: item.name, proposedData });
+                await logAudit('edit_requested', { itemName: item.name, proposedData, originalData });
                 toast.info('✅ Changes submitted for review!');
             }
             setEditing(false);
@@ -407,6 +408,7 @@ export default function ItemDetailPage() {
             await logAudit('approved', {
                 itemName: item.proposedData?.name || item.name,
                 proposedData: item.proposedData,
+                originalData: item.originalData,
                 requestedBy: item.requestedByName,
             });
             toast.success(`✅ ${item.changeType === 'add' ? 'New item' : 'Edit'} approved!`);
@@ -930,6 +932,18 @@ export default function ItemDetailPage() {
                                         );
                                     })()}
                                 </div>
+
+                                {/* Pricing Intelligence Panel */}
+                                <PricingIntelligencePanel
+                                    itemName={editForm.name || ''}
+                                    category={editForm.category || ''}
+                                    vendorPrice={editForm.vendorPrice}
+                                    originalPrice={item.vendorPrice ?? item.price ?? 0}
+                                    isEdit={true}
+                                    vendorId={vendorId}
+                                    onApplyPrice={(price) => setEditForm(prev => ({ ...prev, vendorPrice: String(price) }))}
+                                />
+
                                 <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                                     {hasChanges() && (
                                         <button className="ui-btn primary small" onClick={handleSave} disabled={saving}>

@@ -56,6 +56,7 @@ export default function PricingIntelligencePanel({
     originalPrice = 0,
     isEdit = false,
     onApplyPrice,
+    vendorId = null,
 }) {
     const [benchmark, setBenchmark] = useState(null);
     const [recommendations, setRecommendations] = useState(null);
@@ -67,37 +68,70 @@ export default function PricingIntelligencePanel({
     const [bundleDismissed, setBundleDismissed] = useState(false);
     const debounceRef = useRef(null);
 
-    // ── Fetch all marketplace items once ──
+    // ── Fetch marketplace items for benchmark ──────────────────────────────────
+    // Strategy:
+    //   For vendors (vendorId provided): always fetch own items first (rules allow it),
+    //   then try to fetch all vendors for broader market data. Own items used as fallback.
+    //   For superadmin: fetch all vendors directly.
     const fetchAllItems = useCallback(async () => {
         if (fetched) return;
         setLoading(true);
+
+        const parseItem = (data, vid) => ({
+            name: data.name || '',
+            vendorPrice: parseFloat(data.vendorPrice) || parseFloat(data.price) || 0,
+            category: data.category || '',
+            vendorId: vid,
+        });
+
         try {
-            const vendorsSnap = await getDocs(collection(db, 'vendors'));
-            const items = [];
-            for (const vDoc of vendorsSnap.docs) {
+            // If we have a vendorId, ALWAYS fetch own items first as guaranteed fallback
+            let ownItems = [];
+            if (vendorId) {
                 try {
-                    const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
-                    itemSnap.docs.forEach(d => {
-                        const data = d.data();
-                        if (data.status === 'active' || !data.status) {
-                            items.push({
-                                name: data.name || '',
-                                vendorPrice: parseFloat(data.vendorPrice) || parseFloat(data.price) || 0,
-                                category: data.category || '',
-                                vendorId: vDoc.id,
-                            });
-                        }
-                    });
-                } catch (_) { /* skip inaccessible */ }
+                    const ownSnap = await getDocs(collection(db, `vendors/${vendorId}/items`));
+                    ownItems = ownSnap.docs
+                        .map(d => parseItem(d.data(), vendorId))
+                        .filter(i => i.name);
+                } catch (_) { /* own items fetch failed — unusual */ }
             }
-            setAllItems(items);
-            setFetched(true);
+
+            // Now try to fetch ALL vendors for a richer market benchmark
+            let allItems = [...ownItems]; // start with own items
+            try {
+                const vendorsSnap = await getDocs(collection(db, 'vendors'));
+
+                if (vendorsSnap.docs.length > 0) {
+                    // We have access to vendor list (superadmin) — fetch all items
+                    const marketItems = [];
+                    for (const vDoc of vendorsSnap.docs) {
+                        if (vDoc.id === vendorId) continue; // already have own items
+                        try {
+                            const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+                            itemSnap.docs.forEach(d => {
+                                const data = d.data();
+                                if (data.status === 'active' || !data.status) {
+                                    marketItems.push(parseItem(data, vDoc.id));
+                                }
+                            });
+                        } catch (_) { /* skip inaccessible vendor */ }
+                    }
+                    allItems = [...ownItems, ...marketItems];
+                }
+                // If vendorsSnap is empty (vendor user — rules return no results),
+                // allItems stays as ownItems — that's fine.
+            } catch (_) {
+                // Can't list vendors at all — fall back to own items only
+            }
+
+            setAllItems(allItems);
         } catch (err) {
-            console.warn('PricingIntelligencePanel: fetch failed', err);
+            console.warn('[PricingIntelligence] fetch error:', err);
         } finally {
+            setFetched(true);
             setLoading(false);
         }
-    }, [fetched]);
+    }, [fetched, vendorId]);
 
     // ── Re-compute on input change (debounced 600ms) ──
     useEffect(() => {

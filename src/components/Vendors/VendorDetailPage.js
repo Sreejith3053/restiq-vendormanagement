@@ -261,6 +261,7 @@ export default function VendorDetailPage() {
                 await logAudit(vendorId, item.id, 'approved', {
                     itemName: item.proposedData?.name || item.name,
                     proposedData: item.proposedData,
+                    originalData: item.originalData,
                     requestedBy: item.requestedByName,
                 });
             }

@@ -11,7 +11,8 @@ import {
     signOut,
     onAuthStateChanged,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, limit, getDocs } from 'firebase/firestore';
+
 
 export const UserContext = createContext({
     user: null,
@@ -31,18 +32,33 @@ export const UserContext = createContext({
 
 /**
  * Fetch the user's platform profile from the Firestore `login` collection.
- * This is separate from Firebase Auth — Auth proves identity, Firestore holds role/vendor.
+ * Tries by UID first. Falls back to email lookup to support just-in-time
+ * migrations where the Firebase Auth UID differs from the legacy Firestore doc ID.
  */
-async function fetchUserProfile(uid) {
+async function fetchUserProfile(uid, email) {
     try {
+        // Primary: doc keyed by Firebase Auth UID
         const snap = await getDoc(doc(db, 'login', uid));
-        if (!snap.exists()) return null;
-        return { id: snap.id, ...snap.data() };
+        if (snap.exists()) return { id: snap.id, ...snap.data() };
+
+        // Fallback: legacy systems keyed docs by username or a custom ID.
+        // Look up by email so just-in-time migrated users still resolve correctly.
+        if (email) {
+            const q = query(
+                collection(db, 'login'),
+                where('email', '==', email),
+                limit(1)
+            );
+            const emailSnap = await getDocs(q);
+            if (!emailSnap.empty) return { id: emailSnap.docs[0].id, ...emailSnap.docs[0].data() };
+        }
+        return null;
     } catch (err) {
         console.warn('[UserContext] Could not fetch profile:', err.message);
         return null;
     }
 }
+
 
 export function UserProvider({ children }) {
     // null = loading, object = authenticated, false = signed out
@@ -58,7 +74,10 @@ export function UserProvider({ children }) {
                 return;
             }
             // Firebase says we're authenticated — fetch the platform profile
-            const profile = await fetchUserProfile(firebaseUser.uid);
+            // Pass email as fallback for just-in-time migrated accounts whose
+            // Firestore doc ID may differ from the new Firebase Auth UID.
+            const profile = await fetchUserProfile(firebaseUser.uid, firebaseUser.email);
+
             if (!profile) {
                 // Auth exists but no Firestore profile — sign them out cleanly
                 console.warn('[UserContext] No profile found for uid:', firebaseUser.uid);

@@ -19,6 +19,7 @@ import AdminRestaurantsPage from '../Admin/AdminRestaurantsPage';
 import UserManagementPage from '../Users/UserManagementPage';
 import RolePermissionsPage from '../Settings/RolePermissionsPage';
 import MigrationAdminPage from '../Admin/MigrationAdminPage';
+import AuditLogPage from '../Admin/AuditLogPage';
 
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -84,12 +85,18 @@ export default function PlatformAdminPage() {
             icon: '🔧',
             content: <MigrationAdminPage embedded />,
         },
+        {
+            key: 'audit-logs',
+            label: 'Audit Logs',
+            icon: '📋',
+            content: <AuditLogPage />,
+        },
     ], []);
 
     return (
         <TabbedPageShell
             title="Platform Admin"
-            subtitle="Manage restaurants, users, roles, permissions, and migration tools."
+            subtitle="Manage restaurants, users, roles, permissions, migration tools, and audit logs."
             icon="🔧"
             tabs={tabs}
             defaultTab="restaurants"

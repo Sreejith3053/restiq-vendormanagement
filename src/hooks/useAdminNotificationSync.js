@@ -1,6 +1,6 @@
 import { useEffect, useRef, useContext } from 'react';
 import { db } from '../firebase';
-import { collection, query, orderBy, where, onSnapshot, doc, getDoc, setDoc, getDocs, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, where, limit, onSnapshot, doc, getDoc, setDoc, getDocs, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { getTaxRate } from '../constants/taxRates';
 import { UserContext } from '../contexts/UserContext';
 

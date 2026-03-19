@@ -102,7 +102,7 @@ export default function PendingReviewsDashboard() {
             }
 
             await logItemAudit(item.vendorId, item.id, 'approved', {
-                itemName: item.proposedData?.name || item.name,
+                itemName: item.proposedData?.itemName || item.proposedData?.name || item.itemName || item.name,  // v2-first
                 changeType: item.changeType,
                 proposedData: item.proposedData,
                 requestedBy: item.requestedByName,
@@ -137,7 +137,7 @@ export default function PendingReviewsDashboard() {
             }
 
             await logItemAudit(item.vendorId, item.id, 'rejected', {
-                itemName: item.name,
+                itemName: item.itemName || item.name,  // v2-first
                 rejectionComment: rejectComment.trim(),
                 requestedBy: item.requestedByName,
             });
@@ -166,8 +166,8 @@ export default function PendingReviewsDashboard() {
         if (typeFilter !== 'all' && item.changeType !== typeFilter) return false;
         if (search) {
             const q = search.toLowerCase();
-            return (item.name || '').toLowerCase().includes(q) ||
-                (item.proposedData?.name || '').toLowerCase().includes(q) ||
+            return (item.itemName || item.name || '').toLowerCase().includes(q) ||          // v2-first
+                (item.proposedData?.itemName || item.proposedData?.name || '').toLowerCase().includes(q) ||
                 (item.vendorName || '').toLowerCase().includes(q) ||
                 (item.requestedByName || '').toLowerCase().includes(q);
         }
@@ -263,7 +263,9 @@ export default function PendingReviewsDashboard() {
                                                 {item.status === 'in-review' ? '⏳ Pending' : '❌ Rejected'}
                                             </span>
                                         </div>
-                                        <div style={{ fontWeight: 700, fontSize: 15, color: '#f8fafc' }}>{item.proposedData?.name || item.name || 'Unknown Item'}</div>
+                                        <div style={{ fontWeight: 700, fontSize: 15, color: '#f8fafc' }}>
+                                            {item.proposedData?.itemName || item.proposedData?.name || item.itemName || item.name || 'Unknown Item'}
+                                        </div>
                                         <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>
                                             <span style={{ cursor: 'pointer', color: '#38bdf8', fontWeight: 600 }} onClick={() => navigate(`/vendors/${item.vendorId}`)}>
                                                 {item.vendorName}
@@ -333,14 +335,14 @@ export default function PendingReviewsDashboard() {
                                 {/* Delete summary */}
                                 {ct === 'delete' && item.originalData && (
                                     <div style={{ marginTop: 10, fontSize: 13, color: '#f43f5e', background: 'rgba(244,63,94,0.06)', padding: '8px 14px', borderRadius: 8 }}>
-                                        ⚠️ Delete <strong>{item.originalData.name}</strong> ({item.originalData.category}, ${Number(item.originalData.vendorPrice ?? 0).toFixed(2)}/{item.originalData.unit})
+                                        ⚠️ Delete <strong>{item.originalData.itemName || item.originalData.name}</strong> ({item.originalData.category}, ${Number(item.originalData.vendorPrice ?? 0).toFixed(2)}/{item.originalData.baseUnit || item.originalData.unit})
                                     </div>
                                 )}
 
                                 {/* Deactivate summary */}
                                 {ct === 'deactivate' && (
                                     <div style={{ marginTop: 10, fontSize: 13, color: '#fbbf24', background: 'rgba(251,191,36,0.06)', padding: '8px 14px', borderRadius: 8 }}>
-                                        ⏸️ Deactivate <strong>{item.name}</strong>
+                                        ⏸️ Deactivate <strong>{item.itemName || item.name}</strong>
                                     </div>
                                 )}
 

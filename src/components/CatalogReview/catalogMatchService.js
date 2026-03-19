@@ -35,7 +35,7 @@ export function buildRiskFlags(row, existingItem = null) {
 
     // Unit type changes
     if (existingItem) {
-        const old = (existingItem.unit || '').toLowerCase();
+        const old = (existingItem.baseUnit || existingItem.unit || '').toLowerCase(); // v2-first
         const nw  = (row.unit || '').toLowerCase();
         const eachTypes = ['each', 'ea', 'pcs', 'piece', 'unit', 'packet'];
         const caseTypes = ['case', 'box', 'bag', 'tray', 'container'];
@@ -115,7 +115,9 @@ export async function getSuggestedVendorMatches(vendorId, itemName) {
 
     return items
         .map(item => {
-            const sim = stringSimilarity(norm, normalizeText(item.name || item.itemName || ''));
+            // v2: prefer pre-computed normalized field; fall back to runtime normalization
+            const itemNorm = item.itemNameNormalized || normalizeText(item.itemName || item.name || '');
+            const sim = stringSimilarity(norm, itemNorm);
             return { ...item, similarity: Math.round(sim * 100) };
         })
         .filter(item => item.similarity >= 50)

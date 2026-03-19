@@ -1,6 +1,12 @@
 # RestIQ Marketplace — Firestore Data Structure
 
-Complete schema reference for every Firestore collection used in the project. All system timestamps use Firestore `Timestamp` objects via `serverTimestamp()`. Business planning date keys (e.g. `weekStart`, `deliveryDateKey`) remain as ISO strings.
+Complete schema reference for every Firestore collection used in the project.
+All system timestamps use Firestore `Timestamp` objects via `serverTimestamp()`.
+Business planning date keys (e.g. `weekStart`, `deliveryDateKey`) remain as ISO strings.
+
+> **Architecture:** The system uses a lean 4-collection top-level design:
+> `vendors`, `catalogItems`, `catalogReviewQueue`, `platformSettings`
+> All other data lives as subcollections or in dedicated operational collections.
 
 ---
 
@@ -9,8 +15,12 @@ Complete schema reference for every Firestore collection used in the project. Al
 ```mermaid
 graph TD
     V[vendors] --> VI[vendors/*/items]
-    VI --> AL[vendors/*/items/*/auditLog]
-    CI[catalogItems]
+    VI --> VIH[vendors/*/items/*/history]
+    V --> VIB[vendors/*/importBatches]
+    VIB --> VIBR[vendors/*/importBatches/*/rows]
+    CI[catalogItems] --> CIH[catalogItems/*/history]
+    CRQ[catalogReviewQueue] --> CRQH[catalogReviewQueue/*/history]
+    PS[platformSettings]
     R[restaurants]
     MO[marketplaceOrders]
     SO[submittedOrders]
@@ -20,7 +30,6 @@ graph TD
     RINV[restaurantInvoices]
     N[notifications]
     PR[pendingReviews]
-    CIMR[catalogItemMappingReview]
     L[login]
     ACL[adminChangeLogs]
     ML[migrationLogs]
@@ -60,86 +69,235 @@ Master vendor/supplier profiles.
 
 Items offered by a specific vendor. Subcollection under each vendor.
 
+> **Field name change:** `name` was renamed to `itemName`. New normalized/SKU fields added.
+
 | Field | Type | Description |
 |---|---|---|
-| `name` | string | Item display name |
+| `itemName` | string | Item display name (**canonical field**; replaces old `name`) |
+| `itemNameNormalized` | string | Lowercase, stripped normalized key for matching |
+| `vendorSKU` | string | Vendor's own SKU / product code |
 | `category` | string | `"Produce"` \| `"Meat"` \| `"Seafood"` \| `"Dairy"` \| `"Spices"` \| `"Grains"` \| `"Beverages"` \| `"Packaging"` \| `"Cleaning"` \| `"Other"` |
+| `brand` | string | Brand name |
+| `packSize` | string | Pack size as a human string (e.g. `"10 kg"`) |
+| `packSizeNormalized` | string | Normalized pack size for matching |
 | `unit` | string | Selling unit (`"kg"`, `"lb"`, `"bag"`, `"bunch"`, `"box"`, `"case"`, `"unit"`, `"dozen"`, `"packet"`, `"L"`, `"mL"`) |
+| `unitNormalized` | string | Normalized unit for matching |
 | `vendorPrice` | number | Price charged by vendor |
-| `packQuantity` | number | Pack size (e.g. 10 kg/bag) |
-| `taxable` | boolean | Whether item is taxable |
-| `imageUrl` | string | Product image URL (Firebase Storage) |
+| `currency` | string | Currency code (default `"CAD"`) |
+| `minOrderQty` | string | Minimum order quantity |
+| `leadTimeDays` | string | Lead time in days |
+| `status` | string | `"Active"` \| `"Inactive"` \| `"Pending Review"` \| `"Merged"` |
+| `notes` | string | Vendor-supplied notes |
 | `catalogItemId` | string \| null | Link to master `catalogItems` doc |
-| `status` | string | `"active"` \| `"in-review"` \| `"rejected"` \| `"inactive"` |
-| `changeType` | string | `""` \| `"edit"` \| `"add"` \| `"delete"` \| `"deactivate"` (pending review state) |
-| `proposedData` | object \| null | Pending proposed changes |
-| `originalData` | object \| null | Snapshot of original data before change |
-| `requestedBy` | string | User ID who requested change |
-| `requestedByName` | string | Display name of requester |
-| `requestedAt` | Timestamp \| null | When change was requested |
-| `rejectionComment` | string | Reason for rejection (if rejected) |
-| `proofUrls` | array | `[{ name: string, url: string }]` — uploaded proof documents |
+| `mappingStatus` | string | `"mapped"` \| `"unmapped"` \| `"pending_review"` |
+| `mappingConfidence` | number \| null | Match confidence score (0–1) if auto-matched |
+| `mappingSource` | string \| null | How it was mapped: `"manual"` \| `"import"` \| `"auto"` |
+| `sourceLastUpdated` | string | Last update source: `"manual"` \| `"import"` \| `"import_high_risk_approved"` |
+| `lastImportBatchId` | string \| null | ID of the import batch that last updated this item |
+| `mergedIntoItemId` | string | If status `"Merged"`, the target item ID |
 | `createdAt` | Timestamp | Server-set creation time |
 | `updatedAt` | Timestamp | Server-set last update time |
+| `createdBy` | string | User display name / ID who created |
+| `updatedBy` | string | User display name / ID who last updated |
+
+> **Legacy fields** (present on older docs, being phased out): `name`, `vendorPrice` (was sometimes stored as `price`), `packQuantity`, `taxable`, `imageUrl`, `changeType`, `proposedData`, `originalData`, `requestedBy`, `requestedByName`, `requestedAt`, `rejectionComment`, `proofUrls`
 
 ---
 
-## 3. `vendors/{vendorId}/items/{itemId}/auditLog`
+## 3. `vendors/{vendorId}/items/{itemId}/history`
 
-Per-item audit trail. Subcollection under each vendor item.
+Per-item change history. Replaces the old `auditLog` subcollection.
 
 | Field | Type | Description |
 |---|---|---|
-| `action` | string | `"edited_direct"` \| `"approved"` \| `"rejected"` \| `"price_change"` \| `"image_uploaded"` \| `"submit_for_review"` |
-| `performedBy` | string | User ID who performed action |
-| `performedByName` | string | Display name of performer |
-| `itemName` | string | Item name at time of action |
-| `originalData` | object | Fields before change |
-| `proposedData` | object | Fields after change |
-| `timestamp` | Timestamp | Server-set time of action |
+| `changedBy` | string | User display name / ID who made the change |
+| `changeSource` | string | `"manual"` \| `"import"` \| `"import_high_risk_approved"` |
+| `importBatchId` | string | Import batch ID (if applicable) |
+| `changedFields` | string[] | List of field names that changed |
+| `oldValues` | object | Field values before change |
+| `newValues` | object | Field values after change (or full doc snapshot on create) |
+| `notes` | string | Human-readable note (e.g. `"Item created"`) |
+| `changedAt` | Timestamp | Server-set time of change |
 
 ---
 
-## 4. `catalogItems`
+## 4. `vendors/{vendorId}/importBatches`
 
-Master product catalog — canonical deduplicated product references.
+Bulk import batch header records. One document per CSV upload.
 
 | Field | Type | Description |
 |---|---|---|
-| `catalogItemId` | string | Deterministic ID from normalized name |
-| `canonicalName` | string | Official display name |
-| `normalizedKey` | string | Lowercase normalized key for matching |
+| `vendorId` | string | Parent vendor doc ID |
+| `fileName` | string | Uploaded file name |
+| `importMode` | string | `"add_and_update"` \| `"add_only"` \| `"update_only"` |
+| `uploadedBy` | string | User ID who uploaded |
+| `uploadedByName` | string | User display name |
+| `uploadedAt` | Timestamp | Server-set upload time |
+| `totalRows` | number | Total rows in the CSV |
+| `createdCount` | number | Items created |
+| `updatedHighCount` | number | High-confidence updates applied |
+| `updatedMediumCount` | number | Medium-confidence updates applied |
+| `unchangedCount` | number | Rows with no changes |
+| `warningCount` | number | Rows with warnings |
+| `errorCount` | number | Rows with errors |
+| `reviewCount` | number | Rows sent to review queue |
+| `skippedCount` | number | Rows skipped |
+| `status` | string | `"in_progress"` \| `"completed"` |
+| `templateVersion` | string | CSV template version (e.g. `"1.0"`) |
+| `completedAt` | Timestamp | When batch finalized |
+
+### 4a. `vendors/{vendorId}/importBatches/{batchId}/rows`
+
+Per-row results for an import batch.
+
+| Field | Type | Description |
+|---|---|---|
+| `rowNumber` | number | Row index in the CSV |
+| `rawData` | object | `{ itemName, price, category, brand, packSize, unit, status, vendorSKU }` — raw CSV values |
+| `matchType` | string | How the item was matched: `"exact"` \| `"normalized"` \| `"alias"` \| `"none"` |
+| `matchedItemId` | string \| null | Matched vendor item doc ID |
+| `actionTaken` | string | `"created"` \| `"update_high"` \| `"update_medium"` \| `"needs_review"` \| `"high_risk_review"` \| `"unchanged"` \| `"error"` \| `"none"` |
+| `changedFields` | string[] | Which fields differed |
+| `oldValues` | object | Previous field values |
+| `newValues` | object | New values written |
+| `warningMessages` | string[] | Warning messages for this row |
+| `errorMessages` | string[] | Error messages for this row |
+| `excluded` | boolean | Whether user manually excluded this row |
+| `createdItemId` | string \| null | Newly created vendor item ID (if applicable) |
+
+---
+
+## 5. `catalogItems`
+
+Master product catalog — canonical, deduplicated product references.
+
+| Field | Type | Description |
+|---|---|---|
+| `itemName` | string | Official item name |
+| `itemNameNormalized` | string | Lowercase normalized key for matching |
+| `canonicalName` | string | Official display name (preferred for UI) |
 | `category` | string | Product category |
+| `subcategory` | string | Optional subcategory |
+| `brand` | string | Brand name |
+| `packSize` | string | Reference pack size string |
+| `packSizeNormalized` | string | Normalized pack size for matching |
 | `baseUnit` | string | Standard unit of measure |
-| `packReference` | string | Reference pack size |
-| `aliases` | string[] | Alternative names for this item |
-| `vendorCount` | number | Number of vendors offering this item |
-| `status` | string | `"active"` \| `"inactive"` |
+| `orderUnit` | string | Unit used when ordering |
+| `aliases` | string[] | Alternative raw names for this item |
+| `aliasNormalized` | string[] | Normalized form of each alias |
+| `status` | string | `"active"` \| `"inactive"` \| `"merged"` |
+| `source` | string | `"superadmin"` \| `"import"` \| `"migration"` |
+| `approved` | boolean | Whether a superadmin has approved this entry |
+| `mergedInto` | string | If status `"merged"`, the survivor catalog item ID |
 | `createdAt` | Timestamp | Server-set creation time |
 | `updatedAt` | Timestamp | Server-set last update time |
+| `createdBy` | string | User display name / ID |
+| `updatedBy` | string | User display name / ID |
 
----
+### 5a. `catalogItems/{catalogItemId}/history`
 
-## 5. `catalogItemMappingReview`
-
-Queue for vendor items needing manual catalog mapping (ambiguous names).
+Audit trail for catalog item merges and admin changes.
 
 | Field | Type | Description |
 |---|---|---|
+| `action` | string | `"merged_from"` \| `"alias_added"` \| `"updated"` |
+| `actionBy` | string | User display name / ID |
+| `actionAt` | Timestamp | Server-set time |
+| `notes` | string | Human-readable description |
+| `losingItemId` | string | (merge only) The catalog item that was merged in |
+| `vendorItemsRemapped` | number | (merge only) Count of vendor items re-pointed |
+
+---
+
+## 6. `catalogReviewQueue`
+
+Superadmin review queue for all items that cannot be auto-processed during a bulk import. Replaces `catalogItemMappingReview` and `pendingReviews` for import-originated reviews.
+
+| Field | Type | Description |
+|---|---|---|
+| `reviewType` | string | `"new_item"` \| `"possible_duplicate"` \| `"high_risk_update"` \| `"mapping_review"` \| `"needs_review"` |
+| `status` | string | `"pending"` \| `"approved"` \| `"rejected"` \| `"merged"` \| `"held"` |
 | `vendorId` | string | Vendor doc ID |
 | `vendorName` | string | Vendor display name |
-| `itemId` | string | Vendor item doc ID |
-| `itemName` | string | Vendor's item name |
-| `suggestedNormalizedKey` | string | Auto-generated normalized key |
-| `category` | string | Item category |
-| `status` | string | `"pending"` \| `"mapped"` \| `"ignored"` |
-| `resolvedCatalogItemId` | string | Catalog item it was mapped to |
-| `resolvedAt` | Timestamp | When resolved |
+| `vendorItemId` | string | Vendor item doc ID (may be empty if no item created yet) |
+| `importBatchId` | string | Import batch that triggered this review |
+| `importRowId` | string | Row number (as string) in the CSV |
+| `source` | string | `"vendor_import"` |
+| `proposedData` | object | `{ itemName, category, brand, packSize, unit, price, currency, vendorSKU, minOrderQty, status, notes }` |
+| `existingVendorItemData` | object | Snapshot of the current vendor item (if update) |
+| `suggestedCatalogMatches` | array | `[{ catalogItemId, canonicalName, score, ... }]` — ranked catalog match suggestions |
+| `suggestedVendorMatches` | array | `[{ itemId, itemName, score, ... }]` — ranked vendor item match suggestions |
+| `matchConfidence` | number \| null | Top match confidence score |
+| `riskFlags` | string[] | Risk flag labels (e.g. `["Price change > 50%", "Pack size changed"]`) |
+| `reviewReason` | string | Human-readable reason this item is in queue |
+| `resolutionAction` | string \| null | `"mapped_to_catalog_item"` \| `"created_new_catalog_item"` \| `"approved_high_risk_update"` \| `"merged_into_existing_vendor_item"` \| `"rejected"` \| null |
+| `resolutionNotes` | string \| null | Notes about how it was resolved |
 | `createdAt` | Timestamp | Server-set creation time |
+| `createdBy` | string | User display name / ID |
+| `reviewedAt` | Timestamp \| null | When reviewed |
+| `reviewedBy` | string \| null | Reviewer display name / ID |
+
+**Status Enum Flow:**
+`"pending"` → `"approved"` / `"rejected"` / `"merged"` / `"held"` → (held can return to) `"pending"`
+
+### 6a. `catalogReviewQueue/{reviewId}/history`
+
+Action history for each review item.
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | string | `"approved_map_to_existing"` \| `"approved_created_new_catalog_item"` \| `"approved_high_risk_update"` \| `"merged_into_existing"` \| `"rejected"` \| `"held"` \| `"reverted_mapping"` |
+| `actionBy` | string | User display name / ID |
+| `actionAt` | Timestamp | Server-set time |
+| `notes` | string | Human-readable description |
+| `oldStatus` | string | Status before this action |
+| `newStatus` | string | Status after this action |
 
 ---
 
-## 6. `restaurants`
+## 7. `platformSettings`
+
+Platform-wide configuration. Two documents exist:
+
+### `platformSettings/catalogMatching`
+
+Controls the catalog matching engine scoring weights and thresholds.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `exactNameWeight` | number | `10.0` | Score weight for exact name matches |
+| `normalizedNameWeight` | number | `8.0` | Score weight for normalized name matches |
+| `aliasWeight` | number | `7.0` | Score weight for alias matches |
+| `categoryWeight` | number | `2.0` | Score weight for matching category |
+| `packSizeWeight` | number | `3.0` | Score weight for matching pack size |
+| `unitWeight` | number | `1.5` | Score weight for matching unit |
+| `priorMappingWeight` | number | `5.0` | Score boost for previously mapped items |
+| `duplicateThreshold` | number | `0.85` | Score above which → flagged as possible duplicate |
+| `reviewThreshold` | number | `0.55` | Score above which → sent to review queue |
+| `autoMatchThreshold` | number | `0.90` | Score above which → auto-matched without review |
+| `autoAddAliasOnApprovedReview` | boolean | `true` | Whether to add alias when a review is approved |
+| `allowPluralSingularEquivalence` | boolean | `true` | Treat singular/plural as equivalent in matching |
+| `allowProduceVariants` | boolean | `true` | Treat produce variant spellings as equivalent |
+| `updatedAt` | Timestamp | — | Last updated |
+| `updatedBy` | string | — | User who last updated |
+
+### `platformSettings/importRules`
+
+Controls behavior of the vendor bulk import pipeline.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `autoApplyRecommendedReview` | boolean | `false` | If true, auto-applies moderate-confidence recommendations |
+| `highRiskThresholdPercent` | number | `50` | Price change % above which item is flagged as high-risk |
+| `duplicateSimilarityThreshold` | number | `0.90` | Similarity score above which a new item is flagged as a duplicate |
+| `requireReviewForAllNewItems` | boolean | `false` | If true, all new items go to review queue regardless of confidence |
+| `defaultReviewBehavior` | string | `"queue"` | `"queue"` \| `"auto_approve"` — what to do with items needing review |
+| `updatedAt` | Timestamp | — | Last updated |
+| `updatedBy` | string | — | User who last updated |
+
+---
+
+## 8. `restaurants`
 
 Master restaurant/branch profiles.
 
@@ -165,7 +323,7 @@ Master restaurant/branch profiles.
 
 ---
 
-## 7. `marketplaceOrders`
+## 9. `marketplaceOrders`
 
 Live marketplace orders — the central transactional collection.
 
@@ -211,7 +369,7 @@ Branch: → `"cancelled_by_vendor"` / `"cancelled_by_customer"` / `"cancelled"` 
 
 ---
 
-## 8. `submittedOrders`
+## 10. `submittedOrders`
 
 Restaurant-submitted orders from the forecast review pipeline.
 
@@ -242,7 +400,7 @@ Restaurant-submitted orders from the forecast review pipeline.
 
 ---
 
-## 9. `vendorDispatches`
+## 11. `vendorDispatches`
 
 Weekly parent dispatch records — one per vendor per week.
 
@@ -266,11 +424,11 @@ Weekly parent dispatch records — one per vendor per week.
 | `sentAt` | Timestamp | When dispatched |
 | `confirmedAt` | Timestamp \| null | When confirmed |
 | `deliveredAt` | Timestamp \| null | When delivered |
-| `items` | array | Full items payload (see below) |
+| `items` | array | Full items payload (see shape below) |
 | `createdAt` | Timestamp | Server-set creation time |
 | `updatedAt` | Timestamp | Server-set last update time |
 
-**Dispatch Item Shape (with snapshot fields):**
+**Dispatch Item Shape:**
 
 | Field | Type | Description |
 |---|---|---|
@@ -296,7 +454,7 @@ Weekly parent dispatch records — one per vendor per week.
 
 ---
 
-## 10. `vendorDispatchRoutes`
+## 12. `vendorDispatchRoutes`
 
 Route-day child dispatch records — pipeline tracking per delivery day.
 
@@ -323,7 +481,7 @@ Route-day child dispatch records — pipeline tracking per delivery day.
 
 ---
 
-## 11. `vendorInvoices`
+## 13. `vendorInvoices`
 
 Auto-generated vendor invoices (commission deducted). Doc ID = order ID.
 
@@ -352,7 +510,7 @@ Auto-generated vendor invoices (commission deducted). Doc ID = order ID.
 
 ---
 
-## 12. `restaurantInvoices`
+## 14. `restaurantInvoices`
 
 Auto-generated restaurant invoices (full amount, no commission). Doc ID = order ID.
 
@@ -377,7 +535,7 @@ Auto-generated restaurant invoices (full amount, no commission). Doc ID = order 
 
 ---
 
-## 13. `notifications`
+## 15. `notifications`
 
 Real-time notification system for admins and vendors.
 
@@ -394,9 +552,10 @@ Real-time notification system for admins and vendors.
 
 ---
 
-## 14. `pendingReviews`
+## 16. `pendingReviews`
 
-Legacy review queue for vendor item changes (superseded by inline review in `PendingReviewsDashboard`).
+Legacy vendor item change review queue (pre-import-pipeline).
+Used for manual add/edit/delete requests submitted through the vendor portal.
 
 | Field | Type | Description |
 |---|---|---|
@@ -418,7 +577,7 @@ Legacy review queue for vendor item changes (superseded by inline review in `Pen
 
 ---
 
-## 15. `login`
+## 17. `login`
 
 User accounts and authentication.
 
@@ -437,7 +596,7 @@ User accounts and authentication.
 
 ---
 
-## 16. `adminChangeLogs`
+## 18. `adminChangeLogs`
 
 Admin audit trail for all administrative actions.
 
@@ -453,7 +612,7 @@ Admin audit trail for all administrative actions.
 
 ---
 
-## 17. `migrationLogs`
+## 19. `migrationLogs`
 
 Records of data migration/backfill runs.
 
@@ -474,7 +633,7 @@ Records of data migration/backfill runs.
 
 ---
 
-## 18. `forecastConfig`
+## 20. `forecastConfig`
 
 Global forecast engine configuration. Single document: `forecastConfig/global`.
 
@@ -486,7 +645,7 @@ Global forecast engine configuration. Single document: `forecastConfig/global`.
 
 ---
 
-## 19. `festivalCalendar`
+## 21. `festivalCalendar`
 
 Festival/seasonal event calendar for forecast demand uplift.
 
@@ -501,7 +660,7 @@ Festival/seasonal event calendar for forecast demand uplift.
 
 ---
 
-## 20. `issuesDisputes`
+## 22. `issuesDisputes`
 
 Delivery issues and disputes raised by restaurants.
 
@@ -521,7 +680,7 @@ Delivery issues and disputes raised by restaurants.
 
 ---
 
-## 21. `forecast/corrections/entries`
+## 23. `forecast/corrections/entries`
 
 Item-level forecast correction data (learning engine). Subcollection under `forecast/corrections`.
 
@@ -553,7 +712,15 @@ Item-level forecast correction data (learning engine). Subcollection under `fore
 graph LR
     V[vendors] -->|1:N| VI[vendor items]
     VI -->|N:1| CI[catalogItems]
-    VI -->|1:N| AL[auditLog]
+    VI -->|1:N| VIH[item history]
+    CI -->|1:N| CIH[catalog history]
+    V -->|1:N| VIB[importBatches]
+    VIB -->|1:N| VIBR[batch rows]
+    VIB -->|creates| CRQ[catalogReviewQueue]
+    CRQ -->|1:N| CRQH[review history]
+    CRQ -->|resolves→| VI
+    CRQ -->|resolves→| CI
+    PS[platformSettings] -->|configures| CRQ
     V -->|1:N| VD[vendorDispatches]
     VD -->|1:N| VDR[vendorDispatchRoutes]
     MO[marketplaceOrders] -->|1:1| VINV[vendorInvoices]
@@ -561,9 +728,18 @@ graph LR
     MO -->|N:1| V
     MO -->|N:1| R[restaurants]
     SO[submittedOrders] -->|N:1| R
-    VI -->|pending| CIMR[catalogItemMappingReview]
-    VI -->|pending| PR[pendingReviews]
+    VI -->|pending manual| PR[pendingReviews]
 ```
+
+---
+
+## Deprecated / Removed Collections
+
+| Collection | Status | Replaced By |
+|---|---|---|
+| `vendors/*/items/*/auditLog` | **Removed** | `vendors/*/items/*/history` |
+| `catalogItemMappingReview` | **Superseded** | `catalogReviewQueue` (for import-originated reviews) |
+| `catalogMappingsHistory` | **Removed** | `catalogReviewQueue/*/history` |
 
 ---
 
@@ -571,8 +747,8 @@ graph LR
 
 | Category | Example Fields | Type | Notes |
 |---|---|---|---|
-| System events | `createdAt`, `updatedAt`, `sentAt`, `confirmedAt`, `deliveredAt`, `cancelledAt`, `resolvedAt`, `reviewedAt`, `submittedAt`, `requestedAt`, `lockedAt`, `aggregatedAt` | `Timestamp` | Always `serverTimestamp()` |
+| System events | `createdAt`, `updatedAt`, `sentAt`, `confirmedAt`, `deliveredAt`, `cancelledAt`, `resolvedAt`, `reviewedAt`, `submittedAt`, `requestedAt`, `lockedAt`, `aggregatedAt`, `changedAt`, `actionAt`, `uploadedAt`, `completedAt` | `Timestamp` | Always `serverTimestamp()` |
 | Audit log timestamps | `timestamp` (in auditLog, adminChangeLogs) | `Timestamp` | Always `serverTimestamp()` |
 | Business date keys | `weekStart`, `weekEnd`, `startDate`, `endDate`, `deliveryDateKey` | `string` | ISO date (`YYYY-MM-DD`) for queries/planning |
 | Computed future dates | `dueDate`, `reviewWindowEndsAt` | `string` | Calculated from current time + offset |
-| Migration log times | `startedAt`, `completedAt` | `string` | ISO timestamp of job run boundaries |
+| Migration log times | `startedAt`, `completedAt` (in migrationLogs) | `string` | ISO timestamp of job run boundaries |

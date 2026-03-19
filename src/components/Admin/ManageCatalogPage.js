@@ -65,9 +65,14 @@ export default function ManageCatalogPage() {
                 const itemsSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
                 itemsSnap.docs.forEach(iDoc => {
                     const item = iDoc.data();
-                    const itemName = item.name || item.itemName || '';
+                    const itemName = item.itemName || item.name || '';     // v2-first
                     const cid = item.catalogItemId;
-                    const entry = { vendorId: vDoc.id, vendorName, itemDocId: iDoc.id, itemName, price: item.vendorPrice || 0, unit: item.unit || '', packSize: item.packQuantity || '' };
+                    const entry = {
+                        vendorId: vDoc.id, vendorName, itemDocId: iDoc.id, itemName,
+                        price: item.vendorPrice ?? item.price ?? 0,         // v2-first
+                        unit:  item.baseUnit || item.unit || '',            // v2-first
+                        packSize: item.packQuantity || '',
+                    };
                     if (cid) { if (!viMap[cid]) viMap[cid] = []; viMap[cid].push(entry); }
                     else if (itemName) unmapped.push(entry);
                 });

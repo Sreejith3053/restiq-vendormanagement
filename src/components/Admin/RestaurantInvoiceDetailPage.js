@@ -310,7 +310,7 @@ export default function RestaurantInvoiceDetailPage() {
                                             ) : '—'}
                                         </td>
                                         <td style={{ textAlign: 'right', color: 'var(--muted)' }}>
-                                            ${Number(item.price || 0).toFixed(2)}
+                                            ${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}
                                         </td>
                                         <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>
                                             ${Number(item.lineTotal || 0).toFixed(2)}

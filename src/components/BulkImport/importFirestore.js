@@ -25,22 +25,28 @@ import { buildRiskFlags } from '../CatalogReview/catalogMatchService';
 // ── Normalize a row for Firestore write ───────────────────────────────────────
 
 function buildItemPayload(normalizedRow, extra = {}) {
+    const rawStatus = normalizedRow.status || 'Active';
+    // Phase 3: write ONLY v2 canonical fields — no `unit`, `price`, `name` legacy keys
+    const baseUnit  = normalizedRow.baseUnit  || normalizeUnit(normalizedRow.unit || '') || normalizedRow.unit || '';
+    const orderUnit = normalizedRow.orderUnit || normalizedRow.unit || '';
     return {
-        itemName: normalizedRow.itemName,        // standardized field name
+        itemName:           normalizedRow.itemName,
         itemNameNormalized: normalizeString(normalizedRow.itemName),
-        vendorSKU: normalizedRow.vendorSKU || '',
-        category: normalizedRow.category || '',
-        brand: normalizedRow.brand || '',
-        packSize: normalizedRow.packSize || '',
+        vendorSKU:          normalizedRow.vendorSKU || '',
+        category:           normalizedRow.category || '',
+        brand:              normalizedRow.brand || '',
+        packSize:           normalizedRow.packSize || '',
         packSizeNormalized: normalizePackSize(normalizedRow.packSize || ''),
-        unit: normalizedRow.unit || '',
-        unitNormalized: normalizeUnit(normalizedRow.unit || ''),
-        vendorPrice: parseFloat(normalizedRow.price) || 0,
-        currency: normalizedRow.currency || 'CAD',
-        minOrderQty: normalizedRow.minOrderQty || '',
-        leadTimeDays: normalizedRow.leadTimeDays || '',
-        status: normalizedRow.status || 'Active',
-        notes: normalizedRow.notes || '',
+        baseUnit,
+        orderUnit,
+        unitNormalized:     normalizeUnit(normalizedRow.unit || ''),
+        vendorPrice:        parseFloat(normalizedRow.vendorPrice ?? normalizedRow.price) || 0,  // v2 first
+        currency:           normalizedRow.currency || 'CAD',
+        minOrderQty:        normalizedRow.minOrderQty || '',
+        leadTimeDays:       normalizedRow.leadTimeDays || '',
+        status:             rawStatus,
+        normalizedStatus:   rawStatus.toLowerCase(),
+        notes:              normalizedRow.notes || '',
         ...extra,
     };
 }
@@ -90,17 +96,17 @@ export async function updateVendorItem(vendorId, itemId, normalizedRow, oldValue
     // Build the subset of fields that actually changed
     const updatePayload = {};
     const fieldMapping = {
-        'Item Name': 'itemName',   // standardized — was 'name'
-        'Price': 'vendorPrice',
-        'Category': 'category',
-        'Brand': 'brand',
+        'Item Name': 'itemName',
+        'Price':     'vendorPrice',
+        'Category':  'category',
+        'Brand':     'brand',
         'Pack Size': 'packSize',
-        'Unit': 'unit',
-        'Status': 'status',
-        'Vendor SKU': 'vendorSKU',
-        'Min Order Qty': 'minOrderQty',
+        'Unit':      'baseUnit',   // Phase 3: map Unit column → baseUnit
+        'Status':    'status',
+        'Vendor SKU':'vendorSKU',
+        'Min Order Qty':  'minOrderQty',
         'Lead Time Days': 'leadTimeDays',
-        'Notes': 'notes',
+        'Notes':    'notes',
         'Currency': 'currency',
     };
 
@@ -108,20 +114,22 @@ export async function updateVendorItem(vendorId, itemId, normalizedRow, oldValue
         const key = fieldMapping[label];
         if (!key) return;
         if (key === 'vendorPrice') {
-            updatePayload[key] = parseFloat(normalizedRow.price) || 0;
-        } else if (key === 'itemName') {   // standardized field name
+            updatePayload[key] = parseFloat(normalizedRow.vendorPrice ?? normalizedRow.price) || 0;  // v2 first
+        } else if (key === 'itemName') {
             updatePayload[key] = normalizedRow.itemName;
             updatePayload['itemNameNormalized'] = normalizeString(normalizedRow.itemName);
         } else if (key === 'packSize') {
             updatePayload[key] = normalizedRow.packSize;
             updatePayload['packSizeNormalized'] = normalizeString(normalizedRow.packSize);
-        } else if (key === 'unit') {
-            updatePayload[key] = normalizedRow.unit;
-            updatePayload['unitNormalized'] = normalizeUnit(normalizedRow.unit);
+        } else if (key === 'baseUnit') {
+            // Phase 3: Unit CSV column → write baseUnit + orderUnit (no legacy `unit`)
+            const rawUnit = normalizedRow.unit || '';
+            updatePayload['baseUnit']       = normalizeUnit(rawUnit) || rawUnit;
+            updatePayload['orderUnit']      = normalizedRow.orderUnit || rawUnit;
+            updatePayload['unitNormalized'] = normalizeUnit(rawUnit);
         } else if (key === 'minOrderQty' || key === 'leadTimeDays') {
-            updatePayload[key] = normalizedRow[key.replace('TimeDays', '_leadTimeDays')] || normalizedRow.minOrderQty || normalizedRow.leadTimeDays || '';
+            updatePayload[key] = normalizedRow[key] || '';
         } else {
-            // Map label to row key
             const rowKeyMap = { category: 'category', brand: 'brand', status: 'status', vendorSKU: 'vendorSKU', notes: 'notes', currency: 'currency' };
             if (rowKeyMap[key]) updatePayload[key] = normalizedRow[rowKeyMap[key]] || '';
         }

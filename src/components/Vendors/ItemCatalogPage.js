@@ -21,6 +21,7 @@ import { formatItemSize } from './VendorDetailPage';
 import AddItemModal from './AddItemModal';
 import EditItemModal from './EditItemModal';
 import { exportVendorCatalog, downloadTemplate } from '../BulkImport/importHelpers';
+import GuidanceText from '../ui/GuidanceText';
 
 const CATEGORIES = ['All', 'Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const PAGE_SIZE = 50;
@@ -145,6 +146,36 @@ export default function ItemCatalogPage() {
         toast.success('Catalog exported!');
     };
 
+    // ── Catalog Health Metrics ─────────────────────────────────────────────────
+    const [healthFilter, setHealthFilter] = useState(null); // null | 'missingPack' | 'missingSKU' | 'stale14' | 'stale30' | 'suspectPrice' | 'missingCategory' | 'inactive'
+    const [showHealthPanel, setShowHealthPanel] = useState(false);
+
+    const catalogHealth = useMemo(() => {
+        const now = Date.now();
+        const day14 = 14 * 24 * 60 * 60 * 1000;
+        const day30 = 30 * 24 * 60 * 60 * 1000;
+
+        let active = 0, inactive = 0, missingPack = 0, missingSKU = 0, stale14 = 0, stale30 = 0, suspectPrice = 0, missingCategory = 0;
+
+        allItems.forEach(item => {
+            const status = (item.status || 'Active');
+            if (status === 'Active') active++; else inactive++;
+            if (!item.packSize && !item.packQuantity) missingPack++;
+            if (!item.vendorSKU) missingSKU++;
+            if (!item.category) missingCategory++;
+            const price = parseFloat(item.vendorPrice ?? item.price ?? 0);
+            if (price <= 0 || price > 5000) suspectPrice++;
+            const updMs = item.updatedAt?.toMillis?.() || (item.updatedAt?.seconds ? item.updatedAt.seconds * 1000 : 0);
+            if (updMs > 0) {
+                const age = now - updMs;
+                if (age > day30) stale30++;
+                else if (age > day14) stale14++;
+            }
+        });
+
+        return { active, inactive, missingPack, missingSKU, stale14, stale30, suspectPrice, missingCategory, total: allItems.length };
+    }, [allItems]);
+
     // ── Filter + Sort + Paginate ───────────────────────────────────────────────
     const filtered = useMemo(() => {
         let items = allItems.filter(item => {
@@ -156,6 +187,24 @@ export default function ItemCatalogPage() {
                 (item.brand || '').toLowerCase().includes(q);
             const matchCat = categoryFilter === 'All' || item.category === categoryFilter;
             const matchStatus = statusFilter === 'All' || (item.status || 'Active') === statusFilter;
+
+            // Health filter
+            if (healthFilter) {
+                const now = Date.now();
+                const day14 = 14 * 24 * 60 * 60 * 1000;
+                const day30 = 30 * 24 * 60 * 60 * 1000;
+                const updMs = item.updatedAt?.toMillis?.() || (item.updatedAt?.seconds ? item.updatedAt.seconds * 1000 : 0);
+                const price = parseFloat(item.vendorPrice ?? item.price ?? 0);
+
+                if (healthFilter === 'missingPack' && (item.packSize || item.packQuantity)) return false;
+                if (healthFilter === 'missingSKU' && item.vendorSKU) return false;
+                if (healthFilter === 'missingCategory' && item.category) return false;
+                if (healthFilter === 'suspectPrice' && price > 0 && price <= 5000) return false;
+                if (healthFilter === 'stale14' && (updMs === 0 || (now - updMs) <= day14)) return false;
+                if (healthFilter === 'stale30' && (updMs === 0 || (now - updMs) <= day30)) return false;
+                if (healthFilter === 'inactive' && (item.status || 'Active') !== 'Inactive') return false;
+            }
+
             return matchSearch && matchCat && matchStatus;
         });
 
@@ -178,7 +227,7 @@ export default function ItemCatalogPage() {
         });
 
         return items;
-    }, [allItems, search, categoryFilter, statusFilter, sort]);
+    }, [allItems, search, categoryFilter, statusFilter, sort, healthFilter]);
 
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -229,7 +278,7 @@ export default function ItemCatalogPage() {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
                 <div>
                     <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc', margin: 0 }}>
-                        📋 Item Catalog
+                        📋 Catalog
                     </h1>
                     <p style={{ color: '#94a3b8', marginTop: 4, fontSize: 14 }}>
                         {allItems.length} items · {vendorName && <span style={{ color: '#38bdf8' }}>{vendorName}</span>}
@@ -240,8 +289,8 @@ export default function ItemCatalogPage() {
                         <>
                             <button className="ui-btn ghost small" onClick={() => downloadTemplate()}>📋 Template</button>
                             <button className="ui-btn ghost small" onClick={handleExport}>📤 Export</button>
-                            <button className="ui-btn ghost small" onClick={() => navigate('/vendor/import/history')}>🕐 History</button>
-                            <button className="ui-btn primary small" onClick={() => navigate('/vendor/import')}>📥 Import Catalog</button>
+                            <button className="ui-btn ghost small" onClick={() => navigate('/vendor/import?tab=history')}>🕐 Import History</button>
+                            <button className="ui-btn primary small" onClick={() => navigate('/vendor/import')}>📥 Bulk Upload</button>
                         </>
                     )}
                     {isSuperAdmin && (
@@ -250,6 +299,61 @@ export default function ItemCatalogPage() {
                     <button className="ui-btn primary small" onClick={() => setIsAddModalOpen(true)}>+ Add Item</button>
                 </div>
             </div>
+
+            {/* Catalog Guidance */}
+            {allItems.length > 0 && (catalogHealth.missingPack + catalogHealth.suspectPrice + catalogHealth.stale30) > 0 && (
+                <GuidanceText
+                    text={`${catalogHealth.missingPack + catalogHealth.suspectPrice + catalogHealth.stale30} items may need review — fix data quality issues to improve allocation`}
+                    type="warning"
+                    style={{ marginBottom: 12 }}
+                />
+            )}
+
+            {/* Catalog Health Panel */}
+            {allItems.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                    <button onClick={() => setShowHealthPanel(p => !p)} style={{
+                        padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'rgba(255,255,255,0.02)', color: '#94a3b8', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                    }}>
+                        {showHealthPanel ? '▾' : '▸'} Catalog Health
+                        {(catalogHealth.missingPack + catalogHealth.suspectPrice + catalogHealth.stale30) > 0 && (
+                            <span style={{ background: '#f59e0b', color: '#0f172a', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
+                                {catalogHealth.missingPack + catalogHealth.suspectPrice + catalogHealth.stale30} issues
+                            </span>
+                        )}
+                    </button>
+                    {showHealthPanel && (
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '12px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10 }}>
+                            {[
+                                { key: null, label: `✅ Active: ${catalogHealth.active}`, color: '#4ade80', count: catalogHealth.active },
+                                { key: 'inactive', label: `🚫 Inactive: ${catalogHealth.inactive}`, color: '#f87171', count: catalogHealth.inactive },
+                                { key: 'missingPack', label: `📦 No Pack Size: ${catalogHealth.missingPack}`, color: '#f59e0b', count: catalogHealth.missingPack },
+                                { key: 'missingSKU', label: `🏷️ No SKU: ${catalogHealth.missingSKU}`, color: '#94a3b8', count: catalogHealth.missingSKU },
+                                { key: 'missingCategory', label: `📂 No Category: ${catalogHealth.missingCategory}`, color: '#f97316', count: catalogHealth.missingCategory },
+                                { key: 'suspectPrice', label: `💰 Suspect Price: ${catalogHealth.suspectPrice}`, color: '#f43f5e', count: catalogHealth.suspectPrice },
+                                { key: 'stale14', label: `⏰ Stale 14d: ${catalogHealth.stale14}`, color: '#fbbf24', count: catalogHealth.stale14 },
+                                { key: 'stale30', label: `🚨 Stale 30d: ${catalogHealth.stale30}`, color: '#f43f5e', count: catalogHealth.stale30 },
+                            ].filter(b => b.count > 0 || b.key === null).map(b => (
+                                <button key={b.key || 'active'} onClick={() => { setHealthFilter(healthFilter === b.key ? null : b.key); setPage(0); }} style={{
+                                    padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: b.key ? 'pointer' : 'default',
+                                    border: `1px solid ${healthFilter === b.key ? b.color : 'rgba(255,255,255,0.08)'}`,
+                                    background: healthFilter === b.key ? `${b.color}15` : 'transparent',
+                                    color: healthFilter === b.key ? b.color : '#94a3b8',
+                                }}>{b.label}</button>
+                            ))}
+                            {healthFilter && (
+                                <button onClick={() => { setHealthFilter(null); setPage(0); }} style={{
+                                    padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                                    border: '1px solid rgba(56,189,248,0.3)', background: 'rgba(56,189,248,0.1)',
+                                    color: '#38bdf8', cursor: 'pointer',
+                                }}>✕ Clear Filter</button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Filter bar */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -18,8 +18,11 @@ import {
     doc,
     setDoc,
     addDoc,
+    getDoc,
     serverTimestamp,
 } from 'firebase/firestore';
+import { logDispatchSent } from '../../utils/adminAuditLogger';
+import { ops } from '../../services/operationsLogger';
 
 // ── Week helpers ──────────────────────────────────────────────────────────────
 
@@ -224,6 +227,10 @@ export async function sendVendorDispatch(vendor, weekStart, weekEnd, weekLabel) 
         items: thuItems,
         notes: '',
     });
+
+    // Audit log
+    logDispatchSent({ dispatchId, vendorId: vendor.vendorId, vendorName: vendor.name, weekStart });
+    ops.info('dispatch_sent', { dispatchId, vendorId: vendor.vendorId, vendorName: vendor.name, weekStart });
 
     return { dispatchId, monRouteId, thuRouteId };
 }

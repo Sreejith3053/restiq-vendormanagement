@@ -17,6 +17,11 @@ import { computeRiskAlerts } from '../AI/riskEngine';
 import { computeSeasonalUplifts } from '../AI/seasonalUpliftEngine';
 import { computeDispatchOptimization } from '../AI/dispatchOptimizationEngine';
 import { generateWeeklySummary } from '../AI/aiSummaryEngine';
+import PriceIntelligenceSection from './PriceIntelligenceSection';
+import SectionContainer from '../Consolidated/SectionContainer';
+import PipelineFlow from '../Consolidated/PipelineFlow';
+import AlertCardRow from '../Consolidated/AlertCardRow';
+import CTAButtonGroup from '../Consolidated/CTAButtonGroup';
 
 const Toast = ({ message, type }) => (
     <div style={{ position: 'fixed', bottom: 24, right: 24, padding: '12px 24px', background: type === 'error' ? '#f43f5e' : '#10b981', color: '#fff', borderRadius: 8, fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 9999 }}>
@@ -579,25 +584,23 @@ export default function GlobalSupplyControlTower() {
 
     // ── KPI card definitions (with tab routing) ─────────────────────────
     const KPI_CARDS = [
-        { label: 'Ordered Items', value: metrics.activeItems, icon: '📦', color: '#38bdf8', tab: 'forecast', filter: { item: null } },
-        { label: 'Total Monday Demand', value: `${metrics.totalMonday} packs`, icon: '📅', color: '#818cf8', tab: 'combined', filter: { day: 'Monday' } },
-        { label: 'Total Thursday Demand', value: `${metrics.totalThursday} packs`, icon: '📅', color: '#a78bfa', tab: 'combined', filter: { day: 'Thursday' } },
-        { label: 'Total Restaurant Billing', value: `$${metrics.billing.toFixed(2)}`, icon: '💰', color: '#ec4899', tab: 'combined', filter: { view: 'billing' } },
-        { label: 'Total Vendor Payout', value: `$${metrics.payout.toFixed(2)}`, icon: '💰', color: '#f59e0b', tab: 'dispatch', filter: null },
-        { label: 'Marketplace Commission', value: `$${metrics.commission.toFixed(2)}`, icon: '💰', color: '#10b981', tab: 'combined', filter: { view: 'commission' } },
-        { label: 'Restaurants Ordered', value: metrics.accuracyScore, icon: '🏪', color: '#10b981', tab: 'forecast', filter: null },
-        { label: 'Items Missing Price', value: metrics.missingPrices, icon: '⚠️', color: metrics.missingPrices > 0 ? '#f43f5e' : '#94a3b8', tab: 'combined', filter: { view: 'missingPrice' } },
+        { label: 'Ordered Items', value: metrics.activeItems, icon: '📦', color: '#38bdf8', tab: 'demand', filter: { item: null } },
+        { label: 'Total Monday Demand', value: `${metrics.totalMonday} packs`, icon: '📅', color: '#818cf8', tab: 'demand', filter: { day: 'Monday' } },
+        { label: 'Total Thursday Demand', value: `${metrics.totalThursday} packs`, icon: '📅', color: '#a78bfa', tab: 'demand', filter: { day: 'Thursday' } },
+        { label: 'Total Restaurant Billing', value: `$${metrics.billing.toFixed(2)}`, icon: '💰', color: '#ec4899', tab: 'demand', filter: { view: 'billing' } },
+        { label: 'Total Vendor Payout', value: `$${metrics.payout.toFixed(2)}`, icon: '💰', color: '#f59e0b', tab: 'fulfillment', filter: null },
+        { label: 'Marketplace Commission', value: `$${metrics.commission.toFixed(2)}`, icon: '💰', color: '#10b981', tab: 'demand', filter: { view: 'commission' } },
+        { label: 'Restaurants Ordered', value: metrics.accuracyScore, icon: '🏪', color: '#10b981', tab: 'demand', filter: null },
+        { label: 'Items Missing Price', value: metrics.missingPrices, icon: '⚠️', color: metrics.missingPrices > 0 ? '#f43f5e' : '#94a3b8', tab: 'exceptions', filter: { view: 'missingPrice' } },
     ];
 
-    // ── Tab definitions ──────────────────────────────────────────────────
+    // ── Tab definitions (consolidated: 5 tabs) ──────────────────────────
     const TABS = [
         { id: 'overview', label: '📊 Overview' },
-        { id: 'forecast', label: '📋 Ordered Items' },
-        { id: 'restforecast', label: '📈 Forecast' },
-        { id: 'combined', label: '🛒 Combined Demand' },
-        { id: 'dispatch', label: '🚚 Vendor Dispatch' },
-        { id: 'warehouse', label: '🏭 Warehouse' },
+        { id: 'demand', label: '📋 Demand' },
+        { id: 'fulfillment', label: '🚚 Fulfillment' },
         { id: 'intelligence', label: '🧠 Intelligence' },
+        { id: 'exceptions', label: '🚨 Exceptions' },
     ];
 
     // Forecast rows for Forecast tab (reuse existing topItems logic)
@@ -638,7 +641,7 @@ export default function GlobalSupplyControlTower() {
                     <h1 style={{ fontSize: 26, fontWeight: 700, margin: '0 0 4px 0', background: 'linear-gradient(90deg,#f8fafc,#94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                         Control Tower
                     </h1>
-                    <p style={{ color: '#94a3b8', fontSize: 13, margin: 0 }}>Single command center for forecast, dispatch, warehouse and intelligence. &nbsp;<span style={{ color: '#475569', fontSize: 12 }}>📅 Week of {weekLabel}</span></p>
+                    <p style={{ color: '#94a3b8', fontSize: 13, margin: 0 }}>Unified command center for demand, fulfillment, intelligence and exceptions. &nbsp;<span style={{ color: '#475569', fontSize: 12 }}>📅 Week of {weekLabel}</span></p>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     <select value={activeFilter} onChange={e => setActiveFilter(e.target.value)} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', outline: 'none', cursor: 'pointer', fontSize: 13 }}>
@@ -676,174 +679,214 @@ export default function GlobalSupplyControlTower() {
                 <>
                     {/* ═══════════════ OVERVIEW TAB ═══════════════ */}
                     {activeTab === 'overview' && (
-                        <>
-                            {/* KPI Cards */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
-                                {KPI_CARDS.map((kpi, i) => (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+                            {/* ═══ ROW 1 — PRIMARY KPI STRIP ═══ */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 18 }}>
+                                {[
+                                    { label: 'Restaurants Ordered', value: metrics.accuracyScore, icon: '🏪', color: '#10b981', tab: 'demand', filter: null },
+                                    { label: 'Monday Demand', value: `${metrics.totalMonday}`, icon: '📅', color: '#818cf8', tab: 'demand', filter: { day: 'Monday' }, sub: 'packs' },
+                                    { label: 'Thursday Demand', value: `${metrics.totalThursday}`, icon: '📅', color: '#a78bfa', tab: 'demand', filter: { day: 'Thursday' }, sub: 'packs' },
+                                    { label: 'Restaurant Billing', value: `$${metrics.billing.toFixed(0)}`, icon: '💰', color: '#ec4899', tab: 'demand', filter: { view: 'billing' } },
+                                    { label: 'Vendor Payout', value: `$${metrics.payout.toFixed(0)}`, icon: '💸', color: '#f59e0b', tab: 'fulfillment', filter: null },
+                                    { label: 'Commission', value: `$${metrics.commission.toFixed(0)}`, icon: '✨', color: '#34d399', tab: 'demand', filter: { view: 'commission' } },
+                                ].map((kpi, i) => (
                                     <div key={i} onClick={() => goTab(kpi.tab, kpi.filter)}
-                                        style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${kpi.color}22`, borderRadius: 12, padding: 20, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 14 }}
-                                        onMouseEnter={e => { e.currentTarget.style.border = `1px solid ${kpi.color}66`; e.currentTarget.style.background = `${kpi.color}08`; }}
-                                        onMouseOut={e => { e.currentTarget.style.border = `1px solid ${kpi.color}22`; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}>
-                                        <div style={{ background: `${kpi.color}18`, color: kpi.color, padding: '10px 11px', borderRadius: 10, fontSize: 19 }}>{kpi.icon}</div>
-                                        <div>
-                                            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{kpi.label}</div>
-                                            <div style={{ fontSize: 22, fontWeight: 700, color: '#f8fafc' }}>{kpi.value}</div>
-                                        </div>
+                                        style={{ background: `${kpi.color}06`, border: `1px solid ${kpi.color}18`, borderRadius: 10, padding: '14px 14px 12px', cursor: 'pointer', transition: 'all 0.2s' }}
+                                        onMouseEnter={e => { e.currentTarget.style.border = `1px solid ${kpi.color}55`; e.currentTarget.style.background = `${kpi.color}10`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.border = `1px solid ${kpi.color}18`; e.currentTarget.style.background = `${kpi.color}06`; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                                        <div style={{ fontSize: 13, marginBottom: 6 }}>{kpi.icon}</div>
+                                        <div style={{ fontSize: 24, fontWeight: 800, color: kpi.color, lineHeight: 1.1 }}>{kpi.value}</div>
+                                        {kpi.sub && <div style={{ fontSize: 10, color: '#64748b', fontWeight: 500, marginTop: 1 }}>{kpi.sub}</div>}
+                                        <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 }}>{kpi.label}</div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Demand + Financial Split */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-                                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 22 }}>
-                                    <h3 style={{ margin: '0 0 14px 0', fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>Weekly Demand Split</h3>
-                                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                        <div style={{ flex: metrics.totalMonday, background: 'linear-gradient(90deg,#3b82f6,#60a5fa)', height: 20, borderRadius: 5 }} />
-                                        <div style={{ flex: metrics.totalThursday, background: 'linear-gradient(90deg,#8b5cf6,#a78bfa)', height: 20, borderRadius: 5 }} />
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                        <span style={{ color: '#60a5fa', fontWeight: 600 }}>Mon: {metrics.totalMonday}</span>
-                                        <span style={{ color: '#a78bfa', fontWeight: 600 }}>Thu: {metrics.totalThursday}</span>
-                                    </div>
-                                </div>
-                                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 22 }}>
-                                    <h3 style={{ margin: '0 0 14px 0', fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>Financial Split (90/10)</h3>
-                                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                        <div style={{ flex: 90, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)', height: 20, borderRadius: 5 }} />
-                                        <div style={{ flex: 10, background: 'linear-gradient(90deg,#10b981,#34d399)', height: 20, borderRadius: 5 }} />
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                        <span style={{ color: '#fbbf24', fontWeight: 600 }}>Payout 90%: ${metrics.payout.toFixed(2)}</span>
-                                        <span style={{ color: '#34d399', fontWeight: 600 }}>Comm 10%: ${metrics.commission.toFixed(2)}</span>
-                                    </div>
-                                </div>
-                                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 22 }}>
-                                    <h3 style={{ margin: '0 0 14px 0', fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>Category Cost</h3>
-                                    {Object.entries(catCost).map(([k, v]) => (
-                                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-                                            <span style={{ color: '#94a3b8' }}>{k}</span>
-                                            <span style={{ fontWeight: 600 }}>${parseFloat(v).toFixed(2)}</span>
+                            {/* ═══ ROW 2 — ALERTS / EXCEPTIONS STRIP ═══ */}
+                            <AlertCardRow alerts={[
+                                { label: 'Items Missing Price', count: metrics.missingPrices, icon: '⚠️', color: '#f43f5e', onClick: () => window.location.href = '/catalog-reviews?tab=unmapped' },
+                                { label: 'Open Issues', count: orderPipeline.openIssues, icon: '🚨', color: '#ef4444', onClick: () => window.location.href = '/orders-fulfillment?tab=issues' },
+                                { label: 'Dispatch Alerts', count: dispatchAlerts.length, icon: '📋', color: '#f59e0b', onClick: () => goTab('exceptions') },
+                                { label: 'Pending Aggregation', count: orderPipeline.pendingAggregation, icon: '🔄', color: '#fbbf24', onClick: () => window.location.href = '/orders-fulfillment?tab=submitted' },
+                            ]} />
+
+                            {/* ═══ ROW 3A — ORDER PIPELINE (DOMINANT COMPONENT) ═══ */}
+                            <SectionContainer
+                                title="Order Pipeline"
+                                icon="🔄"
+                                subtitle="Live from Submitted Orders → Vendor Dispatch → Warehouse"
+                                cta={{ label: 'View Orders', onClick: () => window.location.href = '/orders-fulfillment' }}
+                                style={{ marginBottom: 18 }}
+                            >
+                                <PipelineFlow stages={[
+                                    { label: 'Submitted', value: orderPipeline.submitted, color: '#38bdf8', icon: '✅', tooltip: 'Final restaurant orders submitted this week', onClick: () => window.location.href = '/orders-fulfillment?tab=submitted' },
+                                    { label: 'Aggregating', value: orderPipeline.pendingAggregation, color: '#fbbf24', icon: '🔄', tooltip: 'Submitted orders not yet in combined demand', onClick: () => window.location.href = '/orders-fulfillment?tab=submitted' },
+                                    { label: 'Sent to Vendors', value: orderPipeline.sentToVendors, color: '#a78bfa', icon: '🚚', tooltip: 'Route-day dispatches sent to vendors', onClick: () => window.location.href = '/orders-fulfillment?tab=dispatch' },
+                                    { label: 'Confirmed', value: orderPipeline.vendorConfirmed, color: '#34d399', icon: '🎯', tooltip: 'Vendor confirmed dispatches', onClick: () => window.location.href = '/orders-fulfillment?tab=dispatch' },
+                                    { label: 'Warehouse', value: orderPipeline.warehouseReady, color: '#fb923c', icon: '🏭', tooltip: 'Confirmed dispatches generating pick rows', onClick: () => window.location.href = '/orders-fulfillment?tab=dispatch' },
+                                    { label: 'Issues', value: orderPipeline.openIssues, color: '#f43f5e', icon: '🚨', tooltip: 'Open disputes and issue reports', onClick: () => window.location.href = '/orders-fulfillment?tab=issues' },
+                                ]} />
+                            </SectionContainer>
+
+                            {/* ═══ ROW 3B — MAIN GRID (2/3 + 1/3) ═══ */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 18 }}>
+
+                                {/* ─── LEFT COLUMN (PRIMARY OPERATIONS) ─── */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                                    {/* SECTION B — DEMAND SNAPSHOT */}
+                                    <SectionContainer
+                                        title="Demand Snapshot"
+                                        icon="📊"
+                                        cta={{ label: 'View Demand', onClick: () => goTab('demand') }}
+                                        accent="#818cf8"
+                                    >
+                                        {/* Weekly demand split bar */}
+                                        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                                            <div style={{ flex: metrics.totalMonday || 1, background: 'linear-gradient(90deg,#3b82f6,#60a5fa)', height: 18, borderRadius: 5 }} />
+                                            <div style={{ flex: metrics.totalThursday || 1, background: 'linear-gradient(90deg,#8b5cf6,#a78bfa)', height: 18, borderRadius: 5 }} />
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 14 }}>
+                                            <span style={{ color: '#60a5fa', fontWeight: 600 }}>Mon: {metrics.totalMonday} packs</span>
+                                            <span style={{ color: '#a78bfa', fontWeight: 600 }}>Thu: {metrics.totalThursday} packs</span>
+                                        </div>
 
-                            {/* Top Items */}
-                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: 22, marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px 0', color: '#e2e8f0' }}>Top 10 High-Spend Items <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>(click to filter in Ordered Items tab)</span></h3>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8' }}>
-                                            {['Item', 'Category', 'Vendor', 'Demand', 'Billed', 'Commission'].map(h => <th key={h} style={{ padding: '10px 0', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 }}>{h}</th>)}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {topItems.slice(0, 10).map((item, idx) => (
-                                            <tr key={idx} onClick={() => goTab('forecast', { item: item.name })}
-                                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', transition: 'background 0.15s' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.05)'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                <td style={{ padding: '11px 0', fontWeight: 600, color: '#38bdf8' }}>{item.name}</td>
-                                                <td style={{ color: '#94a3b8' }}>{item.category}</td>
-                                                <td style={{ color: '#a78bfa' }}>{item.vendor}</td>
-                                                <td style={{ fontWeight: 700 }}>{item.demand}</td>
-                                                <td style={{ color: '#ec4899' }}>${item.bill.toFixed(2)}</td>
-                                                <td style={{ color: '#10b981' }}>${item.comm.toFixed(2)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Order Pipeline Section */}
-                            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 22, marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 16px 0', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    🔄 Order Pipeline
-                                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>Live from Submitted Orders → Vendor Dispatch → Warehouse</span>
-                                </h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12 }}>
-                                    {[
-                                        {
-                                            label: 'Submitted Orders', value: orderPipeline.submitted,
-                                            color: '#38bdf8', icon: '✅',
-                                            tooltip: 'Final restaurant orders submitted this week',
-                                            onClick: () => window.location.href = '/admin/forecast/submitted-orders'
-                                        },
-                                        {
-                                            label: 'Pending Aggregation', value: orderPipeline.pendingAggregation,
-                                            color: '#fbbf24', icon: '🔄',
-                                            tooltip: 'Submitted orders not yet rolled into combined demand',
-                                            onClick: () => window.location.href = '/admin/forecast/submitted-orders'
-                                        },
-                                        {
-                                            label: 'Sent to Vendors', value: orderPipeline.sentToVendors,
-                                            color: '#a78bfa', icon: '🚚',
-                                            tooltip: 'Route-day dispatches already sent to vendors',
-                                            onClick: () => window.location.href = '/admin/dispatch/confirmations'
-                                        },
-                                        {
-                                            label: 'Vendor Confirmed', value: orderPipeline.vendorConfirmed,
-                                            color: '#34d399', icon: '🎯',
-                                            tooltip: 'Route-day dispatches confirmed or partially confirmed by vendors',
-                                            onClick: () => window.location.href = '/admin/dispatch/confirmations'
-                                        },
-                                        {
-                                            label: 'Warehouse Ready', value: orderPipeline.warehouseReady,
-                                            color: '#fb923c', icon: '🏭',
-                                            tooltip: 'Confirmed route-day dispatches generating pick rows',
-                                            onClick: () => window.location.href = '/admin/dispatch/warehouse'
-                                        },
-                                        {
-                                            label: 'Open Issues', value: orderPipeline.openIssues,
-                                            color: '#f43f5e', icon: '🚨',
-                                            tooltip: 'Open disputes and issue reports',
-                                            onClick: () => window.location.href = '/admin/dispatch/issues'
-                                        },
-                                    ].map((stage, i, arr) => (
-                                        <React.Fragment key={stage.label}>
-                                            <div
-                                                onClick={stage.onClick}
-                                                title={stage.tooltip}
-                                                style={{ background: stage.color + '0e', border: `1px solid ${stage.color}2a`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
-                                                onMouseEnter={e => { e.currentTarget.style.border = `1px solid ${stage.color}66`; e.currentTarget.style.background = `${stage.color}18`; }}
-                                                onMouseOut={e => { e.currentTarget.style.border = `1px solid ${stage.color}2a`; e.currentTarget.style.background = stage.color + '0e'; }}>
-                                                <div style={{ fontSize: 20, marginBottom: 6 }}>{stage.icon}</div>
-                                                <div style={{ fontSize: 26, fontWeight: 700, color: stage.color, marginBottom: 4 }}>{stage.value}</div>
-                                                <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, lineHeight: 1.3 }}>{stage.label}</div>
-                                                {i < arr.length - 1 && <div style={{ position: 'absolute', top: '50%', right: -14, transform: 'translateY(-50%)', color: '#334155', fontSize: 14, fontWeight: 700 }}>→</div>}
+                                        {/* 2-col: Category Cost + Financial split */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                                            <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                                <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 8 }}>Category Cost</div>
+                                                {Object.entries(catCost).map(([k, v]) => (
+                                                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                                                        <span style={{ color: '#94a3b8' }}>{k}</span>
+                                                        <span style={{ fontWeight: 600, color: '#e2e8f0' }}>${parseFloat(v).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        </React.Fragment>
-                                    ))}
+                                            <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                                <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 8 }}>Financial Split</div>
+                                                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                                                    <div style={{ flex: 90, background: 'linear-gradient(90deg,#f59e0b,#fbbf24)', height: 14, borderRadius: 4 }} />
+                                                    <div style={{ flex: 10, background: 'linear-gradient(90deg,#10b981,#34d399)', height: 14, borderRadius: 4 }} />
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                                    <span style={{ color: '#fbbf24', fontWeight: 600 }}>90%: ${metrics.payout.toFixed(2)}</span>
+                                                    <span style={{ color: '#34d399', fontWeight: 600 }}>10%: ${metrics.commission.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Top 5 high-spend items (compact) */}
+                                        <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 6 }}>Top High-Spend Items</div>
+                                        {topItems.length > 0 ? (
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                                <thead>
+                                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                                        {['Item', 'Vendor', 'Qty', 'Billed'].map(h => <th key={h} style={{ padding: '6px 0', fontWeight: 600, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.3, color: '#64748b', textAlign: 'left' }}>{h}</th>)}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {topItems.slice(0, 5).map((item, idx) => (
+                                                        <tr key={idx} onClick={() => goTab('demand', { item: item.name })}
+                                                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'background 0.15s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(56,189,248,0.04)'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                            <td style={{ padding: '6px 0', fontWeight: 600, color: '#38bdf8' }}>{item.name}</td>
+                                                            <td style={{ color: '#94a3b8', fontSize: 11 }}>{item.vendor}</td>
+                                                            <td style={{ fontWeight: 700, color: '#e2e8f0' }}>{item.demand}</td>
+                                                            <td style={{ color: '#ec4899', fontWeight: 600 }}>${item.bill.toFixed(2)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        ) : (
+                                            <div style={{ padding: '14px 0', textAlign: 'center', color: '#475569', fontSize: 12 }}>No orders submitted this week yet</div>
+                                        )}
+                                    </SectionContainer>
+
+                                    {/* SECTION C — FULFILLMENT SNAPSHOT */}
+                                    <SectionContainer
+                                        title="Fulfillment Snapshot"
+                                        icon="🚚"
+                                        cta={{ label: 'View Fulfillment', onClick: () => goTab('fulfillment') }}
+                                        accent="#fb923c"
+                                    >
+                                        {dispatchAlerts.length > 0 ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                {dispatchAlerts.slice(0, 3).map(a => (
+                                                    <div key={a.id} style={{ background: a.status === 'Rejected' ? 'rgba(244,63,94,0.08)' : 'rgba(245,158,11,0.08)', padding: '8px 12px', borderRadius: 6, borderLeft: a.status === 'Rejected' ? '3px solid #f43f5e' : '3px solid #f59e0b', fontSize: 12 }}>
+                                                        <strong style={{ color: a.status === 'Rejected' ? '#f43f5e' : '#f59e0b' }}>{a.vendorName}</strong> — {a.status}. {a.rejectionReason || a.partialReason || ''}
+                                                    </div>
+                                                ))}
+                                                {dispatchAlerts.length > 3 && <div style={{ fontSize: 11, color: '#64748b', paddingLeft: 12 }}>+{dispatchAlerts.length - 3} more alerts</div>}
+                                            </div>
+                                        ) : (
+                                            <div style={{ padding: '14px 0', textAlign: 'center', fontSize: 12, color: '#34d399' }}>✅ All dispatches on track — no alerts</div>
+                                        )}
+                                    </SectionContainer>
+
                                 </div>
+
+                                {/* ─── RIGHT COLUMN (INTELLIGENCE + INSIGHTS) ─── */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                                    {/* SECTION D+E+F — Price Intelligence (self-contained) */}
+                                    <PriceIntelligenceSection />
+
+                                    {/* SECTION G — SYSTEM HEALTH / AI SUMMARY */}
+                                    <SectionContainer
+                                        title="System Health"
+                                        icon="🛡️"
+                                        compact
+                                        accent="#38bdf8"
+                                    >
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            <div style={{ background: 'rgba(56,189,248,0.06)', padding: '7px 10px', borderRadius: 6, borderLeft: '3px solid #38bdf8', fontSize: 11, color: '#94a3b8' }}>
+                                                <strong style={{ color: '#38bdf8' }}>Orders:</strong> {metrics.accuracyScore} submitted this week
+                                            </div>
+                                            <div style={{ background: 'rgba(16,185,129,0.06)', padding: '7px 10px', borderRadius: 6, borderLeft: '3px solid #10b981', fontSize: 11, color: '#94a3b8' }}>
+                                                <strong style={{ color: '#10b981' }}>Correction Engine:</strong> 8 active learning profiles
+                                            </div>
+                                            {metrics.missingPrices > 0 && (
+                                                <div style={{ background: 'rgba(244,63,94,0.06)', padding: '7px 10px', borderRadius: 6, borderLeft: '3px solid #f43f5e', fontSize: 11, color: '#94a3b8' }}>
+                                                    <strong style={{ color: '#f43f5e' }}>Missing Pricing:</strong> {metrics.missingPrices} items
+                                                </div>
+                                            )}
+                                        </div>
+                                    </SectionContainer>
+
+                                </div>
+
                             </div>
 
-                            {/* Risk Alerts */}
-                            <div style={{ background: 'rgba(244,63,94,0.05)', border: '1px solid rgba(244,63,94,0.15)', borderRadius: 12, padding: 22 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px 0', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}><FiAlertCircle color="#f43f5e" size={16} /> Risk Alerts</h3>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    {dispatchAlerts.map(a => (
-                                        <div key={a.id} style={{ background: a.status === 'Rejected' ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.1)', padding: '10px 14px', borderRadius: 8, borderLeft: a.status === 'Rejected' ? '3px solid #f43f5e' : '3px solid #f59e0b', fontSize: 13 }}>
-                                            <strong style={{ color: a.status === 'Rejected' ? '#f43f5e' : '#f59e0b' }}>Dispatch Alert:</strong> {a.vendorName} — <strong>{a.status}</strong>. {a.rejectionReason || a.partialReason || ''}
-                                        </div>
-                                    ))}
-                                    {metrics.missingPrices > 0 && (
-                                        <div style={{ background: 'rgba(244,63,94,0.1)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #f43f5e', fontSize: 13 }}>
-                                            <strong>Missing Pricing:</strong> {metrics.missingPrices} items missing catalog price.
-                                        </div>
-                                    )}
-                                    <div style={{ background: 'rgba(56,189,248,0.08)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #38bdf8', fontSize: 13 }}>
-                                        <strong>Orders:</strong> {metrics.accuracyScore} submitted orders this week.
-                                    </div>
-                                    <div style={{ background: 'rgba(16,185,129,0.08)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #10b981', fontSize: 13 }}>
-                                        <strong>Correction Engine:</strong> 8 active learning profiles tracked.
-                                    </div>
-                                </div>
-                            </div>
-                        </>
+                            {/* ═══ ROW 4 — QUICK ACTIONS BAR ═══ */}
+                            <CTAButtonGroup buttons={[
+                                { label: 'Orders & Fulfillment', icon: '⚙️', to: '/orders-fulfillment', color: '#38bdf8' },
+                                { label: 'Catalog & Reviews', icon: '📦', to: '/catalog-reviews?tab=review-queue', color: '#a78bfa' },
+                                { label: 'Intelligence', icon: '🧠', to: '/intelligence', color: '#34d399' },
+                                { label: 'Finance', icon: '💰', to: '/finance', color: '#fbbf24' },
+                            ]} />
+
+                        </div>
                     )}
 
-                    {/* ═══════════════ FORECAST TAB ═══════════════ */}
-                    {activeTab === 'forecast' && (
+                    {/* ═══════════════ DEMAND TAB (absorbs Ordered Items + Forecast + Combined) ═══════════════ */}
+                    {activeTab === 'demand' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                            {/* Sub-section selector */}
+                            <div style={{ display: 'flex', gap: 8, background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: 10, width: 'fit-content' }}>
+                                {[{ key: 'ordered', label: 'Ordered Items' }, { key: 'forecast', label: 'Forecast' }, { key: 'combined', label: 'Combined Demand' }].map(s => (
+                                    <button key={s.key} onClick={() => setTabFilter(f => ({ ...f, demandView: s.key }))}
+                                        style={{ padding: '7px 16px', fontSize: 12, fontWeight: 600, borderRadius: 7, cursor: 'pointer', border: 'none', transition: 'all 0.2s',
+                                            background: (tabFilter?.demandView || 'ordered') === s.key ? 'rgba(56,189,248,0.15)' : 'transparent',
+                                            color: (tabFilter?.demandView || 'ordered') === s.key ? '#38bdf8' : '#94a3b8' }}>
+                                        {s.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* ── Ordered Items sub-view ── */}
+                            {(!tabFilter?.demandView || tabFilter.demandView === 'ordered') && (
                         <>
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
                                 <input
@@ -897,8 +940,8 @@ export default function GlobalSupplyControlTower() {
                         </>
                     )}
 
-                    {/* ═══════════════ RESTAURANT FORECAST TAB ═══════════════ */}
-                    {activeTab === 'restforecast' && (
+                            {/* ── Forecast sub-view ── */}
+                            {tabFilter?.demandView === 'forecast' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                             {/* Restaurant Selector */}
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -980,15 +1023,17 @@ export default function GlobalSupplyControlTower() {
                         </div>
                     )}
 
-                    {/* ═══════════════ COMBINED DEMAND TAB ═══════════════ */}
-                    {activeTab === 'combined' && (
+                            {/* ── Combined Demand sub-view ── */}
+                            {tabFilter?.demandView === 'combined' && (
                         <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, background: '#0f172a', overflow: 'hidden' }}>
                             <CombinedDemandPage hideHeader={true} />
                         </div>
                     )}
+                        </div>
+                    )}{/* End of Demand tab */}
 
-                    {/* ═══════════════ VENDOR DISPATCH TAB ═══════════════ */}
-                    {activeTab === 'dispatch' && (
+                    {/* ═══════════════ FULFILLMENT TAB (absorbs Dispatch + Warehouse) ═══════════════ */}
+                    {activeTab === 'fulfillment' && (
                         <>
                             {tabFilter?.vendor && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -1000,7 +1045,7 @@ export default function GlobalSupplyControlTower() {
                                 {filteredVendors.map(v => {
                                     const sc = DISPATCH_STATUS_CFG[v.dispatchStatus] || DISPATCH_STATUS_CFG.Ready;
                                     return (
-                                        <div key={v.name} onClick={() => goTab('dispatch', { vendor: v.name })}
+                                        <div key={v.name} onClick={() => goTab('fulfillment', { vendor: v.name })}
                                             style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${v.isPkg ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.07)'}`, borderRadius: 12, padding: 18, cursor: 'pointer', transition: 'all 0.2s', position: 'relative' }}
                                             onMouseEnter={e => e.currentTarget.style.border = '1px solid rgba(56,189,248,0.3)'}
                                             onMouseLeave={e => e.currentTarget.style.border = `1px solid ${v.isPkg ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.07)'}`}>
@@ -1034,11 +1079,8 @@ export default function GlobalSupplyControlTower() {
                                     );
                                 })}
                             </div>
-                        </>
-                    )}
 
-                    {/* ═══════════════ WAREHOUSE TAB ═══════════════ */}
-                    {activeTab === 'warehouse' && (
+                            {/* ── Warehouse Readiness (merged into Fulfillment) ── */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                 <div style={{ background: 'rgba(0,0,0,0.3)', padding: 24, borderRadius: 12, border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -1060,7 +1102,7 @@ export default function GlobalSupplyControlTower() {
                                         </div>
                                     ))}
                                 </div>
-                                <div style={{ marginTop: 20, fontSize: 13, color: '#64748b' }}>💡 For detailed line-item pick operations, use the <strong style={{ color: '#38bdf8' }}>Warehouse Pick List</strong> page in Dispatch &amp; Logistics.</div>
+                                <div style={{ marginTop: 20, fontSize: 13, color: '#64748b' }}>💡 For detailed line-item pick operations, use the <span style={{ color: '#38bdf8', cursor: 'pointer', fontWeight: 600 }} onClick={() => window.location.href = '/admin/dispatch/warehouse'}>Warehouse Pick List</span> page.</div>
                             </div>
 
                             {/* ── AI DISPATCH OPTIMIZATION PANEL ────── */}
@@ -1097,7 +1139,8 @@ export default function GlobalSupplyControlTower() {
                                 </div>
                             )}
                         </div>
-                    )}
+                        </>
+                    )}{/* End of Fulfillment tab */}
 
                     {/* ═══════════════ INTELLIGENCE TAB ═══════════════ */}
                     {activeTab === 'intelligence' && (
@@ -1246,7 +1289,7 @@ export default function GlobalSupplyControlTower() {
                                         </tbody>
                                     </table>
                                     {aiData.price.priceIntelligence.length > 8 && (
-                                        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#64748b' }}>+ {aiData.price.priceIntelligence.length - 8} more items — visit AI Intelligence Hub for full analysis</div>
+                                        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: '#64748b', cursor: 'pointer' }} onClick={() => window.location.href = '/intelligence?tab=price-intelligence'}>+ {aiData.price.priceIntelligence.length - 8} more items — <span style={{ color: '#38bdf8' }}>open full Price Intelligence →</span></div>
                                     )}
                                 </div>
                             )}
@@ -1287,8 +1330,86 @@ export default function GlobalSupplyControlTower() {
                                     <FiRefreshCw className="spin" size={12} /> Loading AI intelligence panels...
                                 </div>
                             )}
+
+                            {/* CTA — View full Intelligence */}
+                            <div onClick={() => window.location.href = '/intelligence'}
+                                style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 10, padding: '14px 20px', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(52,211,153,0.12)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'rgba(52,211,153,0.06)'}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#34d399' }}>🧠 Open full Intelligence workspace →</span>
+                            </div>
                         </div>
                     )}
+
+                    {/* ═══════════════ EXCEPTIONS TAB ═══════════════ */}
+                    {activeTab === 'exceptions' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            {/* Exception KPI Cards */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+                                {[
+                                    { label: 'Open Issues', value: orderPipeline.openIssues, color: '#f43f5e', icon: '🚨', onClick: () => window.location.href = '/orders-fulfillment?tab=issues' },
+                                    { label: 'Items Missing Price', value: metrics.missingPrices, color: metrics.missingPrices > 0 ? '#f43f5e' : '#10b981', icon: '⚠️', onClick: () => goTab('demand', { view: 'missingPrice' }) },
+                                    { label: 'Dispatch Alerts', value: dispatchAlerts.length, color: dispatchAlerts.length > 0 ? '#f59e0b' : '#10b981', icon: '📋', onClick: null },
+                                    { label: 'Pending Aggregation', value: orderPipeline.pendingAggregation, color: orderPipeline.pendingAggregation > 0 ? '#fbbf24' : '#10b981', icon: '🔄', onClick: () => window.location.href = '/orders-fulfillment?tab=submitted' },
+                                ].map(k => (
+                                    <div key={k.label} onClick={k.onClick}
+                                        style={{ background: k.color + '0a', border: `1px solid ${k.color}22`, borderRadius: 12, padding: 20, cursor: k.onClick ? 'pointer' : 'default', transition: 'all 0.2s' }}
+                                        onMouseEnter={e => { if (k.onClick) { e.currentTarget.style.border = `1px solid ${k.color}55`; e.currentTarget.style.background = k.color + '14'; } }}
+                                        onMouseLeave={e => { e.currentTarget.style.border = `1px solid ${k.color}22`; e.currentTarget.style.background = k.color + '0a'; }}>
+                                        <div style={{ fontSize: 20, marginBottom: 6 }}>{k.icon}</div>
+                                        <div style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.value}</div>
+                                        <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }}>{k.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Dispatch Alerts Detail */}
+                            <div style={{ background: 'rgba(244,63,94,0.04)', border: '1px solid rgba(244,63,94,0.12)', borderRadius: 12, padding: 22 }}>
+                                <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px 0', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}><FiAlertCircle color="#f43f5e" size={16} /> Active Alerts & Risks</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {dispatchAlerts.length > 0 ? dispatchAlerts.map(a => (
+                                        <div key={a.id} style={{ background: a.status === 'Rejected' ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.1)', padding: '10px 14px', borderRadius: 8, borderLeft: a.status === 'Rejected' ? '3px solid #f43f5e' : '3px solid #f59e0b', fontSize: 13 }}>
+                                            <strong style={{ color: a.status === 'Rejected' ? '#f43f5e' : '#f59e0b' }}>Dispatch Alert:</strong> {a.vendorName} — <strong>{a.status}</strong>. {a.rejectionReason || a.partialReason || ''}
+                                        </div>
+                                    )) : null}
+                                    {metrics.missingPrices > 0 && (
+                                        <div style={{ background: 'rgba(244,63,94,0.1)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #f43f5e', fontSize: 13 }}>
+                                            <strong>Missing Pricing:</strong> {metrics.missingPrices} items missing catalog price. <span style={{ color: '#38bdf8', cursor: 'pointer', fontWeight: 600 }} onClick={() => window.location.href = '/catalog-reviews?tab=catalog'}>Open Catalog →</span>
+                                        </div>
+                                    )}
+                                    {orderPipeline.openIssues > 0 && (
+                                        <div style={{ background: 'rgba(244,63,94,0.08)', padding: '10px 14px', borderRadius: 8, borderLeft: '3px solid #f43f5e', fontSize: 13 }}>
+                                            <strong>Open Issues:</strong> {orderPipeline.openIssues} disputes need resolution. <span style={{ color: '#38bdf8', cursor: 'pointer', fontWeight: 600 }} onClick={() => window.location.href = '/orders-fulfillment?tab=issues'}>View Issues →</span>
+                                        </div>
+                                    )}
+                                    {dispatchAlerts.length === 0 && metrics.missingPrices === 0 && orderPipeline.openIssues === 0 && (
+                                        <div style={{ padding: 30, textAlign: 'center' }}>
+                                            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                                            <div style={{ fontSize: 15, fontWeight: 700, color: '#34d399', marginBottom: 6 }}>All Clear</div>
+                                            <div style={{ fontSize: 13, color: '#64748b' }}>No active exceptions, missing prices, or open issues this week.</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Quick Links */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                                {[
+                                    { label: 'Open Review Queue', icon: '📦', to: '/catalog-reviews?tab=review-queue', color: '#a78bfa' },
+                                    { label: 'View Unmapped Items', icon: '🔗', to: '/catalog-reviews?tab=unmapped', color: '#f59e0b' },
+                                    { label: 'Open Issues & Disputes', icon: '🚨', to: '/orders-fulfillment?tab=issues', color: '#f43f5e' },
+                                ].map(cta => (
+                                    <div key={cta.label} onClick={() => window.location.href = cta.to}
+                                        style={{ background: cta.color + '08', border: `1px solid ${cta.color}22`, borderRadius: 10, padding: '14px 18px', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: 10 }}
+                                        onMouseEnter={e => { e.currentTarget.style.border = `1px solid ${cta.color}55`; e.currentTarget.style.background = cta.color + '14'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.border = `1px solid ${cta.color}22`; e.currentTarget.style.background = cta.color + '08'; }}>
+                                        <span style={{ fontSize: 18 }}>{cta.icon}</span>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: cta.color }}>{cta.label} →</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}{/* End of Exceptions tab */}
                 </>
             )}
         </div>

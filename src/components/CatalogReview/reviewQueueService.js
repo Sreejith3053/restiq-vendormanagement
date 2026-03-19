@@ -125,7 +125,7 @@ export async function getPendingCatalogReviewItems(filters = {}) {
 
 /**
  * getReviewQueueSummary()
- * Returns counts for the summary cards.
+ * Returns counts for the summary cards, including unmapped vendor items.
  */
 export async function getReviewQueueSummary() {
     const today = todayStart();
@@ -139,6 +139,25 @@ export async function getReviewQueueSummary() {
     ]);
 
     const pending = pendingSnap.docs.map(d => d.data());
+
+    // Count unmapped vendor items (lightweight — just count, no full data)
+    let unmappedCount = 0;
+    try {
+        const vendorsSnap = await getDocs(collection(db, 'vendors'));
+        for (const vDoc of vendorsSnap.docs) {
+            const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+            itemSnap.docs.forEach(d => {
+                const item = d.data();
+                const st = (item.status || item.normalizedStatus || '').toLowerCase();
+                if (st === 'merged' || st === 'deleted') return;
+                const ms = (item.mappingStatus || '').toLowerCase();
+                if (!item.catalogItemId || ms === 'unmapped' || ms === 'pending_review') unmappedCount++;
+            });
+        }
+    } catch (e) {
+        console.warn('[getReviewQueueSummary] unmapped count error:', e);
+    }
+
     const counts = {
         totalPending:         pending.length,
         pendingNewItems:      pending.filter(d => d.reviewType === 'new_item').length,
@@ -148,6 +167,7 @@ export async function getReviewQueueSummary() {
         held:                 heldSnap.size,
         approvedToday:        approvedTodaySnap.size,
         rejectedToday:        rejectedTodaySnap.size,
+        unmappedVendorItems:  unmappedCount,
     };
 
     return counts;
@@ -235,6 +255,7 @@ export async function approveAndCreateCatalogItem(reviewId, itemData, reviewerIn
         itemName:          itemData.itemName || proposedData.itemName || '',
         itemNameNormalized: normalizeText(itemData.itemName || proposedData.itemName || ''),
         canonicalName:     itemData.canonicalName || itemData.itemName || proposedData.itemName || '',
+        canonicalNameNormalized: normalizeText(itemData.canonicalName || itemData.itemName || proposedData.itemName || ''), // v2
         category:          itemData.category || proposedData.category || '',
         subcategory:       itemData.subcategory || '',
         brand:             itemData.brand || proposedData.brand || '',
@@ -545,6 +566,7 @@ export async function createCatalogItem(data, reviewerInfo = {}) {
         itemName:           data.itemName || '',
         itemNameNormalized: normalizeText(data.itemName || ''),
         canonicalName:      data.canonicalName || data.itemName || '',
+        canonicalNameNormalized: normalizeText(data.canonicalName || data.itemName || ''), // v2
         category:           data.category || '',
         subcategory:        data.subcategory || '',
         brand:              data.brand || '',
@@ -605,37 +627,7 @@ export async function writeVendorItemHistory(vendorId, itemId, entry) {
     });
 }
 
-/**
- * getUnmappedVendorItems(vendorId?)
- * Returns vendor items with mappingStatus == 'unmapped' or missing catalogItemId.
- * If vendorId provided, scoped to that vendor. Otherwise uses collectionGroup.
- */
-export async function getUnmappedVendorItems(vendorId = null, pageSize = 200) {
-    if (vendorId) {
-        const snap = await getDocs(
-            query(
-                collection(db, 'vendors', vendorId, 'items'),
-                where('mappingStatus', 'in', ['unmapped', 'pending_review']),
-                limit(pageSize)
-            )
-        );
-        return snap.docs.map(d => ({ id: d.id, vendorId, ...d.data() }));
-    }
 
-    // Cross-vendor query via collectionGroup
-    const snap = await getDocs(
-        query(
-            collectionGroup(db, 'items'),
-            where('mappingStatus', 'in', ['unmapped', 'pending_review']),
-            limit(pageSize)
-        )
-    );
-    return snap.docs.map(d => ({
-        id: d.id,
-        vendorId: d.ref.parent.parent.id,
-        ...d.data(),
-    }));
-}
 
 // ── 9. Catalog merge ─────────────────────────────────────────────────────────
 
@@ -769,6 +761,231 @@ export async function revertCatalogMapping(reviewId, reason = '', reviewerInfo =
         notes: reason || 'Accidentally mapped — reverted to pending',
         oldStatus: review.status || 'approved',
         newStatus: 'pending',
+    });
+
+    return { success: true };
+}
+
+
+
+// ── 10. Vendor Details → Review Queue integration ───────────────────────────
+
+/**
+ * getOpenReviewRecordForItem(vendorItemId)
+ * Returns first open (pending|held) queue record for the given vendorItemId, or null.
+ * Used to show "In Review" badge and deduplicate Send-to-Review calls.
+ */
+export async function getOpenReviewRecordForItem(vendorItemId) {
+    if (!vendorItemId) return null;
+    const snap = await getDocs(
+        query(
+            collection(db, 'catalogReviewQueue'),
+            where('vendorItemId', '==', vendorItemId),
+            where('status', 'in', ['pending', 'held']),
+            limit(1),
+        )
+    );
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+}
+
+/**
+ * sendVendorItemToReviewQueue(params)
+ *
+ * Dedup-safe Send to Review from Vendor Details page.
+ * Creates a new catalogReviewQueue record or updates an existing open one.
+ * Transitions vendor item status from active => review_flagged.
+ *
+ * @param params.vendorId, vendorName, vendorItemId
+ * @param params.item         enriched item from VendorDetailPage (_packSize, _baseUnit, etc.)
+ * @param params.issueFlags   string[] e.g. ['suspect_entry', 'possible_alias']
+ * @param params.primaryReason string e.g. 'suspect_entry'
+ * @param params.reviewedBy   { userId, displayName }
+ * @returns { reviewId: string, isUpdate: boolean }
+ */
+export async function sendVendorItemToReviewQueue(params) {
+    const {
+        vendorId     = '',
+        vendorName   = '',
+        vendorItemId = '',
+        item         = {},
+        issueFlags   = [],
+        primaryReason = 'data_quality',
+        reviewedBy   = {},
+    } = params;
+
+    const actor      = reviewedBy.displayName || reviewedBy.userId || 'system';
+    const reviewType =
+        issueFlags.includes('possible_alias') ? 'possible_duplicate' :
+        issueFlags.includes('unmapped_item')  ? 'mapping_review'     :
+        'data_quality';
+
+    const proposedData = {
+        itemName:            item.itemName || item.name || '',
+        category:            item.category || '',
+        unit:                item.unit || item.baseUnit || '',
+        itemSize:            item.itemSize || '',
+        packQuantity:        item.packQuantity ?? null,
+        parsedPackSize:      item._packSize ?? null,
+        parsedBaseUnit:      item._baseUnit ?? null,
+        price:               item.vendorPrice ?? item.price ?? 0,
+        normalizedUnitPrice: item._pricePerBaseUnit ?? null,
+        currentStatus:       item.status || item.normalizedStatus || '',
+        normalizedPossible:  item._normalizedPossible || false,
+        catalogItemId:       item.catalogItemId || null,
+    };
+
+    const riskFlags = [...new Set(issueFlags)];
+
+    // ── Deduplication: update if an open record already exists ──
+    const existing = await getOpenReviewRecordForItem(vendorItemId);
+    if (existing) {
+        const merged = [...new Set([...(existing.riskFlags || []), ...riskFlags])];
+        await updateDoc(doc(db, 'catalogReviewQueue', existing.id), {
+            riskFlags: merged, reviewReason: primaryReason, proposedData,
+            updatedAt: serverTimestamp(), updatedBy: actor, source: 'vendor_details',
+        });
+        await writeCatalogReviewHistory(existing.id, {
+            action: 'review_flags_updated', actionBy: actor,
+            notes: 'Re-sent from Vendor Details. Flags: ' + riskFlags.join(', '),
+            oldStatus: existing.status, newStatus: existing.status,
+        });
+        return { reviewId: existing.id, isUpdate: true };
+    }
+
+    // ── Create new queue record ──
+    const ref = await addDoc(collection(db, 'catalogReviewQueue'), {
+        reviewType, status: 'pending', source: 'vendor_details',
+        vendorId, vendorName, vendorItemId,
+        importBatchId: '', importRowId: '',
+        proposedData, existingVendorItemData: proposedData,
+        suggestedCatalogMatches: [], suggestedVendorMatches: [],
+        matchConfidence: null, riskFlags, reviewReason: primaryReason,
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        createdBy: actor, updatedBy: actor,
+        reviewedAt: null, reviewedBy: null,
+        resolutionAction: null, resolutionNotes: null,
+    });
+
+    await writeCatalogReviewHistory(ref.id, {
+        action: 'created_from_vendor_details', actionBy: actor,
+        notes: 'Sent to review queue. Flags: ' + riskFlags.join(', '),
+        oldStatus: null, newStatus: 'pending',
+    });
+
+    // ── Transition vendor item to review_flagged if currently active ──
+    const s1 = (item.normalizedStatus || '').toLowerCase();
+    const s2 = (item.status || '').toLowerCase();
+    if (s1 === 'active' || s2 === 'active') {
+        await updateDoc(doc(db, 'vendors', vendorId, 'items', vendorItemId), {
+            status: 'review_flagged', normalizedStatus: 'review_flagged',
+            reviewQueueId: ref.id, flaggedAt: serverTimestamp(), flaggedBy: actor,
+        });
+    }
+
+    return { reviewId: ref.id, isUpdate: false };
+}
+
+// ── 11. Unmapped Vendor Items ──────────────────────────────────────────────────
+
+/**
+ * getUnmappedVendorItems(filters)
+ * Scans vendors/{vendorId}/items for items without catalogItemId
+ * or with mappingStatus = unmapped/pending_review.
+ *
+ * Returns array of { vendorId, vendorName, itemId, itemName, price, unit, category, status, packSize, mappingStatus }
+ */
+export async function getUnmappedVendorItems(filters = {}) {
+    const { vendorId: filterVendorId, category: filterCategory } = filters;
+
+    const vendorsSnap = await getDocs(collection(db, 'vendors'));
+    const vendors = vendorsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const results = [];
+
+    for (const v of vendors) {
+        if (filterVendorId && v.id !== filterVendorId) continue;
+
+        try {
+            const itemSnap = await getDocs(collection(db, `vendors/${v.id}/items`));
+            itemSnap.docs.forEach(d => {
+                const item = d.data();
+                const mappingStatus = (item.mappingStatus || '').toLowerCase();
+                const hasCatalogId = !!item.catalogItemId;
+                const itemStatus = (item.status || item.normalizedStatus || '').toLowerCase();
+
+                // Skip merged/deleted items
+                if (itemStatus === 'merged' || itemStatus === 'deleted') return;
+
+                // Only include unmapped items
+                const isUnmapped = !hasCatalogId || mappingStatus === 'unmapped' || mappingStatus === 'pending_review';
+                if (!isUnmapped) return;
+
+                // Category filter
+                const itemCategory = (item.category || '').toLowerCase();
+                if (filterCategory && itemCategory !== filterCategory.toLowerCase()) return;
+
+                results.push({
+                    vendorId: v.id,
+                    vendorName: v.name || v.businessName || 'Unknown Vendor',
+                    itemId: d.id,
+                    itemName: item.itemName || item.name || '(unnamed)',
+                    price: parseFloat(item.vendorPrice) || parseFloat(item.price) || 0,
+                    unit: item.unit || item.baseUnit || '',
+                    category: item.category || '',
+                    status: item.status || item.normalizedStatus || '',
+                    packSize: item.packSize || item.itemSize || '',
+                    mappingStatus: item.mappingStatus || (hasCatalogId ? 'mapped' : 'unmapped'),
+                    catalogItemId: item.catalogItemId || null,
+                });
+            });
+        } catch (e) {
+            console.warn(`[getUnmappedVendorItems] Error reading vendor ${v.id}:`, e);
+        }
+    }
+
+    return results;
+}
+
+/**
+ * getVendorList()
+ * Returns all vendors for filter dropdowns: { id, name, category }
+ */
+export async function getVendorList() {
+    const snap = await getDocs(collection(db, 'vendors'));
+    return snap.docs.map(d => {
+        const data = d.data();
+        return {
+            id: d.id,
+            name: data.name || data.businessName || 'Unknown',
+            category: data.category || '',
+        };
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+
+/**
+ * mapUnmappedVendorItem(vendorId, itemId, catalogItemId, reviewerInfo)
+ * Directly maps an unmapped vendor item to a catalog item from the Unmapped Items tab.
+ */
+export async function mapUnmappedVendorItem(vendorId, itemId, catalogItemId, reviewerInfo = {}) {
+    const { userId = '', displayName = '' } = reviewerInfo;
+
+    const itemRef = doc(db, 'vendors', vendorId, 'items', itemId);
+    await updateDoc(itemRef, {
+        catalogItemId,
+        mappingStatus: 'mapped',
+        mappingSource: 'review_approved',
+        updatedAt: serverTimestamp(),
+        updatedBy: displayName || userId,
+    });
+
+    // Write vendor item history
+    await addDoc(collection(db, 'vendors', vendorId, 'items', itemId, 'history'), {
+        action: 'mapped_from_review_queue',
+        actionBy: displayName || userId,
+        actionAt: serverTimestamp(),
+        notes: `Mapped to catalogItemId: ${catalogItemId} from Unmapped Items tab`,
+        catalogItemId,
     });
 
     return { success: true };

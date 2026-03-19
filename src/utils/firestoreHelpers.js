@@ -85,7 +85,7 @@ export function getItemDisplayName(item) {
  */
 export function getItemPrice(item) {
     if (!item) return 0;
-    return Number(item.priceSnapshot ?? item.vendorPrice ?? item.price ?? 0);
+    return Number(item.vendorPriceSnapshot ?? item.priceSnapshot ?? item.vendorPrice ?? item.price ?? 0);
 }
 
 /**
@@ -97,6 +97,50 @@ export function getItemPrice(item) {
 export function getItemUnit(item) {
     if (!item) return 'unit';
     return item.unitSnapshot || item.unit || 'unit';
+}
+
+// ── v2 Read Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Get the base unit for a vendor item (v2 canonical field with legacy fallback).
+ * @param {Object} item
+ * @returns {string}
+ */
+export function getItemBaseUnit(item) {
+    if (!item) return 'unit';
+    return item.baseUnit || item.unit || 'unit';
+}
+
+/**
+ * Get the order unit for a vendor item (v2 canonical field with legacy fallback).
+ * @param {Object} item
+ * @returns {string}
+ */
+export function getItemOrderUnit(item) {
+    if (!item) return 'unit';
+    return item.orderUnit || item.baseUnit || item.unit || 'unit';
+}
+
+/**
+ * Get the canonical display name for a catalog item or vendor item.
+ * Prefers v2 canonicalName, falls back to itemName / name.
+ * @param {Object} item
+ * @returns {string}
+ */
+export function getCatalogDisplayName(item) {
+    if (!item) return '';
+    return item.canonicalName || item.itemName || item.name || '';
+}
+
+/**
+ * Get a normalized (lowercase) status for filtering/logic.
+ * Uses the v2 normalizedStatus field if present, otherwise derives from status.
+ * @param {Object} item
+ * @returns {string}
+ */
+export function getItemNormalizedStatus(item) {
+    if (!item) return '';
+    return item.normalizedStatus || (item.status || '').toLowerCase();
 }
 
 // ── Snapshot Builder ────────────────────────────────────────────────────────
@@ -112,15 +156,17 @@ export function getItemUnit(item) {
  * @returns {Object} Snapshot fields to spread into the line item
  */
 export function buildLineItemSnapshot(vendorItem, vendorItemId, vendorInfo = {}) {
+    const price = Number(vendorItem?.vendorPrice ?? vendorItem?.price ?? 0);
     return {
         // Relational identity
         vendorItemId: vendorItemId || vendorItem?.id || null,
         catalogItemId: vendorItem?.catalogItemId || null,
 
-        // Historical display snapshots
-        itemNameSnapshot: vendorItem?.name || vendorItem?.itemName || 'Unknown Item',
-        priceSnapshot: Number(vendorItem?.vendorPrice ?? vendorItem?.price ?? 0),
-        unitSnapshot: vendorItem?.unit || 'unit',
+        // Historical display snapshots (both v1 and v2 alias written)
+        itemNameSnapshot: vendorItem?.itemName || vendorItem?.name || 'Unknown Item',
+        priceSnapshot:       price,   // legacy alias kept
+        vendorPriceSnapshot: price,   // v2 canonical alias
+        unitSnapshot: vendorItem?.baseUnit || vendorItem?.unit || 'unit',
 
         // Recommended additional snapshots
         vendorNameSnapshot: vendorInfo?.name || vendorInfo?.vendorName || null,

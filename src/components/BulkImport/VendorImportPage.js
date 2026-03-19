@@ -9,7 +9,7 @@
  *  - Navigates to preview page with parsed + matched rows
  */
 import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -18,6 +18,7 @@ import UploadDropzone from './UploadDropzone';
 import { validateFile, validateAllRows } from './importValidation';
 import { parseExcelFile, downloadTemplate, exportVendorCatalog } from './importHelpers';
 import { normalizeRow, matchAgainstExistingItems, generateMatchSummary } from './importMatching';
+import VendorImportHistoryPage from './VendorImportHistoryPage';
 
 const MODES = [
     {
@@ -42,7 +43,10 @@ const MODES = [
 
 export default function VendorImportPage() {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { vendorId, vendorName, displayName, userId } = useContext(UserContext);
+
+    const activeTab = searchParams.get('tab') || 'import';
 
     const [mode, setMode] = useState('add_and_update');
     const [file, setFile] = useState(null);
@@ -129,20 +133,49 @@ export default function VendorImportPage() {
     return (
         <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px' }}>
             {/* Header */}
-            <div style={{ marginBottom: 28 }}>
+            <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                     <button className="ui-btn ghost small" onClick={() => navigate('/items')} style={{ padding: '4px 12px' }}>
                         ← Back to Catalog
                     </button>
                 </div>
                 <h1 style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc', margin: 0 }}>
-                    📥 Bulk Import Catalog
+                    📥 Bulk Upload
                 </h1>
                 <p style={{ color: '#94a3b8', marginTop: 6 }}>
                     Upload an Excel or CSV file to add or update your item catalog in bulk.
                     {vendorName && <span style={{ color: '#38bdf8', marginLeft: 6 }}>— {vendorName}</span>}
                 </p>
             </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                {[{ key: 'import', label: '📥 New Import' }, { key: 'history', label: '🕐 Import History' }].map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setSearchParams({ tab: tab.key })}
+                        style={{
+                            padding: '10px 20px',
+                            background: 'none',
+                            border: 'none',
+                            borderBottom: activeTab === tab.key ? '2px solid #38bdf8' : '2px solid transparent',
+                            color: activeTab === tab.key ? '#38bdf8' : '#94a3b8',
+                            fontWeight: activeTab === tab.key ? 700 : 500,
+                            fontSize: 14,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                        }}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'history' ? (
+                <VendorImportHistoryPage embedded />
+            ) : (
+            <>
 
             {/* Quick Actions */}
             <div style={{ display: 'flex', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
@@ -151,9 +184,6 @@ export default function VendorImportPage() {
                 </button>
                 <button className="ui-btn ghost small" onClick={handleExportCatalog}>
                     📤 Export Current Catalog
-                </button>
-                <button className="ui-btn ghost small" onClick={() => navigate('/vendor/import/history')}>
-                    🕐 Import History
                 </button>
             </div>
 
@@ -243,6 +273,9 @@ export default function VendorImportPage() {
                     {parsing ? '⏳ Parsing & Matching...' : 'Preview Changes →'}
                 </button>
             </div>
+
+            </>
+            )}
         </div>
     );
 }

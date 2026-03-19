@@ -8,9 +8,139 @@ import EditItemModal from './EditItemModal';
 import AddItemModal from './AddItemModal';
 import ItemAnalyticsModal from './ItemAnalyticsModal';
 import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
+import { formatPackSize, formatUnitPrice } from '../../utils/parseUnitInfo';
+import { sendVendorItemToReviewQueue } from '../CatalogReview/reviewQueueService';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
+
+
+// ─── Price Normalization Engine ──────────────────────────────────────────────
+//
+// Firestore item schema (set by AddItemModal / vendorCatalogService):
+//   unit:         "lb"      — sales unit label (dropdown selection)
+//   packQuantity: 50        — numeric pack count (Number field)
+//   itemSize:     "50lb"    — text description of pack size e.g. "50lb", "25lb"
+//   baseUnit:     "lb"      — v2 canonical stripped unit (same as unit for weight)
+//   vendorPrice:  19.80     — price per pack
+//
+// The display string "lb (50lb)" is constructed by formatItemSize() and is
+// NEVER stored in Firestore. Do not try to parse it.
+//
+// enrichItem reads packQuantity and itemSize directly from the doc, then
+// derives a unit price as: pricePerBaseUnit = vendorPrice / packQuantity
+//
+const enrichItem = (item) => {
+    const rawUnitStr = (item.unit || item.baseUnit || item.orderUnit || '').trim();
+    const price      = Number(item.vendorPrice ?? item.price ?? 0);
+    const unitLower  = rawUnitStr.toLowerCase();
+    const canonBase  = BASE_UNIT_CANONICAL[unitLower] || null;
+
+    // ── STEP 1: Parenthetical parse on unit string (highest priority) ───────
+    // Handles items where unit field contains "lb (50lb)" or "case (25lb)"  
+    // (legacy data, CSV imports, or manual entry in unit field)
+    const parenRx = rawUnitStr.match(/^([^(]+?)\s*\(\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]*)\s*\)\s*$/);
+    if (parenRx) {
+        const salesLabel = parenRx[1].trim().toLowerCase();
+        const qty        = parseFloat(parenRx[2]);
+        const innerTok   = parenRx[3].trim().toLowerCase();
+        const innerBase  = BASE_UNIT_CANONICAL[innerTok] || BASE_UNIT_CANONICAL[salesLabel] || null;
+        if (qty > 0) {
+            const bu   = innerBase || (innerTok ? null : BASE_UNIT_CANONICAL[salesLabel]) || 'unit';
+            const norm = !!innerBase || !innerTok; // normalizable when base unit is known
+            return _enrichResult(item, price, salesLabel, bu, qty, norm);
+        }
+    }
+
+    // ── STEP 2: OPAQUE units — Normalizable ONLY when explicit weight/count info exists
+    // Explicit info means: parenthetical caught in Step 1, OR packQuantity > 1,
+    // OR itemSize string contains a weight quantity (e.g. "25lb", "10kg")
+    if (OPAQUE_SET.has(unitLower)) {
+        // a) itemSize string with a weight unit (e.g. "25lb", "10 kg")
+        const { bu: sbu, qty: sqty } = _sizeInfo(item.itemSize, null);
+        if (sqty && sbu) {
+            return _enrichResult(item, price, unitLower, sbu, sqty, true);
+        }
+        // b) packQuantity explicitly > 1
+        const pq = Number(item.packQuantity);
+        if (!isNaN(pq) && pq > 1) {
+            const { bu: psbu, qty: psqty } = _sizeInfo(item.itemSize, null);
+            const effPack = psqty || pq;
+            const effBase = psbu || 'unit';
+            return _enrichResult(item, price, unitLower, effBase, effPack, true);
+        }
+        // c) No explicit size info — Raw Only
+        return _enrichResult(item, price, unitLower, null, null, false);
+    }
+
+    // ── STEP 3: Weight/volume units  e.g. "lb", "kg" ─────────────────────
+    if (WEIGHT_SET.has(unitLower) && canonBase) {
+        // itemSize is CHECKED FIRST because packQuantity defaults to 1 for all items
+        // (AddItemModal default), meaning packQuantity=1 is ambiguous — it could be
+        // the default OR an actual single-unit item. itemSize is more explicit:
+        //   itemSize="50lb" → packSize=50 regardless of packQuantity
+        const { bu: sbu, qty: sqty } = _sizeInfo(item.itemSize, canonBase);
+        if (sqty && sbu) return _enrichResult(item, price, unitLower, sbu, sqty, true);
+
+        // itemSize has no numeric info — use packQuantity if it's > 1 (explicit)
+        const pq = Number(item.packQuantity);
+        if (!isNaN(pq) && pq > 1) {
+            return _enrichResult(item, price, unitLower, canonBase, pq, true);
+        }
+
+        // packQuantity is 1 or missing — single unit item (e.g. 1 lb beet)
+        return _enrichResult(item, price, unitLower, canonBase, 1, true);
+    }
+
+    // ── STEP 4: Scalar units  e.g. "unit", "each", "piece" ──────────────
+    if (SCALAR_SET.has(unitLower)) {
+        const pq = Number(item.packQuantity);
+        const ps = (!isNaN(pq) && pq > 0) ? pq : 1;
+        return _enrichResult(item, price, unitLower, 'unit', ps, true);
+    }
+
+    // ── STEP 5: Unknown / unclassified ──────────────────────────────────────
+    return _enrichResult(item, price, unitLower || null, null, null, false);
+};
+
+// Module-level sets/maps (constructed once, not inside enrichItem)
+const OPAQUE_SET = new Set(['bundle','bag','case','box','pack','packet','sleeve','tray','pail','bucket','dozen','can','jar','bottle','jug']);
+const WEIGHT_SET = new Set(['kg','lb','g','oz','l','litre','liter','ml','milliliter','gal','gallon']);
+const SCALAR_SET = new Set(['unit','each','ea','piece','pc','pcs','item','ct','count']);
+const BASE_UNIT_CANONICAL = {
+    kg:'kg', kilogram:'kg', kilograms:'kg',
+    lb:'lb', lbs:'lb', pound:'lb', pounds:'lb',
+    oz:'oz', ounce:'oz', ounces:'oz',
+    g:'g',   gram:'g',  grams:'g',
+    l:'L',   litre:'L', liter:'L', litres:'L', liters:'L',
+    ml:'mL', milliliter:'mL', millilitre:'mL',
+    gallon:'gal', gal:'gal',
+};
+
+// Return enriched item object; logs dev debug for known test items
+function _enrichResult(item, price, salesUnit, baseUnit, packSize, normalizedPossible) {
+    const ppbu = normalizedPossible && packSize && packSize > 0 ? price / packSize : null;
+    if (process.env.NODE_ENV === 'development') {
+        const debugNames = ['onion - cooking', 'onion - red', 'beets', 'long beans', 'celery', 'green onion', 'leeks', 'french beans'];
+        const name = (item.itemName || item.name || '').toLowerCase();
+        if (debugNames.some(n => name.includes(n))) {
+            // eslint-disable-next-line no-console
+            console.log(`[enrichItem] "${item.itemName||item.name}" unit="${item.unit}" pq=${item.packQuantity} sz="${item.itemSize}" → packSize=${packSize} base=${baseUnit} norm=${normalizedPossible} ppbu=${ppbu?.toFixed(4)??'null'}`);
+        }
+    }
+    return { ...item, _salesUnit: salesUnit, _baseUnit: baseUnit, _packSize: packSize, _normalizedPossible: normalizedPossible, _pricePerBaseUnit: ppbu };
+}
+
+// Parse itemSize string like "50lb" → { bu:"lb", qty:50 }
+function _sizeInfo(itemSize, fallbackBase) {
+    if (!itemSize) return { bu: fallbackBase, qty: null };
+    const m = String(itemSize).trim().match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]*)$/);
+    if (!m) return { bu: fallbackBase, qty: null };
+    const qty = parseFloat(m[1]);
+    const bu  = BASE_UNIT_CANONICAL[m[2].toLowerCase()] || fallbackBase || null;
+    return { bu, qty: qty > 0 ? qty : null };
+}
+
 
 // Helper to format item size display
 export const formatItemSize = (unit, packQty, size) => {
@@ -66,6 +196,16 @@ export default function VendorDetailPage() {
     const [auditLogItemId, setAuditLogItemId] = useState(null);
     const [auditLogData, setAuditLogData] = useState([]);
     const [auditLogLoading, setAuditLogLoading] = useState(false);
+
+    // Tab + Compare modal state (NEW)
+    const [activeTab, setActiveTab] = useState('active'); // 'active' | 'pending' | 'rejected' | 'unmapped'
+    const [compareItem, setCompareItem] = useState(null);  // item to compare cross-vendor
+    const [compareData, setCompareData] = useState([]);    // [{vendorId, vendorName, price, unit, pricePerBaseUnit}]
+    const [compareLoading, setCompareLoading] = useState(false);
+
+    // Review queue integration state
+    const [openReviewIds, setOpenReviewIds] = useState(new Set());
+    const [sendingReviewId, setSendingReviewId] = useState(null);
 
     const canEdit = isSuperAdmin || isAdmin || (typeof permissions === 'object' && permissions?.canManageItems);
     const canEditProfile = isSuperAdmin || isAdmin || (typeof permissions === 'object' && permissions?.canEditProfile);
@@ -138,7 +278,7 @@ export default function VendorDetailPage() {
     // Filter items
     const filteredItems = items.filter(item => {
         const matchSearch = !search ||
-            (item.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (item.itemName || item.name || '').toLowerCase().includes(search.toLowerCase()) ||  // v2-first
             (item.sku || '').toLowerCase().includes(search.toLowerCase());
         const matchCat = categoryFilter === 'All' || item.category === categoryFilter;
         const matchStatus = statusFilter === 'All' || (item.status || 'active') === statusFilter;
@@ -202,12 +342,12 @@ export default function VendorDetailPage() {
                     changeType: 'delete',
                     proposedData: null,
                     originalData: {
-                        name: item.name || '',
-                        category: item.category || '',
-                        unit: item.unit || '',
+                        itemName:    item.itemName || item.name || '',  // Phase 3: v2-first
+                        category:    item.category || '',
+                        baseUnit:    item.baseUnit || item.unit || '',
                         vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
-                        sku: item.sku || '',
-                        notes: item.notes || '',
+                        sku:         item.sku || '',
+                        notes:       item.notes || '',
                     },
                     requestedBy: userId,
                     requestedByName: displayName || 'Unknown',
@@ -259,11 +399,11 @@ export default function VendorDetailPage() {
             // Audit log
             if (item.changeType !== 'delete') {
                 await logAudit(vendorId, item.id, 'approved', {
-                    itemName: item.proposedData?.name || item.name,
-                    proposedData: item.proposedData,
-                    originalData: item.originalData,
-                    requestedBy: item.requestedByName,
-                });
+                itemName: item.proposedData?.itemName || item.proposedData?.name || item.itemName || item.name,  // v2-first
+                proposedData: item.proposedData,
+                originalData: item.originalData,
+                requestedBy: item.requestedByName,
+            });
             }
             toast.success(`✅ ${item.changeType === 'delete' ? 'Deletion' : item.changeType === 'add' ? 'New item' : 'Edit'} approved!`);
         } catch (err) {
@@ -376,6 +516,170 @@ export default function VendorDetailPage() {
     // Unique categories from loaded items for filter
     const itemCategories = ['All', ...new Set(items.map(i => i.category).filter(Boolean))];
 
+    // ─── Enrich items with computed price fields ───
+    const enrichedItems = items.map(enrichItem);
+
+    // ─── Vendor Intelligence Stats (always derived from FULL enriched list) ───
+    // Status values in Firestore may be capitalized ('Active', 'In Review', 'Rejected')
+    // from vendorCatalogService.js — always normalize to lowercase before comparing.
+    // Unknown/missing statuses go to 'unknown' bucket instead of silently becoming Active.
+    const getItemStatus = (item) => {
+        // Union strategy: check BOTH status fields.
+        // Any non-active workflow value in either field wins over 'active'.
+        // This prevents normalizedStatus='active' (from Phase 1 import) from hiding
+        // a subsequent status='in-review' set by the review workflow.
+        const s1 = (item.normalizedStatus || '').toLowerCase().trim();
+        const s2 = (item.status || '').toLowerCase().trim();
+        const PENDING_VALS = ['in-review', 'in review', 'in_review', 'needs-correction', 'needs correction', 'pending', 'pending review', 'review_flagged', 'pending_review'];
+
+        // Rejected in either field → rejected
+        if (s1 === 'rejected' || s2 === 'rejected') return 'rejected';
+        // Pending/review in either field → pending
+        if (PENDING_VALS.includes(s1) || PENDING_VALS.includes(s2)) return 'pending';
+        // Active in either field → active (only reached when no non-active value found)
+        if (s1 === 'active' || s2 === 'active') return 'active';
+        // Both empty → truly unknown
+        if (!s1 && !s2) return 'unknown';
+        return 'unknown';
+    };
+
+    const activeItems   = enrichedItems.filter(i => getItemStatus(i) === 'active');
+    const pendingItems  = enrichedItems.filter(i => getItemStatus(i) === 'pending');
+    const rejectedItems = enrichedItems.filter(i => getItemStatus(i) === 'rejected');
+    const unknownItems  = enrichedItems.filter(i => getItemStatus(i) === 'unknown');
+    const unmappedItems = enrichedItems.filter(i => !i.catalogItemId);
+
+    // avgUnitPrice: compute SEPARATELY per base unit to avoid mixing /lb and /unit
+    const normalizedActive = activeItems.filter(i => i._normalizedPossible && i._pricePerBaseUnit !== null && i._pricePerBaseUnit > 0);
+    const lbItems   = normalizedActive.filter(i => i._baseUnit === 'lb');
+    const kgItems   = normalizedActive.filter(i => i._baseUnit === 'kg');
+    const unitItems = normalizedActive.filter(i => i._baseUnit === 'unit');
+    const avg = (arr) => arr.length ? arr.reduce((s, i) => s + i._pricePerBaseUnit, 0) / arr.length : null;
+    const avgLb   = avg(lbItems);
+    const avgKg   = avg(kgItems);
+    const avgUnit = avg(unitItems);
+
+    // Duplicate detection: flag items whose normalized names are very similar
+    const normalizeName = (n) => (n || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    const tokenSort     = (n) => normalizeName(n).split(' ').sort().join(' ');
+    const nameSortedMap = {};
+    enrichedItems.forEach(i => {
+        const key = tokenSort(i.itemName || i.name || '');
+        if (!nameSortedMap[key]) nameSortedMap[key] = [];
+        nameSortedMap[key].push(i.id);
+    });
+    const duplicateSets = new Set(
+        Object.values(nameSortedMap).filter(ids => ids.length > 1).flat()
+    );
+
+    // Price highlight thresholds (only normalizable items)
+    const activePrices = normalizedActive.map(i => i._pricePerBaseUnit);
+    const minUnitPrice = activePrices.length ? Math.min(...activePrices) : null;
+    const maxUnitPrice = activePrices.length ? Math.max(...activePrices) : null;
+
+    // Tab → filtered item list
+    const tabItems = {
+        active:   activeItems,
+        pending:  [...pendingItems, ...unknownItems],
+        rejected: rejectedItems,
+        unmapped: unmappedItems,
+        unknown:  unknownItems,
+    }[activeTab] || activeItems;
+
+    // Apply search + category filter on top of tab
+    const filteredTabItems = tabItems.filter(item => {
+        const matchSearch = !search ||
+            (item.itemName || item.name || '').toLowerCase().includes(search.toLowerCase()) ||
+            (item.sku || '').toLowerCase().includes(search.toLowerCase());
+        const matchCat = categoryFilter === 'All' || item.category === categoryFilter;
+        return matchSearch && matchCat;
+    });
+
+    // ─── Send to Review Queue (replaces simple flag logic) ───
+
+    const handleSendToReview = async (item) => {
+        // Determine issue flags automatically
+        const flags = [];
+        if (duplicateSets.has(item.id)) flags.push('possible_alias');
+        if (item._normalizedPossible && item._packSize === 1 && item._baseUnit === 'lb' && item._pricePerBaseUnit > 10) flags.push('suspect_entry');
+        if (!item._normalizedPossible) flags.push('raw_only');
+        if (!item.catalogItemId) flags.push('unmapped_item');
+        const primaryReason = flags[0] || 'data_quality';
+
+        setSendingReviewId(item.id);
+        try {
+            const result = await sendVendorItemToReviewQueue({
+                vendorId,
+                vendorName: vendor?.name || '',
+                vendorItemId: item.id,
+                item,
+                issueFlags: flags,
+                primaryReason,
+                reviewedBy: { userId: userId || '', displayName: displayName || '' },
+            });
+
+            // Update local state: mark item as review_flagged and track in openReviewIds
+            setItems(prev => prev.map(i =>
+                i.id === item.id
+                    ? { ...i, status: 'review_flagged', normalizedStatus: 'review_flagged', reviewQueueId: result.reviewId }
+                    : i
+            ));
+            setOpenReviewIds(prev => new Set([...prev, item.id]));
+
+            toast.success(
+                result.isUpdate
+                    ? `"${item.itemName || item.name}" review record updated.`
+                    : `"${item.itemName || item.name}" sent to review queue.`
+            );
+        } catch (err) {
+            console.error('Send to review failed:', err);
+            toast.error('Failed to send item to review');
+        } finally {
+            setSendingReviewId(null);
+        }
+    };
+
+    // ─── Cross-vendor compare handler ───
+    const handleCompare = async (item) => {
+        if (!item.catalogItemId) {
+            toast.info('This item has no catalog link — cannot compare across vendors yet.');
+            return;
+        }
+        setCompareItem(item);
+        setCompareLoading(true);
+        setCompareData([]);
+        try {
+            const vendorsSnap = await getDocs(collection(db, 'vendors'));
+            const results = [];
+            for (const vDoc of vendorsSnap.docs) {
+                const itemsSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`));
+                itemsSnap.docs.forEach(d => {
+                    const data = d.data();
+                    if (data.catalogItemId === item.catalogItemId) {
+                        const enriched = enrichItem({ id: d.id, ...data });
+                        results.push({
+                            vendorId:         vDoc.id,
+                            vendorName:       vDoc.data().name || vDoc.id,
+                            price:            Number(data.vendorPrice ?? data.price ?? 0),
+                            unit:             data.baseUnit || data.unit || '—',
+                            packSize:         enriched._packSize,
+                            pricePerBaseUnit: enriched._pricePerBaseUnit,
+                            baseUnit:         enriched._baseUnit,
+                            isCurrentVendor:  vDoc.id === vendorId,
+                        });
+                    }
+                });
+            }
+            results.sort((a, b) => a.pricePerBaseUnit - b.pricePerBaseUnit);
+            setCompareData(results);
+        } catch (err) {
+            console.error('Compare failed:', err);
+            toast.error('Failed to load comparison data');
+        } finally {
+            setCompareLoading(false);
+        }
+    };
+
     return (
         <div>
             {/* Header */}
@@ -388,7 +692,7 @@ export default function VendorDetailPage() {
 
             {/* Vendor Profile Section */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <h3 style={{ margin: 0 }}>Vendor Profile</h3>
+                <h3 style={{ margin: 0 }}>Business Details</h3>
                 {canEditProfile && !editing && (
                     <button className="ui-btn small" onClick={() => setEditing(true)}>✏️ Edit Profile</button>
                 )}
@@ -462,9 +766,36 @@ export default function VendorDetailPage() {
                 )}
             </div>
 
+            {/* ── Vendor Intelligence Panel ── */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: 12,
+                marginBottom: 24,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: 12,
+                padding: '16px 20px',
+            }}>
+                {[
+                    { label: 'Total Items',    value: enrichedItems.length,                                          icon: '📦' },
+                    { label: 'Active',         value: activeItems.length,                                            icon: '✅', color: '#4ade80' },
+                    { label: 'Pending Review', value: pendingItems.length + unknownItems.length,                     icon: '🕐', color: '#fbbf24' },
+                    { label: 'Rejected',       value: rejectedItems.length,                                          icon: '❌', color: '#f87171' },
+                    { label: 'Avg /lb',        value: avgLb   !== null ? `$${avgLb.toFixed(3)}/lb`   : '—',          icon: '⚖️', color: '#818cf8' },
+                    { label: 'Avg /unit',      value: avgUnit  !== null ? `$${avgUnit.toFixed(3)}/unit` : '—',        icon: '🔢', color: '#818cf8' },
+                ].map(({ label, value, icon, color }) => (
+                    <div key={label} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: color || 'var(--text-primary)' }}>{value}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{label}</div>
+                    </div>
+                ))}
+            </div>
+
             {/* Items Section Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <h3 style={{ margin: 0 }}>Items ({filteredItems.length}{filteredItems.length !== items.length ? ` of ${items.length}` : ''})</h3>
+                <h3 style={{ margin: 0 }}>Items ({filteredTabItems.length}{filteredTabItems.length !== items.length ? ` of ${items.length}` : ''})</h3>
                 {canEdit && (
                     <button className="ui-btn primary small" onClick={() => setItemModalOpen(true)}>
                         + Add Item
@@ -472,47 +803,85 @@ export default function VendorDetailPage() {
                 )}
             </div>
 
-            {/* Filters */}
-            {
-                items.length > 0 && (
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-                        <input
-                            className="ui-input"
-                            placeholder="🔍  Search items or SKU..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            style={{ maxWidth: 300, flex: 1 }}
-                        />
-                        <select
-                            className="ui-input"
-                            value={categoryFilter}
-                            onChange={e => setCategoryFilter(e.target.value)}
-                            style={{ maxWidth: 180 }}
-                        >
-                            {itemCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <select
-                            className="ui-input"
-                            value={statusFilter}
-                            onChange={e => setStatusFilter(e.target.value)}
-                            style={{ maxWidth: 160 }}
-                        >
-                            <option value="All">All Statuses</option>
-                            <option value="active">Active</option>
-                            <option value="in-review">In Review</option>
-                            <option value="needs-correction">Needs Correction</option>
-                            <option value="rejected">Rejected</option>
-                        </select>
-                    </div>
-                )
-            }
+            {/* ── Tab Bar ── */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
+                {([
+                    { key: 'active',   label: 'Active',         count: activeItems.length,                      color: '#4ade80' },
+                    { key: 'pending',  label: 'Pending Review', count: pendingItems.length + unknownItems.length, color: '#fbbf24' },
+                    { key: 'rejected', label: 'Rejected',       count: rejectedItems.length,                    color: '#f87171' },
+                    { key: 'unmapped', label: 'Unmapped',       count: unmappedItems.length,                    color: '#94a3b8' },
+                    ...(unknownItems.length > 0 ? [{ key: 'unknown', label: '⚠️ Unknown Status', count: unknownItems.length, color: '#f59e0b' }] : []),
+                ]).map(({ key, label, count, color }) => (
+                    <button
+                        key={key}
+                        onClick={() => setActiveTab(key)}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: 7,
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: activeTab === key ? 700 : 400,
+                            background: activeTab === key ? 'rgba(255,255,255,0.1)' : 'transparent',
+                            color: activeTab === key ? color : 'var(--text-secondary)',
+                            transition: 'all 0.15s',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                        }}
+                    >
+                        {label}
+                        <span style={{
+                            background: activeTab === key ? color : 'rgba(255,255,255,0.08)',
+                            color: activeTab === key ? '#000' : 'var(--text-secondary)',
+                            borderRadius: 99, padding: '1px 7px', fontSize: 11, fontWeight: 700,
+                        }}>{count}</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* ── Search + Category filter ── */}
+            {items.length > 0 && (
+                <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <input
+                        className="ui-input"
+                        placeholder="🔍  Search items or SKU..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{ maxWidth: 300, flex: 1 }}
+                    />
+                    <select
+                        className="ui-input"
+                        value={categoryFilter}
+                        onChange={e => setCategoryFilter(e.target.value)}
+                        style={{ maxWidth: 180 }}
+                    >
+                        {itemCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+            )}
+
+            {/* ── Badge Legend ── */}
+            {items.length > 0 && (
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10, alignItems:'center' }}>
+                    <span style={{ fontSize:10, color:'var(--text-secondary)', marginRight:2 }}>Legend:</span>
+                    {[
+                        { label:'Normalized',     bg:'rgba(74,222,128,0.15)',  color:'#4ade80', bd:'rgba(74,222,128,0.3)' },
+                        { label:'Raw Only',       bg:'rgba(148,163,184,0.15)',color:'#94a3b8', bd:'rgba(148,163,184,0.2)' },
+                        { label:'Possible Alias', bg:'rgba(251,191,36,0.15)', color:'#fbbf24', bd:'rgba(251,191,36,0.3)' },
+                        { label:'⚠ Suspect Entry',bg:'rgba(248,113,113,0.15)',color:'#f87171', bd:'rgba(248,113,113,0.3)' },
+                    ].map(({ label, bg, color, bd }) => (
+                        <span key={label} style={{ fontSize:9, fontWeight:600, padding:'2px 7px', borderRadius:4, background:bg, color, border:`1px solid ${bd}` }}>
+                            {label}
+                        </span>
+                    ))}
+                </div>
+            )}
 
             {
                 items.length === 0 ? (
                     <div className="ui-card" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
                         No items yet. {canEdit && <span style={{ color: 'var(--accent-1)', cursor: 'pointer' }} onClick={() => setItemModalOpen(true)}>Add the first item →</span>}
                     </div>
-                ) : filteredItems.length === 0 ? (
+                ) : filteredTabItems.length === 0 ? (
                     <div className="ui-card" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
                         No items match your filters.
                     </div>
@@ -524,7 +893,11 @@ export default function VendorDetailPage() {
                                     <th>Item Name</th>
                                     <th>Category</th>
                                     <th>Unit</th>
+                                    <th>Pack Size</th>
                                     <th>Price</th>
+                                    <th>Unit Price</th>
+                                    <th>Market Rank</th>
+                                    <th>Price Trend</th>
                                     <th>Tax</th>
                                     <th>SKU</th>
                                     <th>Status</th>
@@ -533,26 +906,77 @@ export default function VendorDetailPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredItems.map(item => {
-                                    const itemStatus = item.status || 'active';
-                                    const statusColor = itemStatus === 'active' ? 'green' : (itemStatus === 'in-review' || itemStatus === 'needs-correction') ? 'yellow' : 'red';
-                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'in-review' ? 'In Review' : itemStatus === 'needs-correction' ? 'Needs Correction' : 'Rejected';
+                                {filteredTabItems.map(item => {
+                                    const itemStatus = getItemStatus(item);   // 'active' | 'pending' | 'rejected' | 'unknown'
+                                    const statusColor = itemStatus === 'active' ? 'green' : (itemStatus === 'pending') ? 'yellow' : itemStatus === 'rejected' ? 'red' : 'orange';
+                                    const statusLabel = itemStatus === 'active' ? 'Active' : itemStatus === 'pending' ? 'In Review' : itemStatus === 'rejected' ? 'Rejected' : (item.status || 'Unknown');
+                                    // Price highlight logic (only when both items are normalizable)
+                                    const isCheapest  = item._normalizedPossible && minUnitPrice !== null && item._pricePerBaseUnit !== null && Math.abs(item._pricePerBaseUnit - minUnitPrice) < 0.00001 && activePrices.length > 1;
+                                    const isMostExp   = item._normalizedPossible && maxUnitPrice !== null && item._pricePerBaseUnit !== null && Math.abs(item._pricePerBaseUnit - maxUnitPrice) < 0.00001 && activePrices.length > 1;
+                                    const unitPriceColor = isCheapest ? '#4ade80' : isMostExp ? '#f87171' : 'var(--text-primary)';
+                                    const unitPriceDisplay = item._normalizedPossible && item._pricePerBaseUnit !== null
+                                        ? formatUnitPrice(Number(item.vendorPrice ?? item.price ?? 0), item._packSize, item._baseUnit)
+                                        : null;
+                                    const packSizeDisplay = item._normalizedPossible && item._packSize !== null
+                                        ? formatPackSize(item._packSize, item._baseUnit)
+                                        : '—';
                                     return (
                                         <React.Fragment key={item.id}>
                                             <tr className="is-row" onClick={() => navigate(`/vendors/${vendorId}/items/${item.id}`)} style={{ cursor: 'pointer' }}>
                                                 <td data-label="Name" style={{ fontWeight: 600, color: '#4dabf7' }}>
-                                                    {item.name}
+                                                    {item.itemName || item.name}
                                                     {(itemStatus === 'rejected' || itemStatus === 'needs-correction') && item.rejectionComment && (
                                                         <div style={{ fontSize: 11, color: itemStatus === 'rejected' ? '#ff6b7a' : '#f59e0b', fontWeight: 400, marginTop: 4, background: itemStatus === 'rejected' ? 'rgba(255,107,122,0.1)' : 'rgba(245,158,11,0.1)', padding: '4px 8px', borderRadius: 4 }}>
                                                             {itemStatus === 'rejected' ? '❌' : '⚠️'} {item.rejectionComment}
                                                         </div>
                                                     )}
+                                                    {/* Normalization badge */}
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        marginLeft: 6,
+                                                        fontSize: 9,
+                                                        fontWeight: 600,
+                                                        padding: '1px 5px',
+                                                        borderRadius: 4,
+                                                        verticalAlign: 'middle',
+                                                        background: item._normalizedPossible ? 'rgba(74,222,128,0.15)' : 'rgba(148,163,184,0.15)',
+                                                        color: item._normalizedPossible ? '#4ade80' : '#94a3b8',
+                                                        border: `1px solid ${item._normalizedPossible ? 'rgba(74,222,128,0.3)' : 'rgba(148,163,184,0.2)'}`,
+                                                    }}>
+                                                        {item._normalizedPossible ? 'Normalized' : 'Raw Only'}
+                                                    </span>
+                                                    {/* Duplicate / alias badge */}
+                                                    {duplicateSets.has(item.id) && (
+                                                        <span style={{ display:'inline-block', marginLeft:4, fontSize:9, fontWeight:600, padding:'1px 5px', borderRadius:4, verticalAlign:'middle', background:'rgba(251,191,36,0.15)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.3)' }}>
+                                                            Possible Alias
+                                                        </span>
+                                                    )}
+                                                    {/* Price anomaly badge — high per-unit price on small-pack produce */}
+                                                    {item._normalizedPossible && item._packSize === 1 && item._baseUnit === 'lb' && item._pricePerBaseUnit > 10 && (
+                                                        <span title="Price seems high for a single lb — was a pack price entered as a per-lb price?" style={{ display:'inline-block', marginLeft:4, fontSize:9, fontWeight:600, padding:'1px 5px', borderRadius:4, verticalAlign:'middle', background:'rgba(248,113,113,0.15)', color:'#f87171', border:'1px solid rgba(248,113,113,0.3)', cursor:'help' }}>
+                                                            ⚠ Suspect Entry
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td data-label="Category"><span className="badge blue">{item.category || '—'}</span></td>
                                                 <td data-label="Unit" style={{ textTransform: 'capitalize' }}>
-                                                    {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
+                                                    {formatItemSize(item.baseUnit || item.unit, item.packQuantity, item.itemSize)}
+                                                </td>
+                                                <td data-label="Pack Size" style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                                                    {packSizeDisplay}
                                                 </td>
                                                 <td data-label="Price">${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)}</td>
+                                                <td data-label="Unit Price" style={{ fontWeight: 600, color: unitPriceColor }}>
+                                                    {unitPriceDisplay !== null ? (
+                                                        <>
+                                                            {unitPriceDisplay}
+                                                            {isCheapest && <span title="Cheapest unit price"> 🏆</span>}
+                                                            {isMostExp  && <span title="Most expensive unit price"> ⚠️</span>}
+                                                        </>
+                                                    ) : '—'}
+                                                </td>
+                                                <td data-label="Market Rank" style={{ color: 'var(--text-secondary)', fontSize: 12 }}>— <span style={{ opacity: 0.4 }}>(soon)</span></td>
+                                                <td data-label="Price Trend"  style={{ color: 'var(--text-secondary)', fontSize: 12 }}>— <span style={{ opacity: 0.4 }}>(soon)</span></td>
                                                 <td data-label="Tax">
                                                     {item.taxable ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>13%</span> : <span style={{ color: 'var(--muted)' }}>—</span>}
                                                 </td>
@@ -563,10 +987,33 @@ export default function VendorDetailPage() {
                                                 </td>
                                                 {canEdit && (
                                                     <td onClick={e => e.stopPropagation()}>
-                                                        <div style={{ display: 'flex', gap: 6 }}>
+                                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                                             <button className="ui-btn mini" onClick={() => setEditingItem(item)}>✏️</button>
                                                             <button className="ui-btn mini danger" onClick={() => handleDeleteItem(item)}>🗑️</button>
                                                             <button className={`ui-btn mini ${auditLogItemId === item.id ? 'primary' : 'ghost'}`} onClick={() => toggleAuditLog(item.id)} title="View History">📜</button>
+                                                            <button className="ui-btn mini ghost" onClick={() => handleCompare(item)} title="Compare across vendors">⚖️</button>
+                                                            {/* Send to Review / In Review indicator */}
+                                                            {(() => {
+                                                                const isInReview = openReviewIds.has(item.id) || getItemStatus(item) === 'pending';
+                                                                const hasIssue = duplicateSets.has(item.id) || (item._normalizedPossible && item._packSize === 1 && item._baseUnit === 'lb' && item._pricePerBaseUnit > 10) || !item._normalizedPossible || !item.catalogItemId;
+                                                                if (isInReview) return (
+                                                                    <span style={{ fontSize:9, fontWeight:600, padding:'2px 6px', borderRadius:4, background:'rgba(251,191,36,0.15)', color:'#fbbf24', border:'1px solid rgba(251,191,36,0.3)', whiteSpace:'nowrap' }}>
+                                                                        🔍 In Review
+                                                                    </span>
+                                                                );
+                                                                if (hasIssue) return (
+                                                                    <button
+                                                                        className="ui-btn mini ghost"
+                                                                        title="Send to review queue"
+                                                                        onClick={() => handleSendToReview(item)}
+                                                                        disabled={sendingReviewId === item.id}
+                                                                        style={{ color:'#f59e0b', borderColor:'rgba(245,158,11,0.3)', whiteSpace:'nowrap', fontSize:10 }}
+                                                                    >
+                                                                        {sendingReviewId === item.id ? '⏳' : '🚩 Review'}
+                                                                    </button>
+                                                                );
+                                                                return null;
+                                                            })()}
                                                         </div>
                                                     </td>
                                                 )}
@@ -574,9 +1021,9 @@ export default function VendorDetailPage() {
                                             {/* Expandable audit log */}
                                             {auditLogItemId === item.id && (
                                                 <tr>
-                                                    <td colSpan={canEdit ? 7 : 6} style={{ padding: 0 }}>
+                                                    <td colSpan={canEdit ? 11 : 10} style={{ padding: 0 }}>
                                                         <div style={{ background: 'rgba(0,200,255,0.03)', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px' }}>
-                                                            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>📜 History for {item.name}</div>
+                                                            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>📜 History for {item.itemName || item.name}</div>
                                                             {auditLogLoading ? (
                                                                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>Loading...</div>
                                                             ) : auditLogData.length === 0 ? (
@@ -625,6 +1072,76 @@ export default function VendorDetailPage() {
                     </div>
                 )
             }
+
+            {/* ── Compare Modal ── */}
+            {compareItem && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }} onClick={() => setCompareItem(null)}>
+                    <div style={{
+                        background: 'var(--bg-card, #1a1b2e)', borderRadius: 16, padding: 28,
+                        minWidth: 420, maxWidth: 640, width: '90%', maxHeight: '80vh',
+                        overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)',
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <div>
+                                <div style={{ fontWeight: 700, fontSize: 17 }}>⚖️ Cross-Vendor Compare</div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 2 }}>{compareItem.itemName || compareItem.name}</div>
+                            </div>
+                            <button className="ui-btn mini ghost" onClick={() => setCompareItem(null)}>✕</button>
+                        </div>
+
+                        {compareLoading ? (
+                            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>Loading vendors…</div>
+                        ) : compareData.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>
+                                No other vendors carry this item yet (catalogItemId matched 0 vendors).
+                            </div>
+                        ) : (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                        <th style={{ textAlign: 'left', padding: '6px 8px' }}>Vendor</th>
+                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>Price</th>
+                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>Unit</th>
+                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>Pack</th>
+                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>Unit Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {compareData.map((row, idx) => {
+                                        const isBest  = idx === 0;
+                                        const isWorst = idx === compareData.length - 1 && compareData.length > 1;
+                                        return (
+                                            <tr key={row.vendorId} style={{
+                                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                background: row.isCurrentVendor ? 'rgba(255,255,255,0.04)' : 'transparent',
+                                            }}>
+                                                <td style={{ padding: '8px 8px', fontWeight: row.isCurrentVendor ? 700 : 400 }}>
+                                                    {row.vendorName}
+                                                    {row.isCurrentVendor && <span style={{ fontSize: 10, color: '#818cf8', marginLeft: 6 }}>← this vendor</span>}
+                                                </td>
+                                                <td style={{ textAlign: 'right', padding: '8px 8px' }}>${row.price.toFixed(2)}</td>
+                                                <td style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--text-secondary)' }}>{row.unit}</td>
+                                                <td style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--text-secondary)' }}>{row.packSize > 1 ? `${row.packSize} ${row.baseUnit}` : '—'}</td>
+                                                <td style={{ textAlign: 'right', padding: '8px 8px', fontWeight: 700, color: isBest ? '#4ade80' : isWorst ? '#f87171' : 'var(--text-primary)' }}>
+                                                    ${row.pricePerBaseUnit.toFixed(3)}/{row.baseUnit}
+                                                    {isBest  && <span title="Cheapest"> 🏆</span>}
+                                                    {isWorst && <span title="Most expensive"> ⚠️</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                        <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            AI price prediction and savings engine coming soon
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Add Item Modal */}
             {itemModalOpen && (

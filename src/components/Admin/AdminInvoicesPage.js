@@ -104,8 +104,8 @@ export default function AdminInvoicesPage() {
                         totalTaxAmount += lineTax;
                         return {
                             itemId: item.itemId,
-                            itemName: item.itemName || item.name || 'Unknown Item',
-                            unit: item.unit || 'unit',
+                            itemName: item.itemName || item.name || 'Unknown Item',  // v2-first
+                            unit: item.baseUnit || item.unit || 'unit',              // v2-first
                             qty,
                             vendorPrice: price,
                             lineTotalVendor: lineTotal,

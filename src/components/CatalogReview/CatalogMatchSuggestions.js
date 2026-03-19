@@ -22,8 +22,9 @@ function SimBar({ pct }) {
 }
 
 function MatchCard({ item, type, onSelect, selected }) {
-    const name     = item.canonicalName || item.name || item.itemName || '—';
-    const price    = item.vendorPrice ?? item.price;
+    const name     = item.canonicalName || item.itemName || item.name || '—';
+    const price    = item.vendorPrice ?? item.price ?? null;
+    const unit     = item.baseUnit || item.unit;
     const sim      = item.similarity ?? 0;
     const isActive = selected === item.id;
 
@@ -43,10 +44,10 @@ function MatchCard({ item, type, onSelect, selected }) {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
-                {item.category && <span style={{ fontSize: 10, color: '#64748b' }}>{item.category}</span>}
+                {item.category  && <span style={{ fontSize: 10, color: '#64748b' }}>{item.category}</span>}
                 {item.packSize  && <span style={{ fontSize: 10, color: '#64748b' }}>• {item.packSize}</span>}
-                {item.unit      && <span style={{ fontSize: 10, color: '#64748b' }}>{item.unit}</span>}
-                {price !== undefined && price !== '' && (
+                {unit           && <span style={{ fontSize: 10, color: '#64748b' }}>{unit}</span>}
+                {price !== null && price !== '' && (
                     <span style={{ fontSize: 10, color: '#fbbf24' }}>• ${Number(price).toFixed(2)}</span>
                 )}
             </div>

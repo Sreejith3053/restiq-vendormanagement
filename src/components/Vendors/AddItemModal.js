@@ -89,12 +89,16 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
         try {
             const itemData = {
                 name: itemForm.name.trim(),
+                itemName: itemForm.name.trim(),        // v2 canonical field
                 brand: itemForm.brand.trim(),
                 category: itemForm.category,
                 unit: itemForm.unit,
+                baseUnit: itemForm.unit,               // v2 canonical field
+                orderUnit: itemForm.unit,              // v2 canonical field
                 packQuantity: Number(itemForm.packQuantity) || 1,
                 itemSize: itemForm.itemSize.trim(),
                 vendorPrice: Number(itemForm.price) || 0,
+                normalizedStatus: 'active',            // v2 field (set below per path)
                 commissionPercent: 0,
                 sku: itemForm.sku.trim(),
                 description: itemForm.description.trim(),
@@ -109,9 +113,13 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
             let finalItem = null;
 
             if (isSuperAdmin) {
-                const docRef = await addDoc(collection(db, `vendors/${vendorId}/items`), { ...itemData, status: 'active' });
+                const docRef = await addDoc(collection(db, `vendors/${vendorId}/items`), {
+                    ...itemData,
+                    status: 'active',
+                    normalizedStatus: 'active',
+                });
                 docId = docRef.id;
-                finalItem = { id: docId, ...itemData, status: 'active' };
+                finalItem = { id: docId, ...itemData, status: 'active', normalizedStatus: 'active' };
                 if (logAudit) await logAudit(vendorId, docId, 'created', { itemName: itemData.name });
             } else {
                 const reviewFields = {
@@ -125,10 +133,11 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                 const docRef = await addDoc(collection(db, `vendors/${vendorId}/items`), {
                     ...itemData,
                     status: 'in-review',
+                    normalizedStatus: 'in-review',
                     ...reviewFields,
                 });
                 docId = docRef.id;
-                finalItem = { id: docId, ...itemData, status: 'in-review', ...reviewFields };
+                finalItem = { id: docId, ...itemData, status: 'in-review', normalizedStatus: 'in-review', ...reviewFields };
                 if (logAudit) await logAudit(vendorId, docId, 'created_pending', { itemName: itemData.name });
             }
 

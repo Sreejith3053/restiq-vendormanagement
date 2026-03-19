@@ -6,110 +6,58 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import restiqLogo from '../assets/restiq-logo-sidebar.png';
 import './Sidebar.css';
 
-// ── Navigation group definitions for SuperAdmin ─────────────────────
-// Pinned top-level link (not in a collapsible group)
-const PINNED_LINK = { to: '/admin/forecast/control-tower', icon: '🗼', label: 'Control Tower' };
-
-const NAV_GROUPS = [
-    {
-        id: 'operations',
-        label: 'Operations',
-        icon: '⚙️',
-        defaultOpen: true,
-        links: [
-            { to: '/orders', icon: '📦', label: 'All Orders' },
-            { to: '/admin/forecast/suggested-order-review', icon: '📝', label: 'Suggested Orders' },
-            { to: '/admin/forecast/submitted-orders', icon: '✅', label: 'Submitted Orders' },
-            { to: '/admin/dispatch/confirmations', icon: '📋', label: 'Dispatch Confirmations' },
-            { to: '/admin/dispatch/delivery', icon: '📍', label: 'Delivery Status' },
-            { to: '/admin/dispatch/issues', icon: '🚨', label: 'Issues & Disputes' },
-        ],
-    },
-    {
-        id: 'marketplace',
-        label: 'Marketplace',
-        icon: '🏪',
-        defaultOpen: true,
-        links: [
-            { to: '/vendors', icon: '🏢', label: 'All Vendors', end: true },
-            { to: '/vendors/add', icon: '➕', label: 'Add Vendor' },
-            { to: '/admin/manage-catalog', icon: '📦', label: 'Catalog Items' },
-            { to: '/admin/mapping-review',   icon: '🔍', label: 'Mapping Review' },
-            { to: '/admin/catalog-review',    icon: '🗂️', label: 'Catalog Review Queue' },
-            { to: '/admin/vendor-competitiveness', icon: '🏆', label: 'Vendor Scores' },
-            { to: '/admin/unmapped-items',          icon: '🔗', label: 'Unmapped Items' },
-        ],
-    },
-    {
-        id: 'intelligence',
-        label: 'Intelligence',
-        icon: '🧠',
-        defaultOpen: false,
-        links: [
-            { to: '/admin/ai-intelligence', icon: '🤖', label: 'AI Intelligence Hub' },
-            { to: '/admin/marketplace-intelligence', icon: '📊', label: 'Marketplace Intelligence' },
-            { to: '/admin/vendor-allocation', icon: '📦', label: 'Vendor Allocation' },
-            { to: '/admin/supply-capacity', icon: '🛡️', label: 'Supply Capacity' },
-            { to: '/admin/forecast/festivals', icon: '🎄', label: 'Festival Calendar' },
-        ],
-    },
-    {
-        id: 'administration',
-        label: 'Administration',
-        icon: '🔧',
-        defaultOpen: false,
-        links: [
-            { to: '/admin/restaurants', icon: '🏪', label: 'All Restaurants' },
-            { to: '/admin/restaurant-invoices', icon: '🧾', label: 'Restaurant Invoices' },
-            { to: '/admin/invoices', icon: '🧾', label: 'Vendor Invoices' },
-            { to: '/admin/manage-restaurants', icon: '🏪', label: 'Master Restaurants' },
-            { to: '/admin/pending-reviews', icon: '📋', label: 'Pending Reviews' },
-            { to: '/users', icon: '👥', label: 'Users & Roles' },
-            { to: '/settings/permissions', icon: '⚙️', label: 'Role Permissions' },
-            { to: '/admin/migration', icon: '🔧', label: 'Migration Tools' },
-        ],
-    },
+// ── Super Admin: 7 flat top-level links ─────────────────────────────
+const SUPER_ADMIN_LINKS = [
+    { to: '/admin/forecast/control-tower', icon: '🗼', label: 'Control Tower' },
+    { to: '/orders-fulfillment',           icon: '⚙️', label: 'Orders & Fulfillment' },
+    { to: '/vendors',                      icon: '🏪', label: 'Vendors',  end: true },
+    { to: '/catalog-reviews',              icon: '📦', label: 'Catalog & Reviews' },
+    { to: '/intelligence',                 icon: '🧠', label: 'Intelligence' },
+    { to: '/finance',                      icon: '💰', label: 'Finance' },
+    { to: '/platform-admin',              icon: '🔧', label: 'Platform Admin' },
 ];
 
-// ── Collapsible Nav Group Component ─────────────────────────────────
-function NavGroup({ group, onClose, searchFilter }) {
-    const [open, setOpen] = useState(group.defaultOpen);
-
-    // If searching, show all groups open
-    const isOpen = searchFilter ? true : open;
-
-    const links = searchFilter
-        ? group.links.filter(l => l.label.toLowerCase().includes(searchFilter))
-        : group.links;
-
-    if (searchFilter && links.length === 0) return null;
-
-    return (
-        <div className="sidebar-group">
-            <button className={`sidebar-group-header ${isOpen ? 'open' : ''}`} onClick={() => setOpen(o => !o)}>
-                <span className="group-icon">{group.icon}</span>
-                <span className="group-label">{group.label}</span>
-                <span className={`group-chevron ${isOpen ? 'open' : ''}`}>›</span>
-            </button>
-            {isOpen && (
-                <div className="sidebar-group-links">
-                    {links.map(link => (
-                        <NavLink
-                            key={link.to + link.label}
-                            to={link.to}
-                            end={link.end || false}
-                            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-                            onClick={onClose}
-                        >
-                            <span className="link-icon">{link.icon}</span>
-                            {link.label}
-                        </NavLink>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
+// ── Extended search targets: tab-level deep links ───────────────────
+// Allows searching for "dispatch" to find Orders & Fulfillment > Dispatch etc.
+const SEARCH_TARGETS = [
+    // Top-level pages
+    ...SUPER_ADMIN_LINKS.map(l => ({ ...l, group: '' })),
+    // Orders & Fulfillment tabs
+    { to: '/orders-fulfillment?tab=overview',   icon: '📊', label: 'Orders Overview',         group: 'Orders & Fulfillment' },
+    { to: '/orders-fulfillment?tab=submitted',  icon: '✅', label: 'Submitted Orders',         group: 'Orders & Fulfillment' },
+    { to: '/orders-fulfillment?tab=dispatch',   icon: '📋', label: 'Dispatch Confirmations',    group: 'Orders & Fulfillment' },
+    { to: '/orders-fulfillment?tab=delivery',   icon: '📍', label: 'Delivery Status',           group: 'Orders & Fulfillment' },
+    { to: '/orders-fulfillment?tab=issues',     icon: '🚨', label: 'Issues & Disputes',         group: 'Orders & Fulfillment' },
+    // Vendor tabs
+    { to: '/vendors?tab=all',                   icon: '🏢', label: 'All Vendors',               group: 'Vendors' },
+    { to: '/vendors?tab=onboarding',            icon: '➕', label: 'Add Vendor / Onboarding',   group: 'Vendors' },
+    { to: '/vendors?tab=performance',           icon: '🏆', label: 'Vendor Performance',        group: 'Vendors' },
+    // Catalog tabs
+    { to: '/catalog-reviews?tab=catalog',       icon: '📦', label: 'Catalog Items',             group: 'Catalog & Reviews' },
+    { to: '/catalog-reviews?tab=review-queue',  icon: '🗂️', label: 'Review Queue',             group: 'Catalog & Reviews' },
+    { to: '/catalog-reviews?tab=unmapped',      icon: '🔗', label: 'Unmapped Items',            group: 'Catalog & Reviews' },
+    { to: '/catalog-reviews?tab=duplicates',    icon: '⚠️', label: 'Duplicates / Merge',       group: 'Catalog & Reviews' },
+    { to: '/catalog-reviews?tab=change-requests', icon: '📋', label: 'Pending Reviews / Change Requests', group: 'Catalog & Reviews' },
+    { to: '/catalog-reviews?tab=audit-log',     icon: '📜', label: 'Audit Log',                 group: 'Catalog & Reviews' },
+    // Intelligence tabs
+    { to: '/intelligence?tab=ai-summary',       icon: '🤖', label: 'AI Intelligence Hub',       group: 'Intelligence' },
+    { to: '/intelligence?tab=price-intelligence', icon: '📊', label: 'Marketplace Intelligence / Price', group: 'Intelligence' },
+    { to: '/intelligence?tab=allocation',       icon: '📦', label: 'Vendor Allocation',         group: 'Intelligence' },
+    { to: '/intelligence?tab=capacity',         icon: '🛡️', label: 'Supply Capacity',          group: 'Intelligence' },
+    { to: '/intelligence?tab=seasonality',      icon: '🎄', label: 'Festival Calendar / Seasonality', group: 'Intelligence' },
+    // Finance tabs
+    { to: '/finance?tab=restaurant-invoices',   icon: '🧾', label: 'Restaurant Invoices',       group: 'Finance' },
+    { to: '/finance?tab=vendor-invoices',       icon: '🧾', label: 'Vendor Invoices',           group: 'Finance' },
+    { to: '/finance?tab=commission',            icon: '💵', label: 'Commission Summary',        group: 'Finance' },
+    { to: '/finance?tab=payments',              icon: '📊', label: 'Payment Tracking',          group: 'Finance' },
+    // Platform Admin tabs
+    { to: '/platform-admin?tab=restaurants',    icon: '🏪', label: 'Restaurants',               group: 'Platform Admin' },
+    { to: '/platform-admin?tab=users',          icon: '👥', label: 'Users & Roles',             group: 'Platform Admin' },
+    { to: '/platform-admin?tab=permissions',    icon: '⚙️', label: 'Role Permissions',         group: 'Platform Admin' },
+    { to: '/platform-admin?tab=migration',      icon: '🔧', label: 'Migration Tools',          group: 'Platform Admin' },
+    // Legacy aliases for search
+    { to: '/catalog-reviews?tab=review-queue',  icon: '🔍', label: 'Mapping Review',            group: 'Catalog & Reviews' },
+];
 
 export default function Sidebar({ isOpen, onClose }) {
     const { displayName, vendorName, vendorId, isSuperAdmin, isAdmin, logout } = useContext(UserContext);
@@ -151,18 +99,10 @@ export default function Sidebar({ isOpen, onClose }) {
     const roleLabel = isSuperAdmin ? 'Super Admin' : isAdmin ? 'Vendor Admin' : 'User';
     const searchFilter = search.trim().toLowerCase() || '';
 
-    // Flatten all links for quick page search results
+    // Search results from all targets
     const searchResults = useMemo(() => {
         if (!searchFilter) return [];
-        const results = [];
-        NAV_GROUPS.forEach(g => {
-            g.links.forEach(l => {
-                if (l.label.toLowerCase().includes(searchFilter)) {
-                    results.push({ ...l, group: g.label });
-                }
-            });
-        });
-        return results;
+        return SEARCH_TARGETS.filter(t => t.label.toLowerCase().includes(searchFilter));
     }, [searchFilter]);
 
     return (
@@ -204,17 +144,16 @@ export default function Sidebar({ isOpen, onClose }) {
                         {searchFilter && searchResults.length > 0 ? (
                             <div className="sidebar-section">
                                 <div className="sidebar-section-title">Search Results</div>
-                                {searchResults.map(r => (
+                                {searchResults.map((r, idx) => (
                                     <NavLink
-                                        key={r.to + r.label}
+                                        key={r.to + r.label + idx}
                                         to={r.to}
-                                        end={r.end || false}
                                         className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
                                         onClick={() => { setSearch(''); onClose(); }}
                                     >
                                         <span className="link-icon">{r.icon}</span>
                                         <span style={{ flex: 1 }}>{r.label}</span>
-                                        <span className="search-group-badge">{r.group}</span>
+                                        {r.group && <span className="search-group-badge">{r.group}</span>}
                                     </NavLink>
                                 ))}
                             </div>
@@ -224,80 +163,87 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <span>No pages match "{search}"</span>
                             </div>
                         ) : (
-                            /* Normal grouped navigation */
-                            <>
-                                {/* Pinned Control Tower */}
-                                <div className="sidebar-pinned">
+                            /* Normal flat navigation — 7 top-level links */
+                            <div className="sidebar-section">
+                                {SUPER_ADMIN_LINKS.map(link => (
                                     <NavLink
-                                        to={PINNED_LINK.to}
+                                        key={link.to}
+                                        to={link.to}
+                                        end={link.end || false}
                                         className={({ isActive }) => `sidebar-link sidebar-link-pinned ${isActive ? 'active' : ''}`}
                                         onClick={onClose}
                                     >
-                                        <span className="link-icon">{PINNED_LINK.icon}</span>
-                                        {PINNED_LINK.label}
+                                        <span className="link-icon">{link.icon}</span>
+                                        {link.label}
                                     </NavLink>
-                                </div>
-
-                                {NAV_GROUPS.map(group => (
-                                    <NavGroup
-                                        key={group.id}
-                                        group={group}
-                                        onClose={onClose}
-                                        searchFilter={searchFilter}
-                                    />
                                 ))}
-                            </>
+                            </div>
                         )}
                     </div>
                 ) : (
-                    /* ── Vendor sidebar (unchanged) ──────────────── */
+                    /* ── Vendor sidebar — workflow-based grouping ── */
                     <div className="sidebar-nav-scroll">
+                        {/* 🏠 Dashboard */}
                         <div className="sidebar-section">
-                            <div className="sidebar-section-title">Main</div>
-                            <NavLink to="/" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                            <NavLink to="/" end className={({ isActive }) => `sidebar-link sidebar-link-pinned ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🏠</span> Dashboard
                             </NavLink>
                         </div>
+
+                        {/* ⚙️ Operations */}
                         <div className="sidebar-section">
-                            <div className="sidebar-section-title">Catalog</div>
-                            <NavLink to="/items" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📋</span> Items
-                            </NavLink>
-                            <NavLink to="/vendor/import" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📥</span> Import Catalog
-                            </NavLink>
-                            <NavLink to="/vendor/import/history" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🕐</span> Import History
-                            </NavLink>
+                            <div className="sidebar-section-title">Operations</div>
                             <NavLink to="/dispatch-requests" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span><span className="link-icon">🚚</span> Dispatch Requests</span>
+                                <span><span className="link-icon">📦</span> Orders</span>
                                 {pendingDispatches > 0 && (
                                     <span style={{ background: '#f59e0b', color: '#fff', fontSize: '11px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
                                         {pendingDispatches}
                                     </span>
                                 )}
                             </NavLink>
-                        </div>
-                        <div className="sidebar-section">
-                            <div className="sidebar-section-title">Vendor</div>
-                            <NavLink to="/profile" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏢</span> Vendor Profile
-                            </NavLink>
-                            <NavLink to="/vendor/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">💳</span> My Invoices
-                            </NavLink>
-                            <NavLink to="/vendor/competitiveness" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">🏆</span> Competitiveness Score
-                            </NavLink>
                             <NavLink to="/vendor/allocation" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
-                                <span className="link-icon">📅</span> Combined Forecast
+                                <span className="link-icon">📊</span> Demand
                             </NavLink>
                             <NavLink to="/vendor/capacity" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                 <span className="link-icon">🛡️</span> Capacity Planning
                             </NavLink>
+                        </div>
+
+                        {/* 📦 Catalog */}
+                        <div className="sidebar-section">
+                            <div className="sidebar-section-title">Catalog</div>
+                            <NavLink to="/items" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📋</span> Catalog
+                            </NavLink>
+                            <NavLink to="/vendor/import" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">📥</span> Bulk Upload
+                            </NavLink>
+                        </div>
+
+                        {/* 💰 Finance */}
+                        <div className="sidebar-section">
+                            <div className="sidebar-section-title">Finance</div>
+                            <NavLink to="/vendor/invoices" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">💰</span> Payouts
+                            </NavLink>
+                        </div>
+
+                        {/* 📈 Performance */}
+                        <div className="sidebar-section">
+                            <div className="sidebar-section-title">Performance</div>
+                            <NavLink to="/vendor/competitiveness" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🏆</span> Competitiveness Score
+                            </NavLink>
+                        </div>
+
+                        {/* 🏢 Business */}
+                        <div className="sidebar-section">
+                            <div className="sidebar-section-title">Business</div>
+                            <NavLink to="/profile" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
+                                <span className="link-icon">🏢</span> Business Hub
+                            </NavLink>
                             {isAdmin && (
                                 <>
-                                    <div className="sidebar-section-title" style={{ marginTop: '16px' }}>Settings</div>
                                     <NavLink to="/users" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} onClick={onClose}>
                                         <span className="link-icon">👥</span> Manage Users
                                     </NavLink>

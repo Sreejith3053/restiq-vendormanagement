@@ -8,6 +8,7 @@ import { toast } from 'react-toastify';
 import PricingIntelligencePanel from './PricingIntelligencePanel';
 import CompetitivenessScorePanel from './CompetitivenessScorePanel';
 import { matchCatalogItem } from '../../utils/catalogUtils';
+import { validateCatalogItem } from '../../services/validationService';
 
 const ITEM_CATEGORIES = ['Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Cleaning', 'Other'];
 const UNITS = ['kg', 'lb', 'g', 'oz', 'L', 'mL', 'unit', 'dozen', 'case', 'packet', 'bag', 'bundle', 'box'];
@@ -16,10 +17,10 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
     const { isSuperAdmin, userId, displayName } = useContext(UserContext);
 
     const [form, setForm] = useState({
-        name: item.name || '',
+        name: item.itemName || item.name || '',    // v2-first for init
         brand: item.brand || '',
         category: item.category || '',
-        unit: item.unit || 'kg',
+        unit: item.baseUnit || item.unit || 'kg', // v2-first for init
         packQuantity: item.packQuantity || 1,
         itemSize: item.itemSize || '',
         vendorPrice: item.vendorPrice ?? item.price ?? '',
@@ -36,6 +37,7 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
 
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [validationWarnings, setValidationWarnings] = useState([]);
     const [catalogItems, setCatalogItems] = useState([]);
     const [catalogMatch, setCatalogMatch] = useState(null);
 
@@ -79,10 +81,10 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
         if (requestType !== 'edit') return true; // Deactivation is always a change
 
         return (
-            form.name.trim() !== (item.name || '') ||
+            form.name.trim() !== (item.itemName || item.name || '') ||  // v2-first compare
             form.brand.trim() !== (item.brand || '') ||
             form.category !== (item.category || '') ||
-            form.unit !== (item.unit || 'kg') ||
+            form.unit !== (item.baseUnit || item.unit || 'kg') ||       // v2-first compare
             Number(form.packQuantity) !== (item.packQuantity || 1) ||
             form.itemSize.trim() !== (item.itemSize || '') ||
             String(form.vendorPrice) !== String(item.vendorPrice ?? item.price ?? '') ||
@@ -96,10 +98,25 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setValidationWarnings([]);
 
         if (requestType === 'edit') {
             if (!form.name.trim()) { setError('Item name is required.'); return; }
             if (!form.category) { setError('Select a category.'); return; }
+
+            // Run centralized validation
+            const validation = validateCatalogItem(
+                { itemName: form.name, vendorPrice: form.vendorPrice, unit: form.unit, packSize: form.packQuantity, category: form.category, vendorSKU: form.sku, id: item.id },
+                { previousVersion: item, existingItems: catalogItems }
+            );
+            if (!validation.valid) {
+                setError(validation.errors.map(e => e.message).join('. '));
+                return;
+            }
+            if (validation.warnings.length > 0) {
+                setValidationWarnings(validation.warnings);
+                validation.warnings.forEach(w => toast.warn(w.message, { autoClose: 5000 }));
+            }
         }
         if (!hasChanges()) { setError('No changes detected.'); return; }
 
@@ -121,10 +138,12 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                 }
             }
             const proposedData = {
-                name: form.name.trim(),
-                brand: form.brand.trim(),
-                category: form.category,
-                unit: form.unit,
+                // Phase 3: write ONLY v2 canonical fields in proposedData
+                itemName:   form.name.trim(),
+                brand:      form.brand.trim(),
+                category:   form.category,
+                baseUnit:   form.unit,          // v2 canonical
+                orderUnit:  form.unit,          // v2 canonical
                 packQuantity: Number(form.packQuantity) || 1,
                 itemSize: form.itemSize.trim(),
                 vendorPrice: Number(form.vendorPrice) || 0,
@@ -135,23 +154,26 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
             };
 
             const originalData = {
-                name: item.name || '',
-                brand: item.brand || '',
-                category: item.category || '',
-                unit: item.unit || 'kg',
+                // Phase 3: capture v2 fields in snapshot for diff display
+                itemName:    item.itemName || item.name || '',
+                brand:       item.brand || '',
+                category:    item.category || '',
+                baseUnit:    item.baseUnit || item.unit || 'kg',
                 packQuantity: item.packQuantity || 1,
-                itemSize: item.itemSize || '',
+                itemSize:    item.itemSize || '',
                 vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
-                sku: item.sku || '',
+                sku:         item.sku || '',
                 description: item.description || '',
-                notes: item.notes || '',
-                taxable: !!item.taxable,
+                notes:       item.notes || '',
+                taxable:     !!item.taxable,
             };
 
             if (isSuperAdmin) {
                 // Super admin → direct update, always active unless deactivating
                 const newStatus = requestType === 'deactivate' ? 'inactive' : 'active';
-                const payload = requestType === 'deactivate' ? { status: newStatus } : { ...proposedData, status: newStatus };
+                const payload = requestType === 'deactivate'
+                    ? { status: newStatus, normalizedStatus: newStatus }
+                    : { ...proposedData, status: newStatus, normalizedStatus: newStatus };
 
                 const itemRef = doc(db, `vendors/${vendorId}/items`, item.id);
                 await updateDoc(itemRef, {
@@ -358,7 +380,14 @@ export default function EditItemModal({ item, vendorId, vendorName, onClose, onI
                             </div>
                         )}
 
-                        {error && <div style={{ marginTop: 12, color: '#ff4d6a', fontSize: 13 }}>{error}</div>}
+                        {error && <div style={{ marginTop: 12, color: '#ff4d6a', fontSize: 13 }}>❌ {error}</div>}
+                        {validationWarnings.length > 0 && (
+                            <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)', borderRadius: 8 }}>
+                                {validationWarnings.map((w, i) => (
+                                    <div key={i} style={{ fontSize: 12, color: '#fbbf24', marginBottom: 2 }}>⚠️ {w.message}</div>
+                                ))}
+                            </div>
+                        )}
 
                         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
                             <button type="button" className="ui-btn ghost" onClick={onClose}>Cancel</button>

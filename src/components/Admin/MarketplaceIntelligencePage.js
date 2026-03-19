@@ -165,10 +165,10 @@ async function loadAllVendorItems() {
     for (const v of vendors) {
         try {
             const itemSnap = await getDocs(collection(db, `vendors/${v.id}/items`));
-            const vendorItemNames = itemSnap.docs.map(d => (d.data().name || '').trim());
+            const vendorItemNames = itemSnap.docs.map(d => (d.data().itemName || d.data().name || '').trim());
             itemSnap.docs.forEach(d => {
                 const data = d.data();
-                const name = normalizeItemName(data.name);
+                const name = normalizeItemName(data.itemName || data.name || '');
                 if (!name) return;
                 const price = parseFloat(data.vendorPrice) || parseFloat(data.price) || 0;
                 allItems.push({
@@ -177,7 +177,7 @@ async function loadAllVendorItems() {
                     itemId: d.id,
                     itemName: name,
                     price,
-                    unit: data.unit || '',
+                    unit: data.baseUnit || data.unit || '',  // v2-first
                     category: data.category || 'Produce',
                     packQuantity: data.packQuantity || 1,
                     itemSize: data.itemSize || '',

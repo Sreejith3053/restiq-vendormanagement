@@ -64,6 +64,12 @@ export async function getVendorItem(vendorId, itemId) {
  */
 export async function createVendorItem(vendorId, data, reviewerInfo = {}) {
     const { userId = '', displayName = '' } = reviewerInfo;
+    const rawStatus = data.status || 'Active';
+
+    // Phase 3: write ONLY v2 canonical fields — no `name`, `price`, `unit` legacy writes
+    const baseUnit  = data.baseUnit  || normalizeStr(data.unit || '');
+    const orderUnit = data.orderUnit || data.baseUnit || data.unit || '';
+
     const payload = {
         vendorId,
         itemName:           data.itemName || '',
@@ -72,14 +78,15 @@ export async function createVendorItem(vendorId, data, reviewerInfo = {}) {
         category:           data.category || '',
         brand:              data.brand || '',
         packSize:           data.packSize || '',
-        baseUnit:           data.baseUnit || data.unit || '',
-        orderUnit:          data.orderUnit || data.unit || '',
-        unit:               data.unit || '',
-        vendorPrice:        parseFloat(data.price || data.vendorPrice) || 0,
+        packSizeNormalized: normalizeStr(data.packSize || ''),
+        baseUnit,
+        orderUnit,
+        vendorPrice:        parseFloat(data.vendorPrice ?? data.price) || 0,  // v2 first
         currency:           data.currency || 'CAD',
         minOrderQty:        data.minOrderQty || '',
         leadTimeDays:       data.leadTimeDays || '',
-        status:             data.status || 'Active',
+        status:             rawStatus,
+        normalizedStatus:   rawStatus.toLowerCase(),
         notes:              data.notes || '',
         catalogItemId:      data.catalogItemId || null,
         mappingStatus:      data.catalogItemId ? 'mapped' : (data.mappingStatus || 'unmapped'),
@@ -125,6 +132,25 @@ export async function updateVendorItem(vendorId, itemId, data, reviewerInfo = {}
     // Normalize itemName when included
     if (data.itemName !== undefined) {
         update.itemNameNormalized = normalizeStr(data.itemName);
+    }
+    // Phase 3: derive packSizeNormalized when packSize changes
+    if (data.packSize !== undefined) {
+        update.packSizeNormalized = normalizeStr(data.packSize);
+    }
+    // v2: normalize status
+    if (data.status !== undefined) {
+        update.normalizedStatus = (data.status || '').toLowerCase();
+    }
+    // v2: ensure vendorPrice is always set (flip price→vendorPrice)
+    if (data.price !== undefined && data.vendorPrice === undefined) {
+        update.vendorPrice = parseFloat(data.price) || 0;
+        delete update.price; // stop writing legacy price field
+    }
+    // v2: derive baseUnit/orderUnit if only the legacy `unit` field was passed
+    if (data.unit !== undefined && data.baseUnit === undefined) {
+        update.baseUnit  = normalizeStr(data.unit);
+        update.orderUnit = update.orderUnit || data.unit;
+        delete update.unit; // stop writing legacy unit field
     }
 
     await updateDoc(doc(db, 'vendors', vendorId, 'items', itemId), update);

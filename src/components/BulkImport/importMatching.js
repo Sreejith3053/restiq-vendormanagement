@@ -320,9 +320,10 @@ function buildExistingMaps(existingItems) {
         const sku = normalizeText(item.vendorSKU || '');
         if (sku) bySKU[sku] = item;
 
-        const nameNorm = normalizeText(item.name || item.itemName || '');
+        // v2: prefer pre-computed normalized fields; fall back to runtime normalization
+        const nameNorm = item.itemNameNormalized || normalizeText(item.itemName || item.name || '');
         const packNorm = normalizePackSize(item.packSize || '');
-        const unitNorm = normalizeUnit(item.unit || '');
+        const unitNorm = item.unitNormalized || normalizeUnit(item.baseUnit || item.unit || '');
         const fullKey  = [nameNorm, packNorm, unitNorm].join('|');
 
         if (nameNorm) {
@@ -442,14 +443,14 @@ function matchOneRow(normalizedRow, maps, existingItems) {
 
     // ─ No exact name match — check naming variants ──────────────────────────
     const variantMatches = existingItems.filter(item => {
-        const en = normalizeText(item.name || item.itemName || '');
-        return en !== nameNorm && isNamingVariant(normalizedRow.itemName, item.name || item.itemName || '');
+        const en = item.itemNameNormalized || normalizeText(item.itemName || item.name || '');
+        return en !== nameNorm && isNamingVariant(normalizedRow.itemName, item.itemName || item.name || '');
     });
 
     if (variantMatches.length === 1) {
         return {
             matchType: 'naming_variant', confidence: 'medium',
-            reason: `Naming variant match: "${variantMatches[0].name}" ↔ "${normalizedRow.itemName}"`,
+            reason: `Naming variant match: "${variantMatches[0].itemName || variantMatches[0].name}" ↔ "${normalizedRow.itemName}"`,
             matchedItem: variantMatches[0],
             matchedItemId: variantMatches[0].id,
         };
@@ -466,7 +467,7 @@ function matchOneRow(normalizedRow, maps, existingItems) {
     // ─ Fuzzy near-duplicate detection ───────────────────────────────────────
     const SIMILARITY_THRESHOLD = 0.60;
     const nearDuplicates = existingItems
-        .map(item => ({ item, sim: stringSimilarity(normalizedRow.itemName, item.name || item.itemName || '') }))
+        .map(item => ({ item, sim: stringSimilarity(normalizedRow.itemName, item.itemName || item.name || '') }))
         .filter(({ sim }) => sim >= SIMILARITY_THRESHOLD)
         .sort((a, b) => b.sim - a.sim)
         .slice(0, 3);
@@ -477,9 +478,10 @@ function matchOneRow(normalizedRow, maps, existingItems) {
             reason: 'No match found — but similar items exist. Verify this is truly a new item.',
             matchedItem: null, matchedItemId: null,
             similarItems: nearDuplicates.map(({ item, sim }) => ({
-                id: item.id, name: item.name || item.itemName || '',
+                id: item.id, name: item.itemName || item.name || '',
                 similarity: Math.round(sim * 100),
-                packSize: item.packSize || '', unit: item.unit || '',
+                packSize: item.packSize || '',
+                unit: item.baseUnit || item.unit || '',
                 vendorPrice: item.vendorPrice ?? item.price ?? '',
             })),
         };
@@ -496,7 +498,7 @@ function matchOneRow(normalizedRow, maps, existingItems) {
 
 function resolveNameSingleCandidate(row, candidate, packNorm, unitNorm) {
     const existingPackNorm = normalizePackSize(candidate.packSize || '');
-    const existingUnitNorm = normalizeUnit(candidate.unit || '');
+    const existingUnitNorm = candidate.unitNormalized || normalizeUnit(candidate.baseUnit || candidate.unit || '');
 
     const packMatches = !packNorm || !existingPackNorm || packNorm === existingPackNorm;
     const unitMatches = !unitNorm || !existingUnitNorm || unitNorm === existingUnitNorm;
@@ -553,8 +555,10 @@ function resolveNameSingleCandidate(row, candidate, packNorm, unitNorm) {
 
 function toCandidateMeta(c) {
     return {
-        id: c.id, name: c.name || c.itemName || '',
-        packSize: c.packSize || '', unit: c.unit || '',
+        id: c.id,
+        name: c.itemName || c.name || '',
+        packSize: c.packSize || '',
+        unit: c.baseUnit || c.unit || '',
         vendorPrice: c.vendorPrice ?? c.price ?? '',
         vendorSKU: c.vendorSKU || '',
     };

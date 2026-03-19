@@ -10,7 +10,9 @@ import {
     doc,
     updateDoc,
     deleteDoc,
+    setDoc,
     orderBy,
+    serverTimestamp,
 } from 'firebase/firestore';
 import AddUserModal from './AddUserModal';
 import { toast } from 'react-toastify';
@@ -56,9 +58,17 @@ export default function UserManagementPage() {
 
     const handleToggleActive = async (user) => {
         try {
-            await updateDoc(doc(db, 'login', user.id), {
-                active: !user.active,
-            });
+            const update = { active: !user.active };
+            await updateDoc(doc(db, 'login', user.id), update);
+            // v2: mirror to users collection
+            try {
+                await setDoc(doc(db, 'users', user.id), {
+                    ...update,
+                    updatedAt: serverTimestamp(),
+                }, { merge: true });
+            } catch (syncErr) {
+                console.warn('[UserManagement] users sync failed (non-fatal):', syncErr);
+            }
             toast.success(`${user.displayName} ${user.active ? 'disabled' : 'enabled'}`);
             fetchUsers();
         } catch (err) {

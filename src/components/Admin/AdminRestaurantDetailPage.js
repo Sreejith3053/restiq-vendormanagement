@@ -106,13 +106,13 @@ export default function AdminRestaurantDetailPage() {
 
         fulfilledOrders.forEach(o => {
             (o.items || []).forEach(item => {
-                const key = item.itemId || item.id || `${item.name}_${o.vendorId}`;
+                const key = item.itemId || item.id || `${item.itemName || item.name}_${o.vendorId}`;
                 if (!productMap[key]) {
                     productMap[key] = {
-                        name: item.itemName || item.name || 'Unknown Item',
+                        name: item.itemName || item.name || 'Unknown Item',       // v2-first
                         vendorName: o.vendorName || 'Unknown Vendor',
                         category: item.category || 'Uncategorized',
-                        unit: item.unit || 'unit',
+                        unit: item.baseUnit || item.unit || 'unit',               // v2-first
                         qtySold: 0,
                         revenue: 0,
                     };

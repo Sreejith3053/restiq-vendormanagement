@@ -172,11 +172,11 @@ export function exportVendorCatalog(items, vendorName) {
     const rows = items.map(item => [
         item.id || '',
         item.vendorSKU || '',
-        item.name || '',
+        item.itemName || item.name || '',          // v2-first
         item.category || '',
         item.brand || '',
         item.packSize || '',
-        item.unit || '',
+        item.baseUnit || item.unit || '',          // v2-first
         item.vendorPrice ?? item.price ?? '',
         item.currency || 'CAD',
         item.minOrderQty || '',

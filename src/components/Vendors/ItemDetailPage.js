@@ -193,21 +193,29 @@ export default function ItemDetailPage() {
         setSaving(true);
         try {
             const proposedData = {
-                name: editForm.name.trim(),
-                brand: (editForm.brand || '').trim(),
-                category: editForm.category || 'Other',
-                unit: editForm.unit || 'kg',
+                itemName:    editForm.name?.trim() || '',  // Phase 3: v2 canonical
+                brand:       (editForm.brand || '').trim(),
+                category:    editForm.category || 'Other',
+                baseUnit:    editForm.unit || 'kg',        // v2 canonical
+                orderUnit:   editForm.unit || 'kg',        // v2 canonical
                 packQuantity: Number(editForm.packQuantity) || 1,
-                itemSize: editForm.itemSize?.trim() || '',
+                itemSize:    editForm.itemSize?.trim() || '',
                 vendorPrice: Number(editForm.vendorPrice),
-                sku: editForm.sku?.trim() || '',
-                notes: editForm.notes?.trim() || '',
-                taxable: !!editForm.taxable,
+                sku:         editForm.sku?.trim() || '',
+                notes:       editForm.notes?.trim() || '',
+                taxable:     !!editForm.taxable,
             };
             const originalData = {
-                name: item.name, brand: item.brand || '', category: item.category, unit: item.unit,
-                packQuantity: item.packQuantity || 1, itemSize: item.itemSize || '',
-                vendorPrice: item.vendorPrice ?? item.price ?? 0, sku: item.sku || '', notes: item.notes || '', taxable: !!item.taxable,
+                itemName:    item.itemName || item.name || '',  // v2-first
+                brand:       item.brand || '',
+                category:    item.category || '',
+                baseUnit:    item.baseUnit || item.unit || 'kg',
+                packQuantity: item.packQuantity || 1,
+                itemSize:    item.itemSize || '',
+                vendorPrice: item.vendorPrice ?? item.price ?? 0,
+                sku:         item.sku || '',
+                notes:       item.notes || '',
+                taxable:     !!item.taxable,
             };
             const itemRef = doc(db, `vendors/${vendorId}/items`, itemId);
 
@@ -282,8 +290,12 @@ export default function ItemDetailPage() {
                     changeType: 'delete',
                     proposedData: null,
                     originalData: {
-                        name: item.name, category: item.category, unit: item.unit,
-                        price: Number(item.price), sku: item.sku || '', notes: item.notes || '',
+                        itemName:  item.itemName || item.name || '',  // Phase 3: v2-first
+                        category:  item.category || '',
+                        baseUnit:  item.baseUnit || item.unit || '',
+                        vendorPrice: Number(item.vendorPrice ?? item.price ?? 0),
+                        sku:       item.sku || '',
+                        notes:     item.notes || '',
                     },
                     requestedBy: userId,
                     requestedByName: displayName || 'Unknown',
@@ -406,7 +418,7 @@ export default function ItemDetailPage() {
             }
 
             await logAudit('approved', {
-                itemName: item.proposedData?.name || item.name,
+                itemName: item.proposedData?.itemName || item.proposedData?.name || item.itemName || item.name,  // v2-first
                 proposedData: item.proposedData,
                 originalData: item.originalData,
                 requestedBy: item.requestedByName,

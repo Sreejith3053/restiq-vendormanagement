@@ -6,82 +6,64 @@ import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 
-// Pages
-import Dashboard from './components/Dashboard';
-import VendorListPage from './components/Vendors/VendorListPage';
+// ── Consolidated Pages (SuperAdmin) ─────────────────────────────────
+import OrdersFulfillmentPage from './components/Consolidated/OrdersFulfillmentPage';
+import VendorsPage from './components/Consolidated/VendorsPage';
+import CatalogReviewsPage from './components/Consolidated/CatalogReviewsPage';
+import IntelligencePage from './components/Consolidated/IntelligencePage';
+import FinancePage from './components/Consolidated/FinancePage';
+import PlatformAdminPage from './components/Consolidated/PlatformAdminPage';
+
+// ── Detail / Sub-pages (remain standalone) ──────────────────────────
 import VendorDetailPage from './components/Vendors/VendorDetailPage';
 import ItemDetailPage from './components/Vendors/ItemDetailPage';
-import AddVendorPage from './components/Vendors/AddVendorPage';
-import ItemCatalogPage from './components/Vendors/ItemCatalogPage';
-import UserManagementPage from './components/Users/UserManagementPage';
-import OrdersPage from './components/Orders/OrdersPage';
-import RolePermissionsPage from './components/Settings/RolePermissionsPage';
-import AdminInvoicesPage from './components/Admin/AdminInvoicesPage';
-import AdminRestaurantInvoicesPage from './components/Admin/AdminRestaurantInvoicesPage';
+import AdminRestaurantDetailPage from './components/Admin/AdminRestaurantDetailPage';
 import RestaurantInvoiceDetailPage from './components/Admin/RestaurantInvoiceDetailPage';
-import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
 import InvoiceDetailPage from './components/Vendors/InvoiceDetailPage';
+
+// ── Vendor / Non-SuperAdmin Pages ───────────────────────────────────
+import Dashboard from './components/Dashboard';
+import ItemCatalogPage from './components/Vendors/ItemCatalogPage';
 import DispatchRequestsPage from './components/Vendors/DispatchRequestsPage';
 import DispatchDetailPage from './components/Vendors/DispatchDetailPage';
+import VendorInvoicesPage from './components/Vendors/VendorInvoicesPage';
 import VendorScoreDashboard from './components/Vendors/VendorScoreDashboard';
 import VendorExpectedAllocation from './components/Vendors/VendorExpectedAllocation';
 import VendorCapacityPlanning from './components/Vendors/VendorCapacityPlanning';
 import VendorImportPage from './components/BulkImport/VendorImportPage';
 import VendorImportPreviewPage from './components/BulkImport/VendorImportPreviewPage';
 import VendorImportHistoryPage from './components/BulkImport/VendorImportHistoryPage';
-import useAdminNotificationSync from './hooks/useAdminNotificationSync';
-import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
+import UserManagementPage from './components/Users/UserManagementPage';
+import RolePermissionsPage from './components/Settings/RolePermissionsPage';
+import VendorIssuesSection from './components/Vendors/VendorIssuesSection';
+import VendorNotificationCenter from './components/Vendors/VendorNotificationCenter';
+import VendorAnalytics from './components/Vendors/VendorAnalytics';
+import VendorAvailabilityCalendar from './components/Vendors/VendorAvailabilityCalendar';
 
-import AdminRestaurantsPage from './components/Admin/AdminRestaurantsPage';
+// ── Control Tower ───────────────────────────────────────────────────
+import GlobalSupplyControlTower from './components/Forecast/GlobalSupplyControlTower';
 
-import AdminRestaurantDetailPage from './components/Admin/AdminRestaurantDetailPage';
-import MarketplaceIntelligencePage from './components/Admin/MarketplaceIntelligencePage';
-import VendorCompetitivenessDashboard from './components/Admin/VendorCompetitivenessDashboard';
-import VendorAllocationDashboard from './components/Admin/VendorAllocationDashboard';
-import SupplyCapacityDashboard from './components/Admin/SupplyCapacityDashboard';
-
-// Forecast Module (Super Admin Only)
+// ── Forecast Module (SuperAdmin — kept for internal tabs / CT) ──────
 import ForecastOverviewPage from './components/Forecast/ForecastOverviewPage';
 import RestaurantForecastPage from './components/Forecast/RestaurantForecastPage';
 import CombinedDemandPage from './components/Forecast/CombinedDemandPage';
 import VendorPlanningPage from './components/Forecast/VendorPlanningPage';
-import FestivalSeasonalityPage from './components/Forecast/FestivalSeasonalityPage';
 import ForecastAccuracyPage from './components/Forecast/ForecastAccuracyPage';
 import ForecastAlertsPage from './components/Forecast/ForecastAlertsPage';
 import ForecastSettingsPage from './components/Forecast/ForecastSettingsPage';
-
-// Main Dashboard
-import GlobalSupplyControlTower from './components/Forecast/GlobalSupplyControlTower';
-import SuggestedOrderReview from './components/Forecast/SuggestedOrderReview';
-import SubmittedOrdersPage from './components/Forecast/SubmittedOrdersPage';
-
-// New Unified Forecast Pages
 import DemandForecastPage from './components/Forecast/DemandForecastPage';
 import ForecastIntelligencePage from './components/Forecast/ForecastIntelligencePage';
-
-// Dispatch & Logistics Pages
-import DispatchConfirmationsPage from './components/Forecast/DispatchConfirmationsPage';
 import WarehousePickListPage from './components/Forecast/WarehousePickListPage';
-import DeliveryStatusPage from './components/Forecast/DeliveryStatusPage';
-import IssuesDisputesPage from './components/Forecast/IssuesDisputesPage';
+import SuggestedOrderReview from './components/Forecast/SuggestedOrderReview';
 
-// AI Intelligence Layer
-import AIIntelligenceHub from './components/AI/AIIntelligenceHub';
+// ── Admin Notification Sync ─────────────────────────────────────────
+import useAdminNotificationSync from './hooks/useAdminNotificationSync';
+import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 
-// Master Collections Admin
-import ManageRestaurantsPage from './components/Admin/ManageRestaurantsPage';
-import ManageCatalogPage from './components/Admin/ManageCatalogPage';
-import MigrationAdminPage from './components/Admin/MigrationAdminPage';
-import CatalogItemMappingReviewPage from './components/Admin/CatalogItemMappingReviewPage';
-import PendingReviewsDashboard from './components/Admin/PendingReviewsDashboard';
-import UnmappedVendorItemsPage from './components/Admin/UnmappedVendorItemsPage';
-import SuperadminCatalogReviewQueuePage from './components/CatalogReview/SuperadminCatalogReviewQueuePage';
-
-
-
-// Toasts
+// ── Toasts ──────────────────────────────────────────────────────────
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
     const { role, isSuperAdmin } = useContext(UserContext);
@@ -89,12 +71,10 @@ function App() {
     const location = useLocation();
 
     const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
-    const isAdmin = normalizedRole === 'admin'; // Helper for vendor admin routes
+    const isAdmin = normalizedRole === 'admin';
 
-    // Start background sync for admin notifications (runs efficiently if isSuperAdmin)
     useAdminNotificationSync();
 
-    // Mobile sidebar
     const [showSidebar, setShowSidebar] = useState(false);
 
     // Persist last path
@@ -114,12 +94,12 @@ function App() {
         if (window.innerWidth < 1024) setShowSidebar(false);
     }, [location.pathname]);
 
-    // Not logged in → show login
     if (!normalizedRole) {
         return <Login />;
     }
 
     return (
+        <ErrorBoundary>
         <div className="app-container theme-neon">
             <Sidebar isOpen={showSidebar} onClose={() => setShowSidebar(false)} />
 
@@ -128,67 +108,100 @@ function App() {
 
                 <div className="page-content">
                     <Routes>
-                        <Route path="/login" element={<Navigate to={isSuperAdmin ? "/vendors" : "/"} />} />
+                        <Route path="/login" element={<Navigate to={isSuperAdmin ? "/admin/forecast/control-tower" : "/"} />} />
 
-                        {/* ── Super Admin Routes ── */}
+                        {/* ══════════════════════════════════════════════════════════
+                            SUPER ADMIN ROUTES
+                           ══════════════════════════════════════════════════════════ */}
                         {isSuperAdmin && (
                             <>
+                                {/* ── 1. Control Tower (unchanged) ── */}
+                                <Route path="/admin/forecast/control-tower" element={<GlobalSupplyControlTower />} />
                                 <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
-                                <Route path="/orders" element={<OrdersPage />} />
-                                <Route path="/vendors" element={<VendorListPage />} />
-                                <Route path="/vendors/add" element={<AddVendorPage />} />
+                                <Route path="/" element={<Navigate to="/admin/forecast/control-tower" />} />
+
+                                {/* ── 2. Orders & Fulfillment (consolidated) ── */}
+                                <Route path="/orders-fulfillment" element={<OrdersFulfillmentPage />} />
+
+                                {/* ── 3. Vendors (consolidated) ── */}
+                                <Route path="/vendors" element={<VendorsPage />} />
                                 <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />
                                 <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
-                                <Route path="/users" element={<UserManagementPage />} />
-                                <Route path="/settings/permissions" element={<RolePermissionsPage />} />
 
-                                <Route path="/admin/restaurants" element={<AdminRestaurantsPage />} />
-                                <Route path="/admin/restaurants/:restaurantId" element={<AdminRestaurantDetailPage />} />
-                                <Route path="/admin/pending-reviews" element={<PendingReviewsDashboard />} />
+                                {/* ── 4. Catalog & Reviews (consolidated) ── */}
+                                <Route path="/catalog-reviews" element={<CatalogReviewsPage />} />
 
-                                <Route path="/admin/marketplace-intelligence" element={<MarketplaceIntelligencePage />} />
-                                <Route path="/admin/vendor-competitiveness" element={<VendorCompetitivenessDashboard />} />
-                                <Route path="/admin/vendor-allocation" element={<VendorAllocationDashboard />} />
-                                <Route path="/admin/supply-capacity" element={<SupplyCapacityDashboard />} />
-                                <Route path="/admin/invoices" element={<AdminInvoicesPage />} />
-                                <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
-                                <Route path="/admin/restaurant-invoices" element={<AdminRestaurantInvoicesPage />} />
+                                {/* ── 5. Intelligence (consolidated) ── */}
+                                <Route path="/intelligence" element={<IntelligencePage />} />
+
+                                {/* ── 6. Finance (consolidated) ── */}
+                                <Route path="/finance" element={<FinancePage />} />
                                 <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
+                                <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
 
+                                {/* ── 7. Platform Admin (consolidated) ── */}
+                                <Route path="/platform-admin" element={<PlatformAdminPage />} />
+                                <Route path="/admin/restaurants/:restaurantId" element={<AdminRestaurantDetailPage />} />
 
+                                {/* ── Forecast internal routes (used by CT tabs) ── */}
                                 <Route path="/admin/forecast/demand" element={<DemandForecastPage />} />
                                 <Route path="/admin/forecast/intelligence" element={<ForecastIntelligencePage />} />
                                 <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />
                                 <Route path="/admin/forecast/combined" element={<CombinedDemandPage />} />
                                 <Route path="/admin/forecast/vendors" element={<VendorPlanningPage />} />
-                                <Route path="/admin/forecast/festivals" element={<FestivalSeasonalityPage />} />
                                 <Route path="/admin/forecast/accuracy" element={<ForecastAccuracyPage />} />
                                 <Route path="/admin/forecast/alerts" element={<ForecastAlertsPage />} />
                                 <Route path="/admin/forecast/settings" element={<ForecastSettingsPage />} />
-                                <Route path="/admin/forecast/control-tower" element={<GlobalSupplyControlTower />} />
-                                <Route path="/admin/forecast/suggested-order-review" element={<SuggestedOrderReview />} />
-                                <Route path="/admin/forecast/submitted-orders" element={<SubmittedOrdersPage />} />
-
-                                {/* Dispatch & Logistics */}
-                                <Route path="/admin/dispatch/confirmations" element={<DispatchConfirmationsPage />} />
                                 <Route path="/admin/dispatch/warehouse" element={<WarehousePickListPage />} />
-                                <Route path="/admin/dispatch/delivery" element={<DeliveryStatusPage />} />
-                                <Route path="/admin/dispatch/issues" element={<IssuesDisputesPage />} />
+                                <Route path="/admin/forecast/suggested-order-review" element={<SuggestedOrderReview />} />
 
-                                {/* AI Intelligence */}
-                                <Route path="/admin/ai-intelligence" element={<AIIntelligenceHub />} />
+                                {/* ═══════════════════════════════════════════════════
+                                    LEGACY ROUTE REDIRECTS
+                                    All old routes safely redirect to consolidated pages.
+                                    This preserves bookmarks and existing links.
+                                   ═══════════════════════════════════════════════════ */}
 
-                                {/* Master Collections */}
-                                <Route path="/admin/manage-restaurants" element={<ManageRestaurantsPage />} />
-                                <Route path="/admin/manage-catalog" element={<ManageCatalogPage />} />
-                                <Route path="/admin/migration" element={<MigrationAdminPage />} />
-                                <Route path="/admin/mapping-review" element={<CatalogItemMappingReviewPage />} />
+                                {/* Orders & Fulfillment redirects */}
+                                <Route path="/orders" element={<Navigate to="/orders-fulfillment?tab=overview" replace />} />
+                                <Route path="/admin/forecast/submitted-orders" element={<Navigate to="/orders-fulfillment?tab=submitted" replace />} />
+                                <Route path="/admin/dispatch/confirmations" element={<Navigate to="/orders-fulfillment?tab=dispatch" replace />} />
+                                <Route path="/admin/dispatch/delivery" element={<Navigate to="/orders-fulfillment?tab=delivery" replace />} />
+                                <Route path="/admin/dispatch/issues" element={<Navigate to="/orders-fulfillment?tab=issues" replace />} />
 
-                                <Route path="/" element={<Navigate to="/admin/forecast/control-tower" />} />
+                                {/* Vendor redirects */}
+                                <Route path="/vendors/add" element={<Navigate to="/vendors?tab=onboarding" replace />} />
+                                <Route path="/admin/vendor-competitiveness" element={<Navigate to="/vendors?tab=performance" replace />} />
+
+                                {/* Catalog & Reviews redirects */}
+                                <Route path="/admin/manage-catalog" element={<Navigate to="/catalog-reviews?tab=catalog" replace />} />
+                                <Route path="/admin/mapping-review" element={<Navigate to="/catalog-reviews?tab=review-queue" replace />} />
+                                <Route path="/admin/catalog-review" element={<Navigate to="/catalog-reviews?tab=review-queue" replace />} />
+                                <Route path="/admin/unmapped-items" element={<Navigate to="/catalog-reviews?tab=unmapped" replace />} />
+                                <Route path="/admin/pending-reviews" element={<Navigate to="/catalog-reviews?tab=change-requests" replace />} />
+
+                                {/* Intelligence redirects */}
+                                <Route path="/admin/ai-intelligence" element={<Navigate to="/intelligence?tab=ai-summary" replace />} />
+                                <Route path="/admin/marketplace-intelligence" element={<Navigate to="/intelligence?tab=price-intelligence" replace />} />
+                                <Route path="/admin/vendor-allocation" element={<Navigate to="/intelligence?tab=allocation" replace />} />
+                                <Route path="/admin/supply-capacity" element={<Navigate to="/intelligence?tab=capacity" replace />} />
+                                <Route path="/admin/forecast/festivals" element={<Navigate to="/intelligence?tab=seasonality" replace />} />
+
+                                {/* Finance redirects */}
+                                <Route path="/admin/restaurant-invoices" element={<Navigate to="/finance?tab=restaurant-invoices" replace />} />
+                                <Route path="/admin/invoices" element={<Navigate to="/finance?tab=vendor-invoices" replace />} />
+
+                                {/* Platform Admin redirects */}
+                                <Route path="/admin/restaurants" element={<Navigate to="/platform-admin?tab=restaurants" replace />} />
+                                <Route path="/admin/manage-restaurants" element={<Navigate to="/platform-admin?tab=restaurants" replace />} />
+                                <Route path="/users" element={<Navigate to="/platform-admin?tab=users" replace />} />
+                                <Route path="/settings/permissions" element={<Navigate to="/platform-admin?tab=permissions" replace />} />
+                                <Route path="/admin/migration" element={<Navigate to="/platform-admin?tab=migration" replace />} />
                             </>
                         )}
 
-                        {/* ── Vendor Admin / User Routes ── */}
+                        {/* ══════════════════════════════════════════════════════════
+                            VENDOR ADMIN / USER ROUTES (unchanged)
+                           ══════════════════════════════════════════════════════════ */}
                         {!isSuperAdmin && (
                             <>
                                 <Route path="/" element={<Dashboard />} />
@@ -202,6 +215,10 @@ function App() {
                                 <Route path="/vendor/competitiveness" element={<VendorScoreDashboard />} />
                                 <Route path="/vendor/allocation" element={<VendorExpectedAllocation />} />
                                 <Route path="/vendor/capacity" element={<VendorCapacityPlanning />} />
+                                <Route path="/vendor/issues" element={<VendorIssuesSection />} />
+                                <Route path="/vendor/notifications" element={<VendorNotificationCenter />} />
+                                <Route path="/vendor/analytics" element={<VendorAnalytics />} />
+                                <Route path="/vendor/availability" element={<VendorAvailabilityCalendar />} />
                                 <Route path="/vendor/import" element={<VendorImportPage />} />
                                 <Route path="/vendor/import/preview" element={<VendorImportPreviewPage />} />
                                 <Route path="/vendor/import/history" element={<VendorImportHistoryPage />} />
@@ -211,14 +228,6 @@ function App() {
                                         <Route path="/settings/permissions" element={<RolePermissionsPage />} />
                                     </>
                                 )}
-                            </>
-                        )}
-
-                        {/* ── Catalog Review Queue (SuperAdmin only) ── */}
-                        {isSuperAdmin && (
-                            <>
-                                <Route path="/admin/catalog-review" element={<SuperadminCatalogReviewQueuePage />} />
-                                <Route path="/admin/unmapped-items" element={<UnmappedVendorItemsPage />} />
                             </>
                         )}
 
@@ -235,6 +244,7 @@ function App() {
                 theme="dark"
             />
         </div>
+        </ErrorBoundary>
     );
 }
 

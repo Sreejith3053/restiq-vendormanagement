@@ -10,6 +10,7 @@
  *   - submittedOrders (all)          → demand computation (filtered by item name match)
  */
 import React, { useState, useEffect, useContext, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     FiRefreshCw, FiTrendingUp, FiPackage, FiCalendar, FiAlertCircle,
 } from 'react-icons/fi';
@@ -24,6 +25,7 @@ const C = { green: '#34d399', red: '#f87171', amber: '#fbbf24', blue: '#38bdf8',
 function normalizeItemName(n) { return (n || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
 export default function VendorExpectedAllocation() {
+    const navigate = useNavigate();
     const { vendorId, vendorName } = useContext(UserContext);
 
     const [myItems, setMyItems] = useState([]); // vendor's own catalog items
@@ -213,9 +215,19 @@ export default function VendorExpectedAllocation() {
                         <div style={{ textAlign: 'center', padding: '60px 32px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12 }}>
                             <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.6 }}>📭</div>
                             <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>No Orders This Week</h3>
-                            <p style={{ margin: 0, color: C.muted, fontSize: 14, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+                            <p style={{ margin: '0 0 20px', color: C.muted, fontSize: 14, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
                                 No restaurant orders for your items have been submitted for <b>{weekLabel}</b>. Check back once restaurants submit their weekly orders.
                             </p>
+                            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                <button onClick={() => navigate('/vendor/capacity')} style={{
+                                    padding: '10px 20px', borderRadius: 8, border: '1px solid rgba(56,189,248,0.3)',
+                                    background: 'rgba(56,189,248,0.1)', color: '#38bdf8', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                }}>🛡️ Update Capacity Plan</button>
+                                <button onClick={() => navigate('/items')} style={{
+                                    padding: '10px 20px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)',
+                                    background: 'transparent', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                }}>📋 Review Catalog Items</button>
+                            </div>
                         </div>
                     )}
 
@@ -322,6 +334,26 @@ export default function VendorExpectedAllocation() {
                                     </tr>
                                 </tfoot>
                             </table>
+                        </div>
+                    )}
+
+                    {/* FORECAST-TO-ACTION */}
+                    {demandItems.length > 0 && (
+                        <div style={{ marginTop: 20, padding: '16px 20px', background: 'rgba(56,189,248,0.04)', border: '1px solid rgba(56,189,248,0.15)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#38bdf8', marginBottom: 4 }}>⚡ Take Action on This Forecast</div>
+                                <div style={{ fontSize: 13, color: '#94a3b8' }}>Update your capacity plan based on this week's demand to ensure readiness.</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <button onClick={() => navigate('/vendor/capacity')} style={{
+                                    padding: '10px 20px', borderRadius: 8, border: 'none',
+                                    background: '#38bdf8', color: '#0f172a', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                                }}>🛡️ Set Capacity from Forecast</button>
+                                <button onClick={() => navigate('/dispatch-requests')} style={{
+                                    padding: '10px 20px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                                    background: 'transparent', color: '#e2e8f0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                                }}>📩 View Dispatch Requests</button>
+                            </div>
                         </div>
                     )}
 

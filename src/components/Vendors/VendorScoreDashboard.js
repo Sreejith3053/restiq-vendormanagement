@@ -272,6 +272,41 @@ export default function VendorScoreDashboard() {
                             ))}
                         </div>
                     )}
+
+                    {/* Market Position */}
+                    {selected._bm && (
+                        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: 20, marginTop: 20 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Market Position</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8 }}>
+                                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Your Price</div>
+                                    <div style={{ fontSize: 20, fontWeight: 800, color: C.fg }}>${selected.normalizedPrice?.toFixed(2)}</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8 }}>
+                                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Market Median</div>
+                                    <div style={{ fontSize: 20, fontWeight: 800, color: C.amber }}>${selected._bm.median?.toFixed(2)}</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8 }}>
+                                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Lowest</div>
+                                    <div style={{ fontSize: 16, fontWeight: 700, color: C.green }}>${selected._bm.lowest?.toFixed(2)}</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8 }}>
+                                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Highest</div>
+                                    <div style={{ fontSize: 16, fontWeight: 700, color: C.red }}>${selected._bm.highest?.toFixed(2)}</div>
+                                </div>
+                            </div>
+                            {selected.normalizedPrice > selected._bm.median && (
+                                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, fontSize: 13, color: C.red }}>
+                                    ⚠️ Your price is <strong>${(selected.normalizedPrice - selected._bm.median).toFixed(2)}</strong> above market median. Consider adjusting to improve your allocation score.
+                                </div>
+                            )}
+                            {selected.normalizedPrice <= selected._bm.median && (
+                                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: 8, fontSize: 13, color: C.green }}>
+                                    ✅ Your price is at or below market median — strong competitive position.
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

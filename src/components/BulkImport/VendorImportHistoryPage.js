@@ -41,7 +41,7 @@ function Stat({ label, value, color }) {
     );
 }
 
-export default function VendorImportHistoryPage() {
+export default function VendorImportHistoryPage({ embedded = false }) {
     const navigate = useNavigate();
     const { vendorId } = useContext(UserContext);
     const [batches, setBatches] = useState([]);
@@ -109,8 +109,9 @@ export default function VendorImportHistoryPage() {
     };
 
     return (
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 16px' }}>
-            {/* Header */}
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: embedded ? '0' : '24px 16px' }}>
+            {/* Header — hidden when embedded in Import Catalog page */}
+            {!embedded && (
             <div style={{ marginBottom: 24 }}>
                 <button className="ui-btn ghost small" onClick={() => navigate('/items')} style={{ marginBottom: 8, padding: '4px 12px' }}>
                     ← Back to Catalog
@@ -125,6 +126,7 @@ export default function VendorImportHistoryPage() {
                     </button>
                 </div>
             </div>
+            )}
 
             {loading && (
                 <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>Loading import history…</div>

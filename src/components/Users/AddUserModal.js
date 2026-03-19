@@ -9,6 +9,8 @@ import {
     query,
     where,
     limit,
+    doc,
+    setDoc,
     serverTimestamp,
 } from 'firebase/firestore';
 import { toast } from 'react-toastify';
@@ -105,7 +107,18 @@ export default function AddUserModal({ onClose, onUserAdded }) {
                 createdAt: serverTimestamp(),
             };
 
-            await addDoc(collection(db, 'login'), newUser);
+            const loginRef = await addDoc(collection(db, 'login'), newUser);
+
+            // v2: mirror to users collection using the same doc ID
+            try {
+                await setDoc(doc(db, 'users', loginRef.id), {
+                    ...newUser,
+                    updatedAt: serverTimestamp(),
+                });
+            } catch (syncErr) {
+                console.warn('[AddUserModal] users sync failed (non-fatal):', syncErr);
+            }
+
             toast.success(`User "${form.displayName}" created!`);
             onUserAdded();
             onClose();

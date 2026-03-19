@@ -316,7 +316,7 @@ export default function SuperAdminDashboard() {
                 if (!categoryItemMap[cat][itemIdKey]) {
                     categoryItemMap[cat][itemIdKey] = {
                         id: item.id || '',
-                        name: item.name,
+                        name: item.itemName || item.name || '',   // Phase 3: v2-first
                         category: cat,
                         vendorId: o.vendorId,
                         vendorName: o.vendorName,

@@ -162,8 +162,13 @@ service cloud.firestore {
     }
 
     // ── Notifications ─────────────────────────────────────────────────────
+    // Users can only read/write their OWN notifications. SuperAdmin has full access.
     match /notifications/{notifId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSuperAdmin() ||
+                            (isSignedIn() && request.auth.uid == resource.data.userId);
+      // Allow create when the doc doesn't exist yet (userId comes from new doc)
+      allow create: if isSignedIn() &&
+                       request.auth.uid == request.resource.data.userId;
     }
 
     // ── System / Audit Logs ───────────────────────────────────────────────

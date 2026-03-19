@@ -16,6 +16,7 @@ import { auth, db } from "../firebase";
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
 } from "firebase/auth";
 import {
     collection, getDocs, query, where, limit,
@@ -34,12 +35,19 @@ export default function Login() {
     const { authLoading } = useContext(UserContext);
     const navigate         = useNavigate();
 
-    const [identifier,      setIdentifier]      = useState("");
-    const [password,        setPassword]        = useState("");
-    const [showPw,          setShowPw]          = useState(false);
-    const [loading,         setLoading]         = useState(false);
-    const [err,             setErr]             = useState("");
+    const [identifier,       setIdentifier]       = useState("");
+    const [password,         setPassword]         = useState("");
+    const [showPw,           setShowPw]           = useState(false);
+    const [loading,          setLoading]          = useState(false);
+    const [err,              setErr]              = useState("");
     const [lockoutRemaining, setLockoutRemaining] = useState(0);
+
+    // Password reset modal state
+    const [showReset,       setShowReset]       = useState(false);
+    const [resetEmail,      setResetEmail]      = useState("");
+    const [resetLoading,    setResetLoading]    = useState(false);
+    const [resetMsg,        setResetMsg]        = useState("");
+    const [resetErr,        setResetErr]        = useState("");
 
     const failureTimestamps = useRef([]);
     const lockoutTimer      = useRef(null);
@@ -73,6 +81,29 @@ export default function Login() {
             });
         }, 1000);
         lockoutTimer.current = iv;
+    };
+
+    // ── Password Reset ────────────────────────────────────────────────────
+    const handlePasswordReset = async (e) => {
+        e.preventDefault();
+        setResetErr("");
+        setResetMsg("");
+        if (!resetEmail.trim()) { setResetErr("Enter your email address."); return; }
+        setResetLoading(true);
+        try {
+            await sendPasswordResetEmail(auth, resetEmail.trim());
+            setResetMsg("Reset link sent! Check your inbox (and spam folder).");
+        } catch (err) {
+            const code = err.code || "";
+            if (code === "auth/user-not-found") {
+                // Don't reveal whether the email exists — security best practice
+                setResetMsg("If that email is registered, a reset link has been sent.");
+            } else {
+                setResetErr("Failed to send reset email. Please try again.");
+            }
+        } finally {
+            setResetLoading(false);
+        }
     };
 
     // ── Look up the Firestore login doc by username or email ──────────────
@@ -256,6 +287,14 @@ export default function Login() {
 
                     <div className="row-between">
                         <span className="hint">Need access? Contact admin.</span>
+                        <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => { setShowReset(true); setResetEmail(identifier.includes('@') ? identifier : ''); setResetMsg(''); setResetErr(''); }}
+                            style={{ fontSize: 12, color: '#4a9eff', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                            Forgot password?
+                        </button>
                     </div>
 
                     {lockoutRemaining > 0 && (
@@ -282,6 +321,70 @@ export default function Login() {
                     <span>© {new Date().getFullYear()} RestIQ Solutions</span>
                 </div>
             </div>
+
+            {/* ── Password Reset Modal ─────────────────────────── */}
+            {showReset && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+                }} onClick={() => setShowReset(false)}>
+                    <div style={{
+                        background: '#131d2e', border: '1px solid #1e3a5f',
+                        borderRadius: 16, padding: '32px 28px', width: 360, boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+                    }} onClick={e => e.stopPropagation()}>
+                        <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 18, fontWeight: 700 }}>Reset Password</h3>
+                        <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 13 }}>
+                            Enter your email and we'll send a reset link.
+                        </p>
+
+                        <form onSubmit={handlePasswordReset}>
+                            <input
+                                type="email"
+                                autoFocus
+                                value={resetEmail}
+                                onChange={e => setResetEmail(e.target.value)}
+                                placeholder="your@email.com"
+                                style={{
+                                    width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                                    background: '#0f1923', border: '1px solid #1e3a5f',
+                                    borderRadius: 8, color: '#e2e8f0', fontSize: 14, outline: 'none',
+                                    marginBottom: 12,
+                                }}
+                            />
+
+                            {resetErr && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 10 }}>{resetErr}</div>}
+                            {resetMsg && <div style={{ color: '#34d399', fontSize: 13, marginBottom: 10 }}>{resetMsg}</div>}
+
+                            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                                <button
+                                    type="submit"
+                                    disabled={resetLoading}
+                                    style={{
+                                        flex: 1, padding: '10px 0',
+                                        background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+                                        border: 'none', borderRadius: 8, color: '#fff',
+                                        fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                    }}
+                                >
+                                    {resetLoading ? 'Sending…' : 'Send Reset Link'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowReset(false)}
+                                    style={{
+                                        padding: '10px 16px',
+                                        background: 'transparent', border: '1px solid #1e3a5f',
+                                        borderRadius: 8, color: '#64748b',
+                                        fontSize: 14, cursor: 'pointer',
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

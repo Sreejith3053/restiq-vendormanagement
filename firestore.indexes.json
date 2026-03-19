@@ -1,4 +1,80 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "vendorDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vendorDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",  "order": "ASCENDING"  },
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vendorInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vendorInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",       "order": "ASCENDING"  },
+        { "fieldPath": "paymentStatus",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "marketplaceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vendorDispatchRoutes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "issuesDisputes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorId",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "systemLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "performedBy", "order": "ASCENDING"  },
+        { "fieldPath": "timestamp",   "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "adminChangeLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entityType", "order": "ASCENDING"  },
+        { "fieldPath": "timestamp",  "order": "DESCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
+

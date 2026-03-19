@@ -254,10 +254,10 @@ export default function useAdminNotificationSync() {
         // Only Super Admins run the sync worker to prevent duplicate triggers from vendors
         if (!isSuperAdmin) return;
 
-        // Query the most recent 100 orders to monitor. 
-        // We use recent to avoid syncing the entire historical database on every load.
-        // A Cloud Function is preferred in production.
-        const q = query(collection(db, 'marketplaceOrders'), orderBy('createdAt', 'desc'));
+        // Query the most recent 100 orders to monitor.
+        // We cap at 100 to avoid scanning the entire collection on mount.
+        // A Cloud Function is the proper production solution for this pattern.
+        const q = query(collection(db, 'marketplaceOrders'), orderBy('createdAt', 'desc'), limit(100));
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
             const newNotifications = [];

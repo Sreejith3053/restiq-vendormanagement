@@ -1,0 +1,221 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────
+
+    // Cached profile read — called max once per rule evaluation
+    function userProfile() {
+      return get(/databases/$(database)/documents/login/$(request.auth.uid)).data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && userProfile().role == 'superadmin';
+    }
+
+    function isAdminOrAbove() {
+      return isSignedIn() && userProfile().role in ['superadmin', 'admin'];
+    }
+
+    function isVendorUser() {
+      return isSignedIn() && userProfile().role in ['vendor', 'admin', 'superadmin'];
+    }
+
+    // Check that the authenticated user's vendorId matches a target vendorId field
+    function isOwnVendor(vendorId) {
+      return isSignedIn() && userProfile().vendorId == vendorId;
+    }
+
+    // Check that the authenticated user is accessing their own login doc
+    function isOwnProfile() {
+      return request.auth.uid == resource.id;
+    }
+
+    // ── Login / User Profiles ──────────────────────────────────────────────
+    // Users can read their own profile. SuperAdmin can read/write all.
+    // Vendors CANNOT write their own role (role changes are admin-only).
+    match /login/{userId} {
+      allow read: if request.auth.uid == userId || isSuperAdmin();
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() ||
+                      // Vendor can update non-sensitive fields only (not role, not vendorId)
+                      (request.auth.uid == userId &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['role', 'vendorId', 'active', 'permissions', 'password']));
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Vendors ───────────────────────────────────────────────────────────
+    match /vendors/{vendorId} {
+      allow read: if isSuperAdmin() || isOwnVendor(vendorId);
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Vendor item sub-collection — vendor can manage their own items
+    match /vendors/{vendorId}/items/{itemId} {
+      allow read: if isSuperAdmin() || isOwnVendor(vendorId);
+      allow write: if isSuperAdmin() || isOwnVendor(vendorId);
+    }
+
+    // ── Catalog ───────────────────────────────────────────────────────────
+    // Any authenticated user can read the catalog
+    match /catalogItems/{itemId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /catalogReviewQueue/{docId} {
+      allow read: if isAdminOrAbove();
+      // Vendors can submit reviews; admins can approve/reject
+      allow create: if isVendorUser();
+      allow update, delete: if isAdminOrAbove();
+    }
+
+    // ── Marketplace Orders ────────────────────────────────────────────────
+    match /marketplaceOrders/{orderId} {
+      // SuperAdmin sees all; vendor sees orders belonging to their vendorId
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      // Only superadmin can create/update orders (system-generated)
+      allow create, update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Submitted Orders ──────────────────────────────────────────────────
+    match /submittedOrders/{orderId} {
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Vendor Dispatches ─────────────────────────────────────────────────
+    match /vendorDispatches/{dispatchId} {
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      // Vendors can update dispatch status (confirm/reject), but not create or delete
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() ||
+                       (isVendorUser() && isOwnVendor(resource.data.vendorId) &&
+                        // Vendors can only change status, not financial fields
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['status', 'updatedAt', 'confirmedAt', 'rejectedAt',
+                                    'vendorNotes', 'rejectionReason', 'items']));
+    }
+
+    match /vendorDispatchRoutes/{routeId} {
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() ||
+                       (isVendorUser() && isOwnVendor(resource.data.vendorId) &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['status', 'updatedAt', 'confirmedAt', 'rejectedAt',
+                                    'vendorNotes', 'rejectionReason', 'items', 'confirmedQty']));
+    }
+
+    // ── Invoices ──────────────────────────────────────────────────────────
+    // Immutable invoices — vendors can only read their own, cannot write
+    match /vendorInvoices/{invoiceId} {
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /invoiceAdjustments/{adjId} {
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      allow write: if isSuperAdmin();
+    }
+
+    match /restaurantInvoices/{invoiceId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /reconciliationReports/{reportId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // ── Issues & Disputes ─────────────────────────────────────────────────
+    match /issuesDisputes/{issueId} {
+      allow read: if isSuperAdmin() ||
+                     (isVendorUser() && isOwnVendor(resource.data.vendorId));
+      // Vendors can create issues for their own orders
+      allow create: if isVendorUser() && isOwnVendor(request.resource.data.vendorId);
+      allow update: if isSuperAdmin() ||
+                       (isVendorUser() && isOwnVendor(resource.data.vendorId) &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['vendorResponse', 'updatedAt']));
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Platform Settings ─────────────────────────────────────────────────
+    match /platformSettings/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────
+    match /notifications/{notifId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ── System / Audit Logs ───────────────────────────────────────────────
+    // Any authenticated user can CREATE logs but never modify or delete
+    match /systemLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    match /adminChangeLogs/{logId} {
+      allow read: if isAdminOrAbove();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    match /systemAlerts/{alertId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    match /systemMetrics/{metricId} {
+      allow read: if isSuperAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    match /systemExceptions/{exId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // ── Restaurants ───────────────────────────────────────────────────────
+    match /restaurants/{restaurantId} {
+      allow read: if isAdminOrAbove();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Forecast / Intelligence ───────────────────────────────────────────
+    match /vendorForecasts/{docId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    match /demandForecasts/{docId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── Catch-All: SuperAdmin can access any unlisted collection ──────────
+    // This ensures no new collections added later are accidentally left open.
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

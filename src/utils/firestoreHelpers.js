@@ -2,9 +2,11 @@
  * firestoreHelpers.js
  *
  * Shared utilities for Firestore data model consistency.
- * Handles backward-compatible timestamp display and transactional snapshot field building.
+ * Handles backward-compatible timestamp display, transactional snapshot field building,
+ * and cursor-based pagination helpers.
  */
-import { serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, limit, startAfter, query } from 'firebase/firestore';
+
 
 // ── Timestamp Helpers ───────────────────────────────────────────────────────
 
@@ -198,3 +200,26 @@ export function mergeSnapshotIntoLineItem(lineItem, snapshotFields) {
         unit: snapshotFields.unitSnapshot || lineItem.unit || 'unit',
     };
 }
+
+// ── Pagination Helpers ───────────────────────────────────────────────────────
+
+/**
+ * Build a paginated Firestore query using cursor-based pagination (startAfter).
+ *
+ * Usage:
+ *   const firstPage = await getDocs(paginatedQuery(baseQuery, [], 50));
+ *   const lastDoc = firstPage.docs[firstPage.docs.length - 1];
+ *   const nextPage = await getDocs(paginatedQuery(baseQuery, [], 50, lastDoc));
+ *
+ * @param {import('firebase/firestore').Query} baseQuery - Already-constrained query (with where/orderBy)
+ * @param {import('firebase/firestore').QueryConstraint[]} extraConstraints - Additional constraints
+ * @param {number} [pageSize=50] - Number of documents per page
+ * @param {import('firebase/firestore').DocumentSnapshot|null} [lastVisible=null] - Last doc from previous page
+ * @returns {import('firebase/firestore').Query}
+ */
+export function paginatedQuery(baseQuery, extraConstraints = [], pageSize = 50, lastVisible = null) {
+    const constraints = [...extraConstraints, limit(pageSize)];
+    if (lastVisible) constraints.push(startAfter(lastVisible));
+    return query(baseQuery, ...constraints);
+}
+

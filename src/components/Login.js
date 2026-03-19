@@ -1,32 +1,122 @@
-import React, { useState, useContext } from "react";
+// src/components/Login.js
+//
+// HARDENED: Uses Firebase Auth signInWithEmailAndPassword.
+// No plaintext password comparison. Supports username → email lookup.
+// Client-side rate limiting: 5 failures in 2 min → 60s lockout + logged to systemLogs.
+//
+import React, { useState, useContext, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../contexts/UserContext.js";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import {
     collection,
     getDocs,
     query,
     where,
     limit,
-    updateDoc,
-    doc,
+    addDoc,
     serverTimestamp,
 } from "firebase/firestore";
 
 import restiqLogo from "../assets/restiq-logo.png";
 import "./Login.css";
 
+// ── Rate Limiting Constants ────────────────────────────────────────────────
+const MAX_ATTEMPTS = 5;
+const ATTEMPT_WINDOW_MS = 2 * 60 * 1000;    // 2 minutes
+const LOCKOUT_DURATION_MS = 60 * 1000;       // 60 seconds
+
 export default function Login() {
-    const { login } = useContext(UserContext);
+    const { authLoading } = useContext(UserContext);
     const navigate = useNavigate();
 
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [showPw, setShowPw] = useState(false);
-    const [remember, setRemember] = useState(true);
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
+    const [lockoutRemaining, setLockoutRemaining] = useState(0);
 
+    // Rate limiting tracked in component refs (survives re-renders, but not page refresh — intentional)
+    const failureTimestamps = useRef([]);
+    const lockoutTimer = useRef(null);
+
+    // ── Rate limit check ───────────────────────────────────────────────────
+    const checkRateLimit = () => {
+        const now = Date.now();
+        // Remove attempts older than the window
+        failureTimestamps.current = failureTimestamps.current.filter(
+            (ts) => now - ts < ATTEMPT_WINDOW_MS
+        );
+        return failureTimestamps.current.length >= MAX_ATTEMPTS;
+    };
+
+    const recordFailure = (identifierAttempted) => {
+        failureTimestamps.current.push(Date.now());
+
+        // Log to systemLogs (fire and forget — don't block login flow)
+        addDoc(collection(db, "systemLogs"), {
+            level: "warn",
+            levelNum: 2,
+            category: "auth",
+            action: "login_failed",
+            entityType: "user",
+            entityId: identifierAttempted,
+            metadata: { identifier: identifierAttempted, attemptCount: failureTimestamps.current.length },
+            performedBy: "system",
+            errorMessage: "Invalid credentials",
+            timestamp: serverTimestamp(),
+            ts: new Date().toISOString(),
+        }).catch(() => { }); // silent — don't break login on log failure
+
+        // Check if we've hit the threshold
+        if (failureTimestamps.current.length >= MAX_ATTEMPTS) {
+            startLockout();
+        }
+    };
+
+    const startLockout = () => {
+        setLockoutRemaining(Math.ceil(LOCKOUT_DURATION_MS / 1000));
+        const interval = setInterval(() => {
+            setLockoutRemaining((prev) => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    failureTimestamps.current = [];
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        lockoutTimer.current = interval;
+    };
+
+    // ── Resolve username → email ───────────────────────────────────────────
+    // Firebase Auth requires email. If user enters a username, we look it up in Firestore.
+    const resolveEmail = async (identifierValue) => {
+        const trimmed = identifierValue.trim();
+        // Already an email
+        if (trimmed.includes("@")) return trimmed;
+
+        // Look up by username
+        try {
+            const q = query(
+                collection(db, "login"),
+                where("username", "==", trimmed),
+                limit(1)
+            );
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                return data.email || null;
+            }
+        } catch (e) {
+            console.warn("[Login] Username lookup failed:", e.message);
+        }
+        return null;
+    };
+
+    // ── Submit handler ─────────────────────────────────────────────────────
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErr("");
@@ -36,84 +126,64 @@ export default function Login() {
             return;
         }
 
+        if (checkRateLimit()) {
+            setErr("Too many failed attempts. Please wait before trying again.");
+            return;
+        }
+
+        if (lockoutRemaining > 0) {
+            setErr(`Account temporarily locked. Try again in ${lockoutRemaining}s.`);
+            return;
+        }
+
         setLoading(true);
+
         try {
-            const baseRef = collection(db, "login");
-            const q1 = query(baseRef, where("username", "==", identifier), limit(1));
-            const q2 = query(baseRef, where("email", "==", identifier), limit(1));
-
-            let snap = await getDocs(q1);
-            if (snap.empty) snap = await getDocs(q2);
-
-            if (snap.empty) {
-                setErr("No user found with that username/email.");
+            const email = await resolveEmail(identifier);
+            if (!email) {
+                recordFailure(identifier);
+                setErr("No account found with that username/email.");
                 setLoading(false);
                 return;
             }
 
-            const docSnap = snap.docs[0];
-            const data = docSnap.data();
-
-            // Check if account is active
-            if (data.active === false) {
-                setErr("Account is disabled. Contact admin.");
-                setLoading(false);
-                return;
-            }
-
-            // Password check
-            if (String(data.password || "") !== String(password)) {
-                setErr("Incorrect password.");
-                setLoading(false);
-                return;
-            }
-
-            // Role detection
-            const role = (data.role || "").trim().toLowerCase();
-            if (!role) {
-                setErr("This account has no role assigned. Contact admin.");
-                setLoading(false);
-                return;
-            }
-
-            // Vendor scoping validation — non-superadmins must have a vendorId
-            if (role !== "superadmin" && !data.vendorId) {
-                setErr("No vendor assigned to this account. Contact admin.");
-                setLoading(false);
-                return;
-            }
-
-            const userPayload = {
-                id: docSnap.id,
-                displayName: data.displayName || data.name || data.username || data.email || identifier,
-                email: data.email || null,
-                username: data.username || null,
-                role: data.role,
-                vendorId: data.vendorId || null,
-                vendorName: data.vendorName || null,
-                active: data.active !== false,
-            };
-
-            login(userPayload, { remember });
-
-            // Update last login timestamp
-            try {
-                await updateDoc(doc(db, "login", docSnap.id), {
-                    lastLogin: serverTimestamp(),
-                });
-            } catch (updateErr) {
-                console.error("Failed to update last login:", updateErr);
-            }
-
-            // Route based on role
+            await signInWithEmailAndPassword(auth, email, password);
+            // onAuthStateChanged in UserContext handles the rest — no manual state here
             navigate("/");
-        } catch (e2) {
-            console.error(e2);
-            setErr("Something went wrong. Please try again.");
+        } catch (firebaseErr) {
+            // Map Firebase error codes to user-friendly messages
+            const code = firebaseErr.code || "";
+            if (
+                code === "auth/user-not-found" ||
+                code === "auth/wrong-password" ||
+                code === "auth/invalid-credential" ||
+                code === "auth/invalid-email"
+            ) {
+                recordFailure(identifier);
+                setErr("Incorrect email/username or password.");
+            } else if (code === "auth/user-disabled") {
+                setErr("This account has been disabled. Contact your admin.");
+            } else if (code === "auth/too-many-requests") {
+                setErr("Too many failed attempts. Your account is temporarily locked by Firebase. Try again later.");
+            } else {
+                console.error("[Login] Unexpected error:", firebaseErr);
+                setErr("Something went wrong. Please try again.");
+            }
         } finally {
             setLoading(false);
         }
     };
+
+    // While Firebase is resolving auth state on first load, show nothing (prevents flash)
+    if (authLoading) {
+        return (
+            <div className="login-wrap">
+                <div style={{ color: "#9db2ce", textAlign: "center", marginTop: 80 }}>
+                    Loading…
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="login-wrap">
@@ -132,6 +202,7 @@ export default function Login() {
                             value={identifier}
                             onChange={(e) => setIdentifier(e.target.value)}
                             placeholder="you@company.com or johndoe"
+                            disabled={lockoutRemaining > 0}
                         />
                     </div>
 
@@ -144,6 +215,7 @@ export default function Login() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="••••••••"
+                                disabled={lockoutRemaining > 0}
                             />
                             <button
                                 type="button"
@@ -157,21 +229,22 @@ export default function Login() {
                     </div>
 
                     <div className="row-between">
-                        <label className="remember">
-                            <input
-                                type="checkbox"
-                                checked={remember}
-                                onChange={(e) => setRemember(e.target.checked)}
-                            />
-                            Remember me
-                        </label>
                         <span className="hint">Need access? Contact admin.</span>
                     </div>
 
-                    {err && <div className="error">{err}</div>}
+                    {lockoutRemaining > 0 && (
+                        <div className="error">
+                            Too many failed attempts. Please wait {lockoutRemaining}s before retrying.
+                        </div>
+                    )}
+                    {err && !lockoutRemaining && <div className="error">{err}</div>}
 
-                    <button className="login-btn" type="submit" disabled={loading}>
-                        {loading ? "Signing in…" : "Sign in"}
+                    <button
+                        className="login-btn"
+                        type="submit"
+                        disabled={loading || lockoutRemaining > 0}
+                    >
+                        {loading ? "Signing in…" : lockoutRemaining > 0 ? `Locked (${lockoutRemaining}s)` : "Sign in"}
                     </button>
                 </form>
 

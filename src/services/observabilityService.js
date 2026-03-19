@@ -9,7 +9,7 @@
  * - Alert detection (invoice failures, high issue rates, price spikes)
  */
 import { db } from '../firebase';
-import { addDoc, getDocs, collection, query, where, serverTimestamp } from 'firebase/firestore';
+import { addDoc, getDocs, collection, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 /* ═══════════════════════════════════════════════════════════
    SECTION 1 — STRUCTURED LOGGING
@@ -86,58 +86,88 @@ export async function computeOperationalMetrics(weekStart) {
     const now = new Date();
     const rangeStart = weekStart ? new Date(weekStart) : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+    // Convert to Firestore Timestamps for server-side filtering
+    const startTs = Timestamp.fromDate(rangeStart);
+    const endTs   = Timestamp.fromDate(now);
+
     const metrics = {
         periodStart: rangeStart.toISOString(),
-        periodEnd: now.toISOString(),
-        orders: { total: 0, fulfilled: 0, pending: 0, rejected: 0 },
+        periodEnd:   now.toISOString(),
+        orders:     { total: 0, fulfilled: 0, pending: 0, rejected: 0 },
         dispatches: { total: 0, confirmed: 0, rejected: 0, delivered: 0, pending: 0 },
-        issues: { total: 0, open: 0, resolved: 0 },
-        invoices: { total: 0, paid: 0, pending: 0, disputed: 0 },
-        revenue: { total: 0, commission: 0, vendorPayout: 0 },
+        issues:     { total: 0, open: 0, resolved: 0 },
+        invoices:   { total: 0, paid: 0, pending: 0, disputed: 0 },
+        revenue:    { total: 0, commission: 0, vendorPayout: 0 },
     };
 
     try {
-        // Orders
-        const ordersSnap = await getDocs(collection(db, 'marketplaceOrders'));
+        // Orders — date-filtered
+        const ordersSnap = await getDocs(
+            query(collection(db, 'marketplaceOrders'),
+                where('createdAt', '>=', startTs),
+                where('createdAt', '<=', endTs)
+            )
+        );
         ordersSnap.docs.forEach(d => {
             const o = d.data();
             metrics.orders.total++;
             const st = (o.status || '').toLowerCase();
-            if (['fulfilled', 'completed', 'delivered'].includes(st)) { metrics.orders.fulfilled++; metrics.revenue.total += Number(o.total || 0); }
-            else if (st.includes('pending')) metrics.orders.pending++;
-            else if (st === 'rejected') metrics.orders.rejected++;
+            if (['fulfilled', 'completed', 'delivered'].includes(st)) {
+                metrics.orders.fulfilled++;
+                metrics.revenue.total += Number(o.total || 0);
+            } else if (st.includes('pending')) {
+                metrics.orders.pending++;
+            } else if (st === 'rejected') {
+                metrics.orders.rejected++;
+            }
         });
 
-        // Dispatches
-        const dispatchSnap = await getDocs(collection(db, 'vendorDispatches'));
+        // Dispatches — date-filtered
+        const dispatchSnap = await getDocs(
+            query(collection(db, 'vendorDispatches'),
+                where('createdAt', '>=', startTs),
+                where('createdAt', '<=', endTs)
+            )
+        );
         dispatchSnap.docs.forEach(d => {
             const dp = d.data();
             metrics.dispatches.total++;
             const st = dp.status || '';
-            if (st === 'Sent') metrics.dispatches.pending++;
+            if (st === 'Sent')                                       metrics.dispatches.pending++;
             else if (st === 'Confirmed' || st === 'Partially Confirmed') metrics.dispatches.confirmed++;
-            else if (st === 'Rejected') metrics.dispatches.rejected++;
-            else if (st === 'Delivered') metrics.dispatches.delivered++;
+            else if (st === 'Rejected')                               metrics.dispatches.rejected++;
+            else if (st === 'Delivered')                              metrics.dispatches.delivered++;
         });
 
-        // Issues
-        const issueSnap = await getDocs(collection(db, 'issuesDisputes'));
+        // Issues — date-filtered
+        const issueSnap = await getDocs(
+            query(collection(db, 'issuesDisputes'),
+                where('createdAt', '>=', startTs),
+                where('createdAt', '<=', endTs)
+            )
+        );
         issueSnap.docs.forEach(d => {
             const i = d.data();
             metrics.issues.total++;
-            if ((i.status || '').toLowerCase() === 'open') metrics.issues.open++;
-            else if (['resolved', 'closed'].includes((i.status || '').toLowerCase())) metrics.issues.resolved++;
+            const st = (i.status || '').toLowerCase();
+            if (st === 'open')                              metrics.issues.open++;
+            else if (['resolved', 'closed'].includes(st)) metrics.issues.resolved++;
         });
 
-        // Invoices
-        const invSnap = await getDocs(collection(db, 'vendorInvoices'));
+        // Invoices — date-filtered
+        const invSnap = await getDocs(
+            query(collection(db, 'vendorInvoices'),
+                where('createdAt', '>=', startTs),
+                where('createdAt', '<=', endTs)
+            )
+        );
         invSnap.docs.forEach(d => {
             const inv = d.data();
             metrics.invoices.total++;
             const ps = (inv.paymentStatus || '').toUpperCase();
-            if (ps === 'PAID') { metrics.invoices.paid++; metrics.revenue.vendorPayout += Number(inv.vendorPayoutAmount || 0); }
-            else if (ps === 'DISPUTED') metrics.invoices.disputed++;
-            else metrics.invoices.pending++;
+            if      (ps === 'PAID')     { metrics.invoices.paid++;      metrics.revenue.vendorPayout += Number(inv.vendorPayoutAmount || 0); }
+            else if (ps === 'DISPUTED')   metrics.invoices.disputed++;
+            else                          metrics.invoices.pending++;
             metrics.revenue.commission += Number(inv.commissionAmount || 0);
         });
     } catch (err) {

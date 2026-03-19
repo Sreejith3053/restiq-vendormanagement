@@ -5,6 +5,7 @@ import { UserContext } from './contexts/UserContext';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import PrivateRoute from './components/PrivateRoute';
 
 // ── Consolidated Pages (SuperAdmin) ─────────────────────────────────
 import OrdersFulfillmentPage from './components/Consolidated/OrdersFulfillmentPage';
@@ -60,41 +61,48 @@ import SuggestedOrderReview from './components/Forecast/SuggestedOrderReview';
 import useAdminNotificationSync from './hooks/useAdminNotificationSync';
 import SuperAdminDashboard from './components/Admin/SuperAdminDashboard';
 
+// ── 404 page ────────────────────────────────────────────────────────
+import NotFoundPage from './components/NotFoundPage';
+
 // ── Toasts ──────────────────────────────────────────────────────────
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
-    const { role, isSuperAdmin } = useContext(UserContext);
+    const { role, isSuperAdmin, authLoading } = useContext(UserContext);
     const navigate = useNavigate();
     const location = useLocation();
 
     const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
     const isAdmin = normalizedRole === 'admin';
+    const isAuthenticated = !!role;
 
     useAdminNotificationSync();
 
     const [showSidebar, setShowSidebar] = useState(false);
 
-    // Persist last path
+    // Persist last path for UX convenience (non-sensitive — just a URL)
     useEffect(() => {
-        if (normalizedRole) localStorage.setItem('vm_lastPath', location.pathname);
+        if (normalizedRole) sessionStorage.setItem('vm_lastPath', location.pathname);
     }, [location.pathname, normalizedRole]);
-
-    // Restore last path on refresh
-    useEffect(() => {
-        const savedRole = localStorage.getItem('vm_role');
-        const savedPath = localStorage.getItem('vm_lastPath');
-        if (savedRole && !normalizedRole) navigate(savedPath || '/');
-    }, [normalizedRole, navigate]);
 
     // Close sidebar on route change (mobile)
     useEffect(() => {
         if (window.innerWidth < 1024) setShowSidebar(false);
     }, [location.pathname]);
 
-    if (!normalizedRole) {
+    // While Firebase Auth is resolving, show a minimal loader (avoids redirect flash)
+    if (authLoading) {
+        return (
+            <div style={{ background: '#0f1923', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ color: '#4a9eff', fontSize: 14 }}>Loading RestIQ…</div>
+            </div>
+        );
+    }
+
+    // Not authenticated — show login
+    if (!isAuthenticated) {
         return <Login />;
     }
 
@@ -111,49 +119,75 @@ function App() {
                         <Route path="/login" element={<Navigate to={isSuperAdmin ? "/admin/forecast/control-tower" : "/"} />} />
 
                         {/* ══════════════════════════════════════════════════════════
-                            SUPER ADMIN ROUTES
+                            SUPER ADMIN ROUTES — guarded by PrivateRoute
                            ══════════════════════════════════════════════════════════ */}
                         {isSuperAdmin && (
                             <>
                                 {/* ── 1. Control Tower (unchanged) ── */}
-                                <Route path="/admin/forecast/control-tower" element={<GlobalSupplyControlTower />} />
-                                <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
+                                <Route path="/admin/forecast/control-tower" element={
+                                    <PrivateRoute requiredRole="superadmin"><GlobalSupplyControlTower /></PrivateRoute>
+                                } />
+                                <Route path="/admin/dashboard" element={
+                                    <PrivateRoute requiredRole="superadmin"><SuperAdminDashboard /></PrivateRoute>
+                                } />
                                 <Route path="/" element={<Navigate to="/admin/forecast/control-tower" />} />
 
                                 {/* ── 2. Orders & Fulfillment (consolidated) ── */}
-                                <Route path="/orders-fulfillment" element={<OrdersFulfillmentPage />} />
+                                <Route path="/orders-fulfillment" element={
+                                    <PrivateRoute requiredRole="superadmin"><OrdersFulfillmentPage /></PrivateRoute>
+                                } />
 
                                 {/* ── 3. Vendors (consolidated) ── */}
-                                <Route path="/vendors" element={<VendorsPage />} />
-                                <Route path="/vendors/:vendorId" element={<VendorDetailPage />} />
-                                <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
+                                <Route path="/vendors" element={
+                                    <PrivateRoute requiredRole="superadmin"><VendorsPage /></PrivateRoute>
+                                } />
+                                <Route path="/vendors/:vendorId" element={
+                                    <PrivateRoute requiredRole="superadmin"><VendorDetailPage /></PrivateRoute>
+                                } />
+                                <Route path="/vendors/:vendorId/items/:itemId" element={
+                                    <PrivateRoute requiredRole="superadmin"><ItemDetailPage /></PrivateRoute>
+                                } />
 
                                 {/* ── 4. Catalog & Reviews (consolidated) ── */}
-                                <Route path="/catalog-reviews" element={<CatalogReviewsPage />} />
+                                <Route path="/catalog-reviews" element={
+                                    <PrivateRoute requiredRole="superadmin"><CatalogReviewsPage /></PrivateRoute>
+                                } />
 
                                 {/* ── 5. Intelligence (consolidated) ── */}
-                                <Route path="/intelligence" element={<IntelligencePage />} />
+                                <Route path="/intelligence" element={
+                                    <PrivateRoute requiredRole="superadmin"><IntelligencePage /></PrivateRoute>
+                                } />
 
                                 {/* ── 6. Finance (consolidated) ── */}
-                                <Route path="/finance" element={<FinancePage />} />
-                                <Route path="/admin/restaurant-invoices/:invoiceId" element={<RestaurantInvoiceDetailPage />} />
-                                <Route path="/admin/invoices/:invoiceId" element={<InvoiceDetailPage />} />
+                                <Route path="/finance" element={
+                                    <PrivateRoute requiredRole="superadmin"><FinancePage /></PrivateRoute>
+                                } />
+                                <Route path="/admin/restaurant-invoices/:invoiceId" element={
+                                    <PrivateRoute requiredRole="superadmin"><RestaurantInvoiceDetailPage /></PrivateRoute>
+                                } />
+                                <Route path="/admin/invoices/:invoiceId" element={
+                                    <PrivateRoute requiredRole="superadmin"><InvoiceDetailPage /></PrivateRoute>
+                                } />
 
                                 {/* ── 7. Platform Admin (consolidated) ── */}
-                                <Route path="/platform-admin" element={<PlatformAdminPage />} />
-                                <Route path="/admin/restaurants/:restaurantId" element={<AdminRestaurantDetailPage />} />
+                                <Route path="/platform-admin" element={
+                                    <PrivateRoute requiredRole="superadmin"><PlatformAdminPage /></PrivateRoute>
+                                } />
+                                <Route path="/admin/restaurants/:restaurantId" element={
+                                    <PrivateRoute requiredRole="superadmin"><AdminRestaurantDetailPage /></PrivateRoute>
+                                } />
 
                                 {/* ── Forecast internal routes (used by CT tabs) ── */}
-                                <Route path="/admin/forecast/demand" element={<DemandForecastPage />} />
-                                <Route path="/admin/forecast/intelligence" element={<ForecastIntelligencePage />} />
-                                <Route path="/admin/forecast/restaurants" element={<RestaurantForecastPage />} />
-                                <Route path="/admin/forecast/combined" element={<CombinedDemandPage />} />
-                                <Route path="/admin/forecast/vendors" element={<VendorPlanningPage />} />
-                                <Route path="/admin/forecast/accuracy" element={<ForecastAccuracyPage />} />
-                                <Route path="/admin/forecast/alerts" element={<ForecastAlertsPage />} />
-                                <Route path="/admin/forecast/settings" element={<ForecastSettingsPage />} />
-                                <Route path="/admin/dispatch/warehouse" element={<WarehousePickListPage />} />
-                                <Route path="/admin/forecast/suggested-order-review" element={<SuggestedOrderReview />} />
+                                <Route path="/admin/forecast/demand" element={<PrivateRoute requiredRole="superadmin"><DemandForecastPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/intelligence" element={<PrivateRoute requiredRole="superadmin"><ForecastIntelligencePage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/restaurants" element={<PrivateRoute requiredRole="superadmin"><RestaurantForecastPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/combined" element={<PrivateRoute requiredRole="superadmin"><CombinedDemandPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/vendors" element={<PrivateRoute requiredRole="superadmin"><VendorPlanningPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/accuracy" element={<PrivateRoute requiredRole="superadmin"><ForecastAccuracyPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/alerts" element={<PrivateRoute requiredRole="superadmin"><ForecastAlertsPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/settings" element={<PrivateRoute requiredRole="superadmin"><ForecastSettingsPage /></PrivateRoute>} />
+                                <Route path="/admin/dispatch/warehouse" element={<PrivateRoute requiredRole="superadmin"><WarehousePickListPage /></PrivateRoute>} />
+                                <Route path="/admin/forecast/suggested-order-review" element={<PrivateRoute requiredRole="superadmin"><SuggestedOrderReview /></PrivateRoute>} />
 
                                 {/* ═══════════════════════════════════════════════════
                                     LEGACY ROUTE REDIRECTS
@@ -200,39 +234,39 @@ function App() {
                         )}
 
                         {/* ══════════════════════════════════════════════════════════
-                            VENDOR ADMIN / USER ROUTES (unchanged)
+                            VENDOR / USER ROUTES — guarded by PrivateRoute
                            ══════════════════════════════════════════════════════════ */}
                         {!isSuperAdmin && (
                             <>
-                                <Route path="/" element={<Dashboard />} />
-                                <Route path="/items" element={<ItemCatalogPage />} />
-                                <Route path="/vendors/:vendorId/items/:itemId" element={<ItemDetailPage />} />
-                                <Route path="/profile" element={<VendorDetailPage />} />
-                                <Route path="/dispatch-requests" element={<DispatchRequestsPage />} />
-                                <Route path="/dispatch-requests/:dispatchId" element={<DispatchDetailPage />} />
-                                <Route path="/vendor/invoices" element={<VendorInvoicesPage />} />
-                                <Route path="/vendor/invoices/:invoiceId" element={<InvoiceDetailPage />} />
-                                <Route path="/vendor/competitiveness" element={<VendorScoreDashboard />} />
-                                <Route path="/vendor/allocation" element={<VendorExpectedAllocation />} />
-                                <Route path="/vendor/capacity" element={<VendorCapacityPlanning />} />
-                                <Route path="/vendor/issues" element={<VendorIssuesSection />} />
-                                <Route path="/vendor/notifications" element={<VendorNotificationCenter />} />
-                                <Route path="/vendor/analytics" element={<VendorAnalytics />} />
-                                <Route path="/vendor/availability" element={<VendorAvailabilityCalendar />} />
-                                <Route path="/vendor/import" element={<VendorImportPage />} />
-                                <Route path="/vendor/import/preview" element={<VendorImportPreviewPage />} />
-                                <Route path="/vendor/import/history" element={<VendorImportHistoryPage />} />
+                                <Route path="/" element={<PrivateRoute requiredRole="vendor"><Dashboard /></PrivateRoute>} />
+                                <Route path="/items" element={<PrivateRoute requiredRole="vendor"><ItemCatalogPage /></PrivateRoute>} />
+                                <Route path="/vendors/:vendorId/items/:itemId" element={<PrivateRoute requiredRole="vendor"><ItemDetailPage /></PrivateRoute>} />
+                                <Route path="/profile" element={<PrivateRoute requiredRole="vendor"><VendorDetailPage /></PrivateRoute>} />
+                                <Route path="/dispatch-requests" element={<PrivateRoute requiredRole="vendor"><DispatchRequestsPage /></PrivateRoute>} />
+                                <Route path="/dispatch-requests/:dispatchId" element={<PrivateRoute requiredRole="vendor"><DispatchDetailPage /></PrivateRoute>} />
+                                <Route path="/vendor/invoices" element={<PrivateRoute requiredRole="vendor"><VendorInvoicesPage /></PrivateRoute>} />
+                                <Route path="/vendor/invoices/:invoiceId" element={<PrivateRoute requiredRole="vendor"><InvoiceDetailPage /></PrivateRoute>} />
+                                <Route path="/vendor/competitiveness" element={<PrivateRoute requiredRole="vendor"><VendorScoreDashboard /></PrivateRoute>} />
+                                <Route path="/vendor/allocation" element={<PrivateRoute requiredRole="vendor"><VendorExpectedAllocation /></PrivateRoute>} />
+                                <Route path="/vendor/capacity" element={<PrivateRoute requiredRole="vendor"><VendorCapacityPlanning /></PrivateRoute>} />
+                                <Route path="/vendor/issues" element={<PrivateRoute requiredRole="vendor"><VendorIssuesSection /></PrivateRoute>} />
+                                <Route path="/vendor/notifications" element={<PrivateRoute requiredRole="vendor"><VendorNotificationCenter /></PrivateRoute>} />
+                                <Route path="/vendor/analytics" element={<PrivateRoute requiredRole="vendor"><VendorAnalytics /></PrivateRoute>} />
+                                <Route path="/vendor/availability" element={<PrivateRoute requiredRole="vendor"><VendorAvailabilityCalendar /></PrivateRoute>} />
+                                <Route path="/vendor/import" element={<PrivateRoute requiredRole="vendor"><VendorImportPage /></PrivateRoute>} />
+                                <Route path="/vendor/import/preview" element={<PrivateRoute requiredRole="vendor"><VendorImportPreviewPage /></PrivateRoute>} />
+                                <Route path="/vendor/import/history" element={<PrivateRoute requiredRole="vendor"><VendorImportHistoryPage /></PrivateRoute>} />
                                 {isAdmin && (
                                     <>
-                                        <Route path="/users" element={<UserManagementPage />} />
-                                        <Route path="/settings/permissions" element={<RolePermissionsPage />} />
+                                        <Route path="/users" element={<PrivateRoute requiredRole="admin"><UserManagementPage /></PrivateRoute>} />
+                                        <Route path="/settings/permissions" element={<PrivateRoute requiredRole="admin"><RolePermissionsPage /></PrivateRoute>} />
                                     </>
                                 )}
                             </>
                         )}
 
                         {/* 404 */}
-                        <Route path="*" element={<h2 style={{ padding: 16, color: '#9db2ce' }}>404 - Page not found</h2>} />
+                        <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 </div>
             </div>

@@ -1,20 +1,58 @@
 /**
  * financialEngine.js
- * 
+ *
  * Enterprise-grade financial system for RestIQ platform.
- * 
+ *
  * Provides:
- * 1. Immutable invoice snapshot creation
+ * 1. Immutable invoice snapshot creation (atomic via runTransaction)
  * 2. Invoice adjustment/correction records
  * 3. Payout lifecycle management (Draft → Generated → Pending → Paid → On Hold → Disputed)
- * 4. Weekly reconciliation engine 
+ * 4. Weekly reconciliation engine
  * 5. Financial audit trail integration
+ * 6. Dynamic commission rate from platformSettings (not hardcoded)
  */
 import { db } from '../firebase';
 import {
-    doc, setDoc, addDoc, getDoc, getDocs, updateDoc,
-    collection, query, where, serverTimestamp, Timestamp,
+    doc, addDoc, getDoc, getDocs, updateDoc,
+    collection, query, where, serverTimestamp, runTransaction,
 } from 'firebase/firestore';
+
+/* ═══════════════════════════════════════════════════════════
+   COMMISSION RATE — fetched from platformSettings, cached in memory
+   Fallback: 0.15 (15%) if Firestore is unavailable
+   ═══════════════════════════════════════════════════════════ */
+
+let _cachedCommissionRate = null;
+let _commissionFetchedAt  = 0;
+const COMMISSION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get the platform commission rate, fetched from platformSettings and cached.
+ * @returns {Promise<number>} e.g. 0.15 for 15%
+ */
+export async function getPlatformCommissionRate() {
+    const now = Date.now();
+    if (_cachedCommissionRate !== null && (now - _commissionFetchedAt) < COMMISSION_CACHE_TTL_MS) {
+        return _cachedCommissionRate;
+    }
+    try {
+        const snap = await getDoc(doc(db, 'platformSettings', 'commissionConfig'));
+        if (snap.exists()) {
+            const rate = Number(snap.data().commissionRate);
+            if (!isNaN(rate) && rate > 0 && rate < 1) {
+                _cachedCommissionRate = rate;
+                _commissionFetchedAt  = now;
+                return rate;
+            }
+        }
+    } catch (err) {
+        console.warn('[FinancialEngine] Could not fetch commission rate from platformSettings:', err.message);
+    }
+    // Fallback
+    _cachedCommissionRate = 0.15;
+    _commissionFetchedAt  = now;
+    return 0.15;
+}
 
 /* ═══════════════════════════════════════════════════════════
    SECTION 1 — IMMUTABLE INVOICE SNAPSHOTS
@@ -45,7 +83,8 @@ import {
 export async function createImmutableInvoice({
     vendorId, vendorName, weekStart, dispatchId,
     items, subtotal, tax = 0,
-    commissionRate = 0.15, commissionAmount, vendorPayoutAmount,
+    commissionRate,          // ← now fetched from platformSettings if not passed
+    commissionAmount, vendorPayoutAmount,
     totalBilled, restaurantId, restaurantName,
     createdBy = 'system',
 }) {
@@ -54,31 +93,33 @@ export async function createImmutableInvoice({
     if (!items || items.length === 0) throw new Error('items are required');
     if (typeof subtotal !== 'number' || subtotal < 0) throw new Error('Invalid subtotal');
 
-    // Compute if not provided
-    const computedCommission = commissionAmount ?? Math.round(subtotal * commissionRate * 100) / 100;
-    const computedPayout = vendorPayoutAmount ?? Math.round((subtotal - computedCommission) * 100) / 100;
-    const computedTotal = totalBilled ?? Math.round((subtotal + tax) * 100) / 100;
+    // Resolve commission rate: caller-supplied → platformSettings → fallback 0.15
+    const resolvedRate = commissionRate ?? await getPlatformCommissionRate();
+
+    // Compute financials if not provided
+    const computedCommission = commissionAmount ?? Math.round(subtotal * resolvedRate * 100) / 100;
+    const computedPayout     = vendorPayoutAmount ?? Math.round((subtotal - computedCommission) * 100) / 100;
+    const computedTotal      = totalBilled ?? Math.round((subtotal + tax) * 100) / 100;
 
     // Generate invoice number
-    const prefix = 'INV';
+    const prefix      = 'INV';
     const dateSegment = (weekStart || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const random      = Math.random().toString(36).substring(2, 6).toUpperCase();
     const invoiceNumber = `${prefix}-${dateSegment}-${random}`;
 
     // Freeze item snapshots — deep copy with computed line totals
     const frozenItems = items.map(item => ({
-        itemName: item.itemName || item.name || '',
-        itemId: item.itemId || item.id || '',
-        qty: Number(item.qty) || 0,
+        itemName:  item.itemName  || item.name || '',
+        itemId:    item.itemId   || item.id   || '',
+        qty:       Number(item.qty) || 0,
         unitPrice: Number(item.unitPrice || item.vendorPrice || item.price) || 0,
         lineTotal: Number(item.lineTotal) || (Number(item.qty || 0) * Number(item.unitPrice || item.vendorPrice || item.price || 0)),
-        packSize: item.packSize || '',
-        unit: item.unit || '',
-        category: item.category || '',
+        packSize:  item.packSize || '',
+        unit:      item.unit     || '',
+        category:  item.category || '',
     }));
 
-    const invoice = {
-        // Identity
+    const invoiceData = {
         invoiceNumber,
         vendorId,
         vendorName: vendorName || '',
@@ -89,42 +130,53 @@ export async function createImmutableInvoice({
 
         // Financial snapshot (IMMUTABLE after creation)
         snapshotItems: frozenItems,
-        subtotal: Math.round(subtotal * 100) / 100,
-        tax: Math.round(tax * 100) / 100,
-        commissionRate,
-        commissionAmount: computedCommission,
-        vendorPayoutAmount: computedPayout,
-        totalBilled: computedTotal,
+        subtotal:             Math.round(subtotal          * 100) / 100,
+        tax:                  Math.round(tax               * 100) / 100,
+        commissionRate:       resolvedRate,
+        commissionAmount:     computedCommission,
+        vendorPayoutAmount:   computedPayout,
+        totalBilled:          computedTotal,
 
         // Lifecycle
-        invoiceStatus: 'generated', // generated | sent | disputed | paid | voided
-        paymentStatus: 'PENDING',   // PENDING | PAID | ON_HOLD | DISPUTED
-        payoutLifecycle: 'generated', // draft | generated | pending_payment | paid | on_hold | disputed
+        invoiceStatus:   'generated',
+        paymentStatus:   'PENDING',
+        payoutLifecycle: 'generated',
 
         // Metadata
-        isImmutable: true,
-        version: 1,
-        adjustmentIds: [], // references to adjustment records
+        isImmutable:   true,
+        version:       1,
+        adjustmentIds: [],
         createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     };
 
-    const docRef = await addDoc(collection(db, 'vendorInvoices'), invoice);
+    // ── Atomic write: invoice + audit log in one transaction ─────────────
+    let invoiceId;
+    await runTransaction(db, async (txn) => {
+        // Write the invoice document (addDoc inside a transaction requires a collection ref)
+        const invoiceRef = doc(collection(db, 'vendorInvoices'));
+        invoiceId = invoiceRef.id;
+        txn.set(invoiceRef, invoiceData);
 
-    // Audit log
-    try {
-        await addDoc(collection(db, 'adminChangeLogs'), {
-            entityType: 'invoice',
-            entityId: docRef.id,
-            action: 'invoice_created',
-            changedBy: createdBy,
-            afterState: { invoiceNumber, subtotal, commissionAmount: computedCommission, vendorPayoutAmount: computedPayout },
+        // Write the audit log atomically
+        const auditRef = doc(collection(db, 'adminChangeLogs'));
+        txn.set(auditRef, {
+            entityType:  'invoice',
+            entityId:    invoiceId,
+            action:      'invoice_created',
+            changedBy:   createdBy,
+            afterState:  {
+                invoiceNumber,
+                subtotal,
+                commissionAmount: computedCommission,
+                vendorPayoutAmount: computedPayout,
+            },
             timestamp: serverTimestamp(),
         });
-    } catch (_) {}
+    });
 
-    return { invoiceId: docRef.id, invoiceNumber };
+    return { invoiceId, invoiceNumber };
 }
 
 /**
@@ -199,55 +251,58 @@ const VALID_PAYOUT_TRANSITIONS = {
  * @param {string} [performedBy='admin']
  */
 export async function transitionPayoutStatus(invoiceId, newStatus, metadata = {}, performedBy = 'admin') {
-    const ref = doc(db, 'vendorInvoices', invoiceId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) throw new Error('Invoice not found');
+    // ── Atomic: invoice update + audit log in one transaction ────────────
+    let previousStatus;
 
-    const data = snap.data();
-    const currentStatus = data.payoutLifecycle || 'generated';
-    const allowed = VALID_PAYOUT_TRANSITIONS[currentStatus] || [];
+    await runTransaction(db, async (txn) => {
+        const ref  = doc(db, 'vendorInvoices', invoiceId);
+        const snap = await txn.get(ref);
+        if (!snap.exists()) throw new Error('Invoice not found');
 
-    if (!allowed.includes(newStatus)) {
-        throw new Error(`Cannot transition from '${currentStatus}' to '${newStatus}'. Allowed: ${allowed.join(', ')}`);
-    }
+        const data = snap.data();
+        previousStatus = data.payoutLifecycle || 'generated';
+        const allowed  = VALID_PAYOUT_TRANSITIONS[previousStatus] || [];
 
-    const update = {
-        payoutLifecycle: newStatus,
-        updatedAt: serverTimestamp(),
-    };
+        if (!allowed.includes(newStatus)) {
+            throw new Error(
+                `Cannot transition from '${previousStatus}' to '${newStatus}'. Allowed: ${allowed.join(', ')}`
+            );
+        }
 
-    // Map to paymentStatus for backward compatibility
-    if (newStatus === 'paid') {
-        update.paymentStatus = 'PAID';
-        update.paidAt = serverTimestamp();
-        if (metadata.paymentDate) update.paymentDate = metadata.paymentDate;
-        if (metadata.paymentReference) update.paymentReference = metadata.paymentReference;
-    } else if (newStatus === 'on_hold') {
-        update.paymentStatus = 'ON_HOLD';
-    } else if (newStatus === 'disputed') {
-        update.paymentStatus = 'DISPUTED';
-    } else if (newStatus === 'pending_payment') {
-        update.paymentStatus = 'PENDING';
-    }
+        const update = {
+            payoutLifecycle: newStatus,
+            updatedAt: serverTimestamp(),
+        };
 
-    if (metadata.notes) update.payoutNotes = metadata.notes;
+        // Map to paymentStatus for backward compatibility
+        if (newStatus === 'paid') {
+            update.paymentStatus = 'PAID';
+            update.paidAt = serverTimestamp();
+            if (metadata.paymentDate)      update.paymentDate      = metadata.paymentDate;
+            if (metadata.paymentReference) update.paymentReference = metadata.paymentReference;
+        } else if (newStatus === 'on_hold')          { update.paymentStatus = 'ON_HOLD';  }
+          else if (newStatus === 'disputed')          { update.paymentStatus = 'DISPUTED'; }
+          else if (newStatus === 'pending_payment')   { update.paymentStatus = 'PENDING';  }
 
-    await updateDoc(ref, update);
+        if (metadata.notes) update.payoutNotes = metadata.notes;
 
-    // Audit trail
-    try {
-        await addDoc(collection(db, 'adminChangeLogs'), {
+        // Write invoice update
+        txn.update(ref, update);
+
+        // Write audit log atomically
+        const auditRef = doc(collection(db, 'adminChangeLogs'));
+        txn.set(auditRef, {
             entityType: 'invoice',
-            entityId: invoiceId,
-            action: 'payout_status_changed',
-            changedBy: performedBy,
-            changedFields: { payoutLifecycle: { from: currentStatus, to: newStatus } },
-            metadata: metadata || {},
-            timestamp: serverTimestamp(),
+            entityId:   invoiceId,
+            action:     'payout_status_changed',
+            changedBy:  performedBy,
+            changedFields: { payoutLifecycle: { from: previousStatus, to: newStatus } },
+            metadata:   metadata || {},
+            timestamp:  serverTimestamp(),
         });
-    } catch (_) {}
+    });
 
-    return { previousStatus: currentStatus, newStatus };
+    return { previousStatus, newStatus };
 }
 
 /* ═══════════════════════════════════════════════════════════

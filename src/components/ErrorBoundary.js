@@ -26,9 +26,35 @@ export default class ErrorBoundary extends React.Component {
 
     componentDidCatch(error, errorInfo) {
         this.setState({ errorInfo });
-        // Log to console (and optionally to Firestore or external service)
         console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+
+        // ── Sentry integration (graceful — works even if @sentry/react is not installed) ──
+        try {
+            // eslint-disable-next-line
+            const Sentry = require('@sentry/react');
+            Sentry.withScope((scope) => {
+                scope.setTag('errorBoundary', true);
+                scope.setExtra('componentStack', errorInfo?.componentStack);
+                Sentry.captureException(error);
+            });
+        } catch (_) {
+            // Sentry not installed or not initialized — fall through silently
+        }
+
+        // ── Fallback: log to Firestore systemExceptions ──────────────────
+        try {
+            const { db } = require('../firebase');
+            const { addDoc, collection, serverTimestamp } = require('firebase/firestore');
+            addDoc(collection(db, 'systemExceptions'), {
+                error:          error?.toString(),
+                componentStack: errorInfo?.componentStack,
+                url:            window.location.href,
+                userAgent:      navigator.userAgent,
+                timestamp:      serverTimestamp(),
+            }).catch(() => {});
+        } catch (_) { /* silent */ }
     }
+
 
     handleReload = () => {
         window.location.reload();

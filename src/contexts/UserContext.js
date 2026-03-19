@@ -1,6 +1,16 @@
 // src/contexts/UserContext.js
-import React, { createContext, useEffect, useState } from 'react';
-import { db } from '../firebase';
+//
+// HARDENED: Uses Firebase Auth (onAuthStateChanged) as the source of truth.
+// User profile (role, vendorId) is fetched from Firestore on each auth state change.
+// NO plaintext credentials or full user objects are stored in localStorage.
+//
+import React, { createContext, useEffect, useState, useCallback } from 'react';
+import { auth, db } from '../firebase';
+import {
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged,
+} from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
 export const UserContext = createContext({
@@ -10,81 +20,104 @@ export const UserContext = createContext({
     vendorId: null,
     vendorName: '',
     isSuperAdmin: false,
+    isAdmin: false,
+    isUser: false,
     permissions: {},
     displayName: '',
-    login: () => { },
-    logout: () => { },
+    authLoading: true,
+    login: async () => { },
+    logout: async () => { },
 });
 
-const loadUserFromStorage = () => {
+/**
+ * Fetch the user's platform profile from the Firestore `login` collection.
+ * This is separate from Firebase Auth — Auth proves identity, Firestore holds role/vendor.
+ */
+async function fetchUserProfile(uid) {
     try {
-        const raw = localStorage.getItem('vm_user');
-        return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-        console.error('Failed to parse user from localStorage', e);
+        const snap = await getDoc(doc(db, 'login', uid));
+        if (!snap.exists()) return null;
+        return { id: snap.id, ...snap.data() };
+    } catch (err) {
+        console.warn('[UserContext] Could not fetch profile:', err.message);
         return null;
     }
-};
+}
 
 export function UserProvider({ children }) {
-    const [user, setUser] = useState(() => loadUserFromStorage());
+    // null = loading, object = authenticated, false = signed out
+    const [user, setUser] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
 
-    // Hydrate extra fields from Firestore on mount
+    // ── Listen to Firebase Auth state ──────────────────────────────────────
     useEffect(() => {
-        if (!user?.id) return;
-        (async () => {
-            try {
-                const loginsSnap = await getDoc(doc(db, 'login', user.id));
-                if (loginsSnap.exists()) {
-                    const data = loginsSnap.data();
-                    const updates = {};
-                    if (data.vendorId && !user.vendorId) updates.vendorId = data.vendorId;
-                    if (data.vendorName && !user.vendorName) updates.vendorName = data.vendorName;
-                    if (data.position && !user.position) updates.position = data.position;
-                    // Hydrate permissions
-                    const currentPerms = JSON.stringify(user.permissions || {});
-                    const newPerms = JSON.stringify(data.permissions || {});
-                    if (currentPerms !== newPerms) {
-                        updates.permissions = data.permissions || {};
-                    }
-                    if (Object.keys(updates).length > 0) {
-                        const updatedUser = { ...user, ...updates };
-                        setUser(updatedUser);
-                        localStorage.setItem('vm_user', JSON.stringify(updatedUser));
-                    }
-                }
-            } catch (e) {
-                console.warn('Could not fetch user data:', e);
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (!firebaseUser) {
+                setUser(false);
+                setAuthLoading(false);
+                return;
             }
-        })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id]);
+            // Firebase says we're authenticated — fetch the platform profile
+            const profile = await fetchUserProfile(firebaseUser.uid);
+            if (!profile) {
+                // Auth exists but no Firestore profile — sign them out cleanly
+                console.warn('[UserContext] No profile found for uid:', firebaseUser.uid);
+                await signOut(auth);
+                setUser(false);
+                setAuthLoading(false);
+                return;
+            }
 
-    const login = (userData, options = {}) => {
-        const remember = options.remember ?? true;
-        const nextUser = { ...userData };
-        setUser(nextUser);
-        if (remember) {
-            localStorage.setItem('vm_user', JSON.stringify(nextUser));
-            if (nextUser.role) localStorage.setItem('vm_role', nextUser.role);
-        } else {
-            localStorage.removeItem('vm_user');
-            localStorage.removeItem('vm_role');
-        }
-    };
+            // Check account is still active
+            if (profile.active === false) {
+                console.warn('[UserContext] Account is disabled.');
+                await signOut(auth);
+                setUser(false);
+                setAuthLoading(false);
+                return;
+            }
 
-    const logout = () => {
-        setUser(null);
-        localStorage.removeItem('vm_user');
-        localStorage.removeItem('vm_role');
-        localStorage.removeItem('vm_lastPath');
-    };
+            setUser({
+                id: firebaseUser.uid,
+                firebaseUid: firebaseUser.uid,
+                email: firebaseUser.email || profile.email || null,
+                displayName: profile.displayName || profile.name || profile.username || firebaseUser.email || '',
+                role: profile.role || null,
+                vendorId: profile.vendorId || null,
+                vendorName: profile.vendorName || null,
+                permissions: profile.permissions || {},
+                active: profile.active !== false,
+                position: profile.position || null,
+            });
+            setAuthLoading(false);
+        });
 
+        return () => unsubscribe();
+    }, []);
+
+    // ── Login via Firebase Auth ────────────────────────────────────────────
+    const login = useCallback(async (emailOrUsername, password) => {
+        // Firebase Auth requires an email. If the identifier looks like a username,
+        // we must look up that username in Firestore to find the email.
+        // For now, pass directly — callers (Login.js) resolve usernames to emails first.
+        await signInWithEmailAndPassword(auth, emailOrUsername, password);
+        // onAuthStateChanged above will handle the rest
+    }, []);
+
+    // ── Logout ────────────────────────────────────────────────────────────
+    const logout = useCallback(async () => {
+        await signOut(auth);
+        // Clear any residual legacy keys
+        ['vm_user', 'vm_role', 'vm_lastPath'].forEach(k => localStorage.removeItem(k));
+        setUser(false);
+    }, []);
+
+    // ── Derived values ─────────────────────────────────────────────────────
     const normalizedRole = (user?.role || '').trim().toLowerCase();
 
     const value = {
-        user,
-        userId: user?.id || user?.uid || null,
+        user: user || null,
+        userId: user?.id || null,
         role: user?.role || null,
         vendorId: user?.vendorId || null,
         vendorName: user?.vendorName || '',
@@ -93,6 +126,7 @@ export function UserProvider({ children }) {
         isUser: normalizedRole === 'user',
         permissions: user?.permissions || {},
         displayName: user?.displayName || '',
+        authLoading,
         login,
         logout,
     };

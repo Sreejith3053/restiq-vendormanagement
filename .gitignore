@@ -20,3 +20,29 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ── Debug / Dev Artifacts (never commit these) ────────────────────────────────
+*.log
+cron_logs*.txt
+error_log*.txt
+server_logs*.txt
+check.js
+check*.js
+diff*.txt
+deploy_output*.txt
+*_utf8.txt
+*_backup*.json
+
+# ── Firebase Admin (service account key — contains credentials) ───────────────
+scripts/serviceAccountKey.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db

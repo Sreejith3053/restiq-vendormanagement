@@ -107,6 +107,7 @@ export function UserProvider({ children }) {
                 permissions: profile.permissions || {},
                 active: profile.active !== false,
                 position: profile.position || null,
+                mustChangePassword: profile.mustChangePassword === true,
             });
             setAuthLoading(false);
         });

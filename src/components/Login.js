@@ -179,7 +179,12 @@ export default function Login() {
             // ── Step 2: try Firebase Auth ────────────────────────────────
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                navigate("/");
+                // Check if user must change password on first login
+                if (data.mustChangePassword === true) {
+                    navigate('/change-password');
+                } else {
+                    navigate('/');
+                }
                 return; // ✅ Firebase Auth path — done
             } catch (firebaseErr) {
                 const code = firebaseErr.code || "";
@@ -223,7 +228,12 @@ export default function Login() {
 
                 // ✅ Firestore credentials valid — auto-migrate to Firebase Auth
                 await migrateUserToFirebaseAuth(email, password, docId);
-                navigate("/");
+                // Check if user must change password on first login
+                if (data.mustChangePassword === true) {
+                    navigate('/change-password');
+                } else {
+                    navigate('/');
+                }
             }
         } catch (err) {
             console.error("[Login] Unexpected error:", err);

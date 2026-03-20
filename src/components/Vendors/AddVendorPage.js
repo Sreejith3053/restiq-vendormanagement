@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { toast } from 'react-toastify';
 import { COUNTRIES, getRegionsForCountry, getRegionLabel, getTaxRate } from '../../constants/taxRates';
 
@@ -119,12 +120,20 @@ export default function AddVendorPage() {
         }));
     };
 
+    // Password generator
+    const generatePassword = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+        let pw = '';
+        for (let i = 0; i < 12; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length));
+        return pw;
+    };
+
     // Validation
     const validateForm = () => {
         if (!form.name.trim()) { toast.warn('Vendor name is required.'); return false; }
         if (!form.category) { toast.warn('Please select a category.'); return false; }
-        if (form.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
-            toast.warn('Please enter a valid email address.'); return false;
+        if (!form.contactEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contactEmail)) {
+            toast.warn('A valid email address is required for vendor login.'); return false;
         }
         if (form.contactPhone && !/^[\d\s\-+().]{7,}$/.test(form.contactPhone)) {
             toast.warn('Please enter a valid phone number.'); return false;
@@ -175,7 +184,65 @@ export default function AddVendorPage() {
             };
 
             const docRef = await addDoc(collection(db, 'vendors'), payload);
-            toast.success('Vendor added successfully!');
+
+            // ── Auto-create login account ────────────────────────────────
+            const vendorEmail = form.contactEmail.trim();
+            const username = form.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || docRef.id;
+            const tempPassword = generatePassword();
+
+            // Check if username already exists
+            let finalUsername = username;
+            const existingQ = query(collection(db, 'login'), where('username', '==', username), limit(1));
+            const existingSnap = await getDocs(existingQ);
+            if (!existingSnap.empty) {
+                finalUsername = username + Math.floor(Math.random() * 999);
+            }
+
+            const loginPayload = {
+                displayName: form.contactName.trim() || form.name.trim(),
+                username: finalUsername,
+                email: vendorEmail,
+                password: tempPassword,
+                role: 'admin',
+                vendorId: docRef.id,
+                vendorName: form.name.trim(),
+                active: true,
+                mustChangePassword: true,
+                createdBy: 'system-onboarding',
+                createdAt: serverTimestamp(),
+            };
+
+            const loginRef = await addDoc(collection(db, 'login'), loginPayload);
+
+            // Mirror to users collection
+            try {
+                await setDoc(doc(db, 'users', loginRef.id), {
+                    ...loginPayload,
+                    updatedAt: serverTimestamp(),
+                });
+            } catch (syncErr) {
+                console.warn('[AddVendor] users sync failed (non-fatal):', syncErr);
+            }
+
+            // ── Send welcome email via Cloud Function ────────────────────
+            try {
+                const functions = getFunctions();
+                const sendWelcome = httpsCallable(functions, 'sendVendorWelcomeEmailFn');
+                await sendWelcome({
+                    vendorName: form.name.trim(),
+                    contactName: form.contactName.trim() || form.name.trim(),
+                    toEmail: vendorEmail,
+                    username: finalUsername,
+                    tempPassword: tempPassword,
+                });
+                toast.success(`Welcome email sent to ${vendorEmail}`);
+            } catch (emailErr) {
+                console.warn('[AddVendor] Welcome email failed (non-fatal):', emailErr);
+                toast.warn('Vendor created but welcome email failed. Share credentials manually.');
+            }
+
+            toast.success(`Vendor "${form.name}" created with login account!`);
+            toast.info(`Username: ${finalUsername}`, { autoClose: 10000 });
             navigate(`/vendors/${docRef.id}`);
         } catch (err) {
             console.error('Failed to add vendor:', err);
@@ -240,7 +307,7 @@ export default function AddVendorPage() {
                     </div>
                     <div style={fieldStyle}>
                         <label style={labelStyle}>Email</label>
-                        <input style={inputStyle} type="email" placeholder="vendor@example.com" value={form.contactEmail} onChange={e => update('contactEmail', e.target.value)} />
+                        <input style={inputStyle} type="email" placeholder="vendor@example.com (required for login)" value={form.contactEmail} onChange={e => update('contactEmail', e.target.value)} />
                     </div>
                 </div>
 

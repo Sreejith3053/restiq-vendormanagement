@@ -3,6 +3,7 @@ import React, { useContext, useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { UserContext } from './contexts/UserContext';
 import Login from './components/Login';
+import ForcePasswordChange from './components/ForcePasswordChange';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import PrivateRoute from './components/PrivateRoute';
@@ -70,7 +71,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
-    const { role, isSuperAdmin, authLoading } = useContext(UserContext);
+    const { role, isSuperAdmin, authLoading, user } = useContext(UserContext);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -106,6 +107,11 @@ function App() {
         return <Login />;
     }
 
+    // Force password change on first login
+    if (user?.mustChangePassword && location.pathname !== '/change-password') {
+        return <ForcePasswordChange />;
+    }
+
     return (
         <ErrorBoundary>
         <div className="app-container theme-neon">
@@ -117,6 +123,7 @@ function App() {
                 <div className="page-content">
                     <Routes>
                         <Route path="/login" element={<Navigate to={isSuperAdmin ? "/admin/forecast/control-tower" : "/"} />} />
+                        <Route path="/change-password" element={<ForcePasswordChange />} />
 
                         {/* ══════════════════════════════════════════════════════════
                             SUPER ADMIN ROUTES — guarded by PrivateRoute

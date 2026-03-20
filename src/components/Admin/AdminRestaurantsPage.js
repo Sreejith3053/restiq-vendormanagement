@@ -7,10 +7,12 @@ import { useNavigate } from 'react-router-dom';
 
 export default function AdminRestaurantsPage() {
     const { isSuperAdmin } = useContext(UserContext);
+    const [restaurants, setRestaurants] = useState([]);
     const [orders, setOrders] = useState([]);
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -18,19 +20,19 @@ export default function AdminRestaurantsPage() {
 
         const fetchData = async () => {
             try {
-                // Fetch all Marketplace Orders to calculate total revenue per restaurant
-                // We're fetching all for simplicity; in massive apps this should be paginated/aggregated
+                // 1. Primary source: restaurants collection
+                const restSnap = await getDocs(collection(db, 'restaurants'));
+                const restDocs = restSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setRestaurants(restDocs);
+
+                // 2. Enrich with order stats
                 const qOrders = query(collection(db, 'marketplaceOrders'), orderBy('createdAt', 'desc'));
-                const oSnap = await getDocs(qOrders);
-                const allOrders = oSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                setOrders(allOrders);
+                const oSnap = await getDocs(qOrders).catch(() => ({ docs: [] }));
+                setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
-                // Fetch all Restaurant Invoices to calculate billed/paid/pending amounts
-                const qInvoices = query(collection(db, 'restaurantInvoices'));
-                const iSnap = await getDocs(qInvoices);
-                const allInvoices = iSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                setInvoices(allInvoices);
-
+                // 3. Enrich with invoice stats
+                const iSnap = await getDocs(collection(db, 'restaurantInvoices')).catch(() => ({ docs: [] }));
+                setInvoices(iSnap.docs.map(d => ({ id: d.id, ...d.data() })));
             } catch (error) {
                 console.error("Error fetching restaurant data:", error);
                 toast.error("Failed to load restaurant data.");
@@ -42,51 +44,56 @@ export default function AdminRestaurantsPage() {
         fetchData();
     }, [isSuperAdmin]);
 
-    // Aggregate data per unique restaurant
-    const restaurantAgg = useMemo(() => {
-        const agg = {};
-
-        // Aggregate Orders
+    // Build order & invoice stats per restaurant
+    const statsMap = useMemo(() => {
+        const map = {};
         orders.forEach(o => {
-            const rId = o.restaurantId || 'Unknown';
-            if (!agg[rId]) {
-                agg[rId] = { id: rId, orderCount: 0, revenue: 0, billed: 0, paid: 0, pending: 0, invoiceCount: 0 };
-            }
-            agg[rId].orderCount++;
-
-            // Only count revenue for fulfilled/completed/delivered
+            const rId = o.restaurantId;
+            if (!rId) return;
+            if (!map[rId]) map[rId] = { orderCount: 0, revenue: 0, billed: 0, paid: 0, pending: 0, invoiceCount: 0 };
+            map[rId].orderCount++;
             const status = (o.status || '').toLowerCase();
             if (['fulfilled', 'completed', 'delivered'].includes(status)) {
-                agg[rId].revenue += Number(o.grandTotalAfterTax || o.total || 0);
+                map[rId].revenue += Number(o.grandTotalAfterTax || o.total || 0);
             }
         });
-
-        // Aggregate Invoices
         invoices.forEach(inv => {
-            const rId = inv.restaurantId || 'Unknown';
-            if (!agg[rId]) {
-                agg[rId] = { id: rId, orderCount: 0, revenue: 0, billed: 0, paid: 0, pending: 0, invoiceCount: 0 };
-            }
-
+            const rId = inv.restaurantId;
+            if (!rId) return;
+            if (!map[rId]) map[rId] = { orderCount: 0, revenue: 0, billed: 0, paid: 0, pending: 0, invoiceCount: 0 };
             const amount = Number(inv.grandTotal || 0);
-            agg[rId].invoiceCount++;
-            agg[rId].billed += amount;
-
-            if (inv.paymentStatus === 'PAID') {
-                agg[rId].paid += amount;
-            } else if (inv.paymentStatus === 'PENDING') {
-                agg[rId].pending += amount;
-            }
+            map[rId].invoiceCount++;
+            map[rId].billed += amount;
+            if (inv.paymentStatus === 'PAID') map[rId].paid += amount;
+            else if (inv.paymentStatus === 'PENDING') map[rId].pending += amount;
         });
-
-        return Object.values(agg);
+        return map;
     }, [orders, invoices]);
 
-    const filteredRestaurants = useMemo(() => {
-        return restaurantAgg.filter(r =>
-            !search || r.id.toLowerCase().includes(search.toLowerCase())
-        ).sort((a, b) => b.revenue - a.revenue); // Sort by highest revenue by default
-    }, [restaurantAgg, search]);
+    // Merge restaurants with stats
+    const merged = useMemo(() => {
+        return restaurants.map(r => {
+            const rid = r.restaurantId || r.id;
+            const s = statsMap[rid] || { orderCount: 0, revenue: 0, billed: 0, paid: 0, pending: 0, invoiceCount: 0 };
+            return { ...r, ...s, restaurantId: rid };
+        });
+    }, [restaurants, statsMap]);
+
+    const filtered = useMemo(() => {
+        return merged.filter(r => {
+            if (statusFilter !== 'all' && (r.status || 'active') !== statusFilter) return false;
+            if (search) {
+                const q = search.toLowerCase();
+                return (r.name || '').toLowerCase().includes(q)
+                    || (r.restaurantId || '').toLowerCase().includes(q)
+                    || (r.city || '').toLowerCase().includes(q)
+                    || (r.code || '').toLowerCase().includes(q);
+            }
+            return true;
+        }).sort((a, b) => b.revenue - a.revenue);
+    }, [merged, search, statusFilter]);
+
+    const statusColors = { active: '#4ade80', hold: '#fbbf24', inactive: '#94a3b8' };
 
     if (!isSuperAdmin) {
         return <div style={{ padding: 40, textAlign: 'center' }}>Access Denied.</div>;
@@ -98,20 +105,32 @@ export default function AdminRestaurantsPage() {
                 <div>
                     <h2>All Restaurants</h2>
                     <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-                        A high-level summary of order volume and invoice health for every restaurant on the platform.
+                        Restaurant directory with order volume and invoice health — sourced from <strong>restaurants</strong> collection.
                     </div>
                 </div>
             </div>
 
             <div className="ui-card" style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                     <input
                         className="ui-input"
-                        placeholder="🔍 Search Restaurant Name/ID..."
+                        placeholder="🔍 Search name, ID, city..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         style={{ maxWidth: 300, flex: 1 }}
                     />
+                    {['all', 'active', 'hold', 'inactive'].map(s => (
+                        <button key={s} onClick={() => setStatusFilter(s)}
+                            style={{
+                                padding: '5px 12px', borderRadius: 14, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                border: statusFilter === s ? `1px solid ${statusColors[s] || '#38bdf8'}` : '1px solid rgba(255,255,255,0.08)',
+                                background: statusFilter === s ? (statusColors[s] || '#38bdf8') + '18' : 'transparent',
+                                color: statusFilter === s ? (statusColors[s] || '#38bdf8') : '#94a3b8',
+                            }}>
+                            {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+                        </button>
+                    ))}
+                    <span style={{ fontSize: 12, color: '#64748b' }}>{filtered.length} of {restaurants.length}</span>
                 </div>
             </div>
 
@@ -120,29 +139,48 @@ export default function AdminRestaurantsPage() {
                     <thead>
                         <tr>
                             <th>Restaurant</th>
+                            <th>Type</th>
+                            <th>City</th>
+                            <th>Status</th>
                             <th style={{ textAlign: 'right' }}>Total Orders</th>
-                            <th style={{ textAlign: 'right' }}>Realized Revenue</th>
-                            <th style={{ textAlign: 'right' }}>Invoices Generated</th>
-                            <th style={{ textAlign: 'right' }}>Total Billed</th>
-                            <th style={{ textAlign: 'right' }}>Total Paid</th>
-                            <th style={{ textAlign: 'right' }}>Total Pending</th>
+                            <th style={{ textAlign: 'right' }}>Revenue</th>
+                            <th style={{ textAlign: 'right' }}>Invoices</th>
+                            <th style={{ textAlign: 'right' }}>Billed</th>
+                            <th style={{ textAlign: 'right' }}>Paid</th>
+                            <th style={{ textAlign: 'right' }}>Pending</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: 24 }}>Loading restaurants...</td></tr>
-                        ) : filteredRestaurants.length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>No restaurants found.</td></tr>
+                            <tr><td colSpan="10" style={{ textAlign: 'center', padding: 24 }}>Loading restaurants...</td></tr>
+                        ) : filtered.length === 0 ? (
+                            <tr><td colSpan="10" style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>
+                                {restaurants.length === 0 ? 'No restaurants found. Add them from Manage Restaurants or run a migration backfill.' : 'No results match your filter.'}
+                            </td></tr>
                         ) : (
-                            filteredRestaurants.map(r => (
+                            filtered.map(r => (
                                 <tr
                                     key={r.id}
                                     className="is-row"
                                     style={{ cursor: 'pointer' }}
-                                    onClick={() => navigate(`/admin/restaurants/${encodeURIComponent(r.id)}`)}
-                                    title={`View invoices for ${r.id}`}
+                                    onClick={() => navigate(`/admin/restaurants/${encodeURIComponent(r.restaurantId || r.id)}`)}
+                                    title={`View details for ${r.name || r.restaurantId}`}
                                 >
-                                    <td style={{ fontWeight: 600 }}>{r.id === 'Unknown' ? <em style={{ color: 'var(--muted)' }}>Unknown / Unassigned</em> : r.id}</td>
+                                    <td style={{ fontWeight: 600 }}>
+                                        {r.name || r.restaurantId || <em style={{ color: 'var(--muted)' }}>Unnamed</em>}
+                                        {r.code && <div style={{ fontSize: 10, color: '#64748b', fontFamily: 'monospace' }}>{r.code}</div>}
+                                    </td>
+                                    <td>
+                                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'rgba(167,139,250,0.1)', color: '#a78bfa', fontWeight: 600 }}>
+                                            {r.branchType || 'restaurant'}
+                                        </span>
+                                    </td>
+                                    <td style={{ color: '#94a3b8', fontSize: 12 }}>{r.city || '—'}</td>
+                                    <td>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: statusColors[r.status] || '#94a3b8' }}>
+                                            ● {r.status || 'active'}
+                                        </span>
+                                    </td>
                                     <td style={{ textAlign: 'right' }}>{r.orderCount}</td>
                                     <td style={{ textAlign: 'right', fontWeight: 600, color: '#4dabf7' }}>
                                         ${r.revenue.toFixed(2)}

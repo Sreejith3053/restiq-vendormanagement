@@ -1,21 +1,24 @@
 /**
- * MarketplaceResetUtility.js  — v2
+ * MarketplaceResetUtility.js  — v3
  *
  * SuperAdmin-only marketplace reset utility.
  * Collection names audited directly from codebase on 2026-03-20.
  *
  * Phase 1 — Dry run:  counts every clearable document.
  * Phase 2 — Preview:  show exact counts, protected items, confirm gate.
- * Phase 3 — Execute:  batched delete (top-level + deep vendor subcollections).
+ * Phase 3 — Execute:  batched delete (top-level + vendors + deep vendor subcollections).
  * Phase 4 — Validate: post-reset check that all UI data sources are empty.
  * Phase 5 — Audit:    write final reset log to adminChangeLogs.
  *
  * PROTECTED (never deleted):
- *   vendors collection docs, platformSettings, login collection (all accounts).
+ *   platformSettings, login collection (all accounts).
+ *
+ * DELETED (including vendor docs themselves):
+ *   All vendor docs + their subcollections are fully removed.
  */
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext } from 'react';
 import {
-    collection, getDocs, writeBatch, doc, addDoc,
+    collection, getDocs, writeBatch, doc, addDoc, deleteDoc,
     Timestamp, query, limit, startAfter,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -26,11 +29,6 @@ import { toast } from 'react-toastify';
 // COLLECTION MANIFEST  (audited from source code, 2026-03-20)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Top-level collections to wipe completely.
- * Keys are the Firestore collection IDs.
- * Labels are human-readable names for the preview UI.
- */
 const TOP_LEVEL_COLLECTIONS = [
     // ── Orders & Fulfillment ──────────────────────────────────────────────
     { id: 'marketplaceOrders',          label: 'Marketplace Orders',           group: 'Orders & Fulfillment' },
@@ -71,59 +69,62 @@ const TOP_LEVEL_COLLECTIONS = [
     { id: 'forecastSnapshots',          label: 'Forecast Snapshots',           group: 'Snapshots' },
     { id: 'capacitySnapshots',          label: 'Capacity Snapshots',           group: 'Snapshots' },
     { id: 'vendorScores',               label: 'Vendor Scores',                group: 'Snapshots' },
+    // ── Forecast / AI ─────────────────────────────────────────────────────
+    { id: 'suggestedOrderAIForcast_Model', label: 'AI Forecast Model',         group: 'Forecast / AI' },
+    { id: 'correctionEntries',          label: 'Forecast Corrections',         group: 'Forecast / AI' },
     // ── Calendar / Seasonal ───────────────────────────────────────────────
     { id: 'festivalCalendar',           label: 'Festival Calendar',            group: 'Seasonal' },
     // ── Imports ───────────────────────────────────────────────────────────
     { id: 'importHistory',              label: 'Import History',               group: 'Imports' },
-    { id: 'importBatches',              label: 'Import Batches',               group: 'Imports' },
+    { id: 'importBatches',              label: 'Import Batches (top-level)',   group: 'Imports' },
+    // ── User Accounts ─────────────────────────────────────────────────────
+    { id: 'users',                      label: 'User Accounts',                group: 'User Accounts' },
+    // ── Legacy ────────────────────────────────────────────────────────────
+    { id: 'vegetablePurchaseHistory',   label: 'Vegetable Purchase History',   group: 'Legacy' },
+    { id: 'containerPredictionHistory', label: 'Container Prediction History', group: 'Legacy' },
 ];
 
-/**
- * Per-vendor LEVEL-1 subcollections to delete for every vendor doc.
- * The vendor doc itself is preserved.
- */
-const VENDOR_L1_SUBS = [
-    'items',
-    'importBatches',
-    'auditLog',
-];
+/** Per-item LEVEL-2 subcollections under vendors/{id}/items/{itemId}. */
+const VENDOR_ITEM_SUBS = ['history', 'auditLog'];
 
-/**
- * Per-item LEVEL-2 subcollections under vendors/{id}/items/{itemId}.
- * Deleted before items are deleted.
- */
-const VENDOR_ITEM_SUBS = [
-    'history',
-    'auditLog',
-];
+/** Per-importBatch LEVEL-2 subcollections under vendors/{id}/importBatches/{batchId}. */
+const VENDOR_BATCH_SUBS = ['rows'];
 
-/**
- * Per-importBatch LEVEL-2 subcollections under vendors/{id}/importBatches/{batchId}.
- */
-const VENDOR_BATCH_SUBS = [
-    'rows',
-];
+/** Vendor-level L1 subcollection names (deleted before vendor doc itself). */
+const VENDOR_L1_SUBS = ['items', 'importBatches', 'auditLog'];
 
-/**
- * Collections to validate after reset (check they are now empty).
- * Maps to a human label and the UI page where the data appears.
- */
+/** Collections to validate after reset. */
 const VALIDATION_TARGETS = [
     { id: 'marketplaceOrders',    label: 'Orders',            page: 'Orders & Fulfillment' },
     { id: 'submittedOrders',      label: 'Submitted Orders',  page: 'Orders & Fulfillment' },
     { id: 'vendorDispatches',     label: 'Dispatches',        page: 'Orders & Fulfillment' },
+    { id: 'vendorDispatchRoutes', label: 'Dispatch Routes',   page: 'Orders & Fulfillment' },
     { id: 'vendorInvoices',       label: 'Vendor Invoices',   page: 'Finance' },
     { id: 'restaurantInvoices',   label: 'Rest. Invoices',    page: 'Finance' },
     { id: 'catalogItems',         label: 'Catalog Items',     page: 'Catalog & Reviews' },
+    { id: 'catalogReviewQueue',   label: 'Review Queue',      page: 'Catalog & Reviews' },
     { id: 'restaurants',          label: 'Restaurants',       page: 'Restaurants' },
     { id: 'issuesDisputes',       label: 'Issues/Disputes',   page: 'Issues' },
+    { id: 'suggestedOrderAIForcast_Model', label: 'AI Forecasts', page: 'Forecast' },
+    { id: 'correctionEntries',    label: 'Corrections',       page: 'Forecast' },
+    { id: 'vendors',              label: 'Vendors',           page: 'Vendor Details' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIRESTORE HELPERS
+// FIRESTORE HELPERS  (with retry)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BATCH_SIZE = 400;
+
+async function withRetry(fn, retries = 3) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try { return await fn(); }
+        catch (err) {
+            if (attempt === retries) throw err;
+            await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
+    }
+}
 
 async function countColl(collPath) {
     let count = 0, lastDoc = null;
@@ -140,16 +141,14 @@ async function countColl(collPath) {
 }
 
 async function deleteColl(collPath, onTick) {
-    let deleted = 0, lastDoc = null;
+    let deleted = 0;
     while (true) {
-        const q = lastDoc
-            ? query(collection(db, collPath), startAfter(lastDoc), limit(BATCH_SIZE))
-            : query(collection(db, collPath), limit(BATCH_SIZE));
-        const snap = await getDocs(q);
+        const q = query(collection(db, collPath), limit(BATCH_SIZE));
+        const snap = await withRetry(() => getDocs(q));
         if (snap.empty) break;
         const batch = writeBatch(db);
         snap.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+        await withRetry(() => batch.commit());
         deleted += snap.size;
         onTick?.(snap.size);
         if (snap.size < BATCH_SIZE) break;
@@ -159,18 +158,15 @@ async function deleteColl(collPath, onTick) {
 
 /** Delete a subcollection under a given parent DocumentReference. */
 async function deleteSubcoll(parentRef, subName) {
-    let deleted = 0, lastDoc = null;
+    let deleted = 0;
     while (true) {
-        const q = lastDoc
-            ? query(collection(parentRef, subName), startAfter(lastDoc), limit(BATCH_SIZE))
-            : query(collection(parentRef, subName), limit(BATCH_SIZE));
-        const snap = await getDocs(q);
+        const q = query(collection(parentRef, subName), limit(BATCH_SIZE));
+        const snap = await withRetry(() => getDocs(q));
         if (snap.empty) break;
         const batch = writeBatch(db);
         snap.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+        await withRetry(() => batch.commit());
         deleted += snap.size;
-        lastDoc = snap.docs[snap.docs.length - 1];
         if (snap.size < BATCH_SIZE) break;
     }
     return deleted;
@@ -197,7 +193,7 @@ const PHASES = { IDLE: 'idle', SCANNING: 'scanning', PREVIEW: 'preview', RESETTI
 export default function MarketplaceResetUtility() {
     const { role, email, displayName } = useContext(UserContext);
     const [phase,        setPhase]       = useState(PHASES.IDLE);
-    const [scan,         setScan]        = useState(null);    // { byGroup, topLevelTotal, vendorSubTotal }
+    const [scan,         setScan]        = useState(null);
     const [confirmText,  setConfirmText] = useState('');
     const [log,          setLog]         = useState([]);
     const [validation,   setValidation]  = useState(null);
@@ -206,7 +202,6 @@ export default function MarketplaceResetUtility() {
 
     const addLog = (msg, type = 'info') => setLog(prev => [...prev, { msg, type, ts: Date.now() }]);
 
-    // guard
     if (role !== 'superadmin') {
         return (
             <div style={{ padding: 60, textAlign: 'center', color: C.muted }}>
@@ -232,37 +227,46 @@ export default function MarketplaceResetUtility() {
                 topLevelTotal += count;
             }
 
-            // Vendor subcollections
+            // Vendor docs + subcollections
+            let vendorDocCount = 0;
             let vendorSubTotal = 0;
             const vendorSubDetail = [];
             const vSnap = await getDocs(collection(db, 'vendors'));
+            vendorDocCount = vSnap.size;
+
             for (const vDoc of vSnap.docs) {
+                const vData = vDoc.data();
+                let vSubs = 0;
+
                 // items
                 const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`)).catch(() => ({ docs: [] }));
-                vendorSubTotal += itemSnap.docs.length;
-                // item-level sub-subs
+                vSubs += itemSnap.docs.length;
                 for (const iDoc of itemSnap.docs) {
                     for (const sub of VENDOR_ITEM_SUBS) {
                         const n = await countColl(`vendors/${vDoc.id}/items/${iDoc.id}/${sub}`).catch(() => 0);
-                        vendorSubTotal += n;
+                        vSubs += n;
                     }
                 }
+
                 // importBatches
                 const batchSnap = await getDocs(collection(db, `vendors/${vDoc.id}/importBatches`)).catch(() => ({ docs: [] }));
-                vendorSubTotal += batchSnap.docs.length;
+                vSubs += batchSnap.docs.length;
                 for (const bDoc of batchSnap.docs) {
                     for (const sub of VENDOR_BATCH_SUBS) {
                         const n = await countColl(`vendors/${vDoc.id}/importBatches/${bDoc.id}/${sub}`).catch(() => 0);
-                        vendorSubTotal += n;
+                        vSubs += n;
                     }
                 }
+
                 // auditLog
                 const auditN = await countColl(`vendors/${vDoc.id}/auditLog`).catch(() => 0);
-                vendorSubTotal += auditN;
-                vendorSubDetail.push({ vendorId: vDoc.id, name: vDoc.data().name || vDoc.id });
+                vSubs += auditN;
+
+                vendorSubTotal += vSubs;
+                vendorSubDetail.push({ vendorId: vDoc.id, name: vData.name || vDoc.id, subDocs: vSubs });
             }
 
-            setScan({ byGroup, topLevelTotal, vendorSubTotal, vendorCount: vSnap.size, vendorSubDetail });
+            setScan({ byGroup, topLevelTotal, vendorDocCount, vendorSubTotal, vendorSubDetail });
             setPhase(PHASES.PREVIEW);
         } catch (err) {
             setError(`Scan failed: ${err.message}`);
@@ -278,10 +282,6 @@ export default function MarketplaceResetUtility() {
         let totalDeleted = 0;
         const deleteSummary = [];
 
-        const tick = (collKey, n) => {
-            totalDeleted += n;
-        };
-
         try {
             addLog('🚀 Marketplace reset started', 'info');
 
@@ -293,18 +293,20 @@ export default function MarketplaceResetUtility() {
                     continue;
                 }
                 addLog(`🗑️  Deleting ${c.id} (${entry.count} docs)…`, 'warn');
-                const n = await deleteColl(c.id, (chunk) => tick(c.id, chunk));
+                const n = await deleteColl(c.id);
+                totalDeleted += n;
                 deleteSummary.push({ key: c.id, deleted: n });
                 addLog(`   ✅ ${c.id} — ${n} deleted`, 'success');
             }
 
-            // ── 2. Vendor subcollections (deep) ───────────────────────────
-            addLog('🗑️  Clearing vendor subcollections (items + history + auditLog + importBatches + rows)…', 'warn');
+            // ── 2. Vendor subcollections (deep) + vendor docs ─────────────
+            addLog('🗑️  Clearing ALL vendors (subcollections + docs)…', 'warn');
             let vSubDeleted = 0;
+            let vDocsDeleted = 0;
             const vSnap = await getDocs(collection(db, 'vendors'));
 
             for (const vDoc of vSnap.docs) {
-                const ref = vDoc.ref;
+                const vName = vDoc.data().name || vDoc.id;
 
                 // items + item sub-subs (history, auditLog)
                 const itemSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`)).catch(() => ({ docs: [] }));
@@ -313,8 +315,7 @@ export default function MarketplaceResetUtility() {
                         const n = await deleteSubcoll(iDoc.ref, sub).catch(() => 0);
                         vSubDeleted += n;
                     }
-                    // delete item doc itself
-                    await iDoc.ref.delete().catch(() => {});
+                    await withRetry(() => deleteDoc(iDoc.ref)).catch(() => {});
                     vSubDeleted++;
                 }
 
@@ -325,18 +326,24 @@ export default function MarketplaceResetUtility() {
                         const n = await deleteSubcoll(bDoc.ref, sub).catch(() => 0);
                         vSubDeleted += n;
                     }
-                    await bDoc.ref.delete().catch(() => {});
+                    await withRetry(() => deleteDoc(bDoc.ref)).catch(() => {});
                     vSubDeleted++;
                 }
 
                 // vendor-level auditLog
-                const auditN = await deleteSubcoll(ref, 'auditLog').catch(() => 0);
+                const auditN = await deleteSubcoll(vDoc.ref, 'auditLog').catch(() => 0);
                 vSubDeleted += auditN;
+
+                // Delete vendor doc itself
+                await withRetry(() => deleteDoc(vDoc.ref)).catch(() => {});
+                vDocsDeleted++;
+                addLog(`   🗑️ Vendor "${vName}" — cleared & deleted`, 'warn');
             }
 
-            totalDeleted += vSubDeleted;
+            totalDeleted += vSubDeleted + vDocsDeleted;
+            deleteSummary.push({ key: 'vendors (docs)', deleted: vDocsDeleted });
             deleteSummary.push({ key: 'vendors/*/subcollections', deleted: vSubDeleted });
-            addLog(`   ✅ Vendor subcollections — ${vSubDeleted} docs deleted`, 'success');
+            addLog(`   ✅ Vendors — ${vDocsDeleted} docs + ${vSubDeleted} subcol docs deleted`, 'success');
 
             // ── 3. Post-reset validation ──────────────────────────────────
             addLog('', 'info');
@@ -345,16 +352,8 @@ export default function MarketplaceResetUtility() {
             const valResults = [];
             for (const v of VALIDATION_TARGETS) {
                 const remaining = await countColl(v.id).catch(() => 0);
-                valResults.push({ ...v, remaining });
+                valResults.push({ ...v, remaining, reason: remaining > 0 ? 'Documents still exist — may need manual check' : '' });
             }
-            // Vendor items validation
-            let itemsRemaining = 0;
-            const postVSnap = await getDocs(collection(db, 'vendors')).catch(() => ({ docs: [] }));
-            for (const vDoc of postVSnap.docs) {
-                const iSnap = await getDocs(collection(db, `vendors/${vDoc.id}/items`)).catch(() => ({ size: 0 }));
-                itemsRemaining += iSnap.size;
-            }
-            valResults.push({ id: 'vendors/*/items', label: 'Vendor Items (all)', page: 'Vendor Details', remaining: itemsRemaining });
 
             setValidation(valResults);
 
@@ -362,7 +361,7 @@ export default function MarketplaceResetUtility() {
             addLog('📝 Writing final audit log…', 'info');
             try {
                 await addDoc(collection(db, 'adminChangeLogs'), {
-                    action:             'MARKETPLACE_RESET_V2',
+                    action:             'MARKETPLACE_RESET_V3',
                     performedBy:        email || displayName || 'superadmin',
                     role:               'superadmin',
                     timestamp:          Timestamp.now(),
@@ -370,7 +369,7 @@ export default function MarketplaceResetUtility() {
                     collectionsCleared: deleteSummary.map(d => d.key),
                     summary:            deleteSummary,
                     validationResults:  valResults,
-                    note:               'Full marketplace reset. vendors, platformSettings, login accounts preserved.',
+                    note:               'Full platform reset v3. All vendors deleted. login and platformSettings preserved.',
                 });
                 addLog('   ✅ Audit log written to adminChangeLogs', 'success');
             } catch (e) {
@@ -379,9 +378,9 @@ export default function MarketplaceResetUtility() {
 
             addLog('', 'info');
             addLog(`🎉 Reset complete!  ${totalDeleted.toLocaleString()} documents deleted.`, 'success');
-            addLog('✅ vendors collection: preserved', 'success');
             addLog('✅ platformSettings: preserved', 'success');
-            addLog('✅ login / user accounts: preserved', 'success');
+            addLog('✅ login accounts: preserved (all)', 'success');
+            addLog('🗑️ vendors: fully deleted (docs + subcollections)', 'info');
 
             setSummary({ totalDeleted, deleteSummary, timestamp: new Date() });
             setPhase(PHASES.DONE);
@@ -393,7 +392,7 @@ export default function MarketplaceResetUtility() {
         }
     };
 
-    const totalToDelete = scan ? scan.topLevelTotal + scan.vendorSubTotal : 0;
+    const totalToDelete = scan ? scan.topLevelTotal + scan.vendorDocCount + scan.vendorSubTotal : 0;
 
     // ── RENDER ────────────────────────────────────────────────────────────────
     return (
@@ -402,18 +401,28 @@ export default function MarketplaceResetUtility() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                 <span style={{ fontSize: 28 }}>⚠️</span>
                 <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.red }}>Marketplace Reset Utility</h2>
-                <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(248,113,113,0.1)', color: C.red, border: `1px solid rgba(248,113,113,0.3)`, borderRadius: 6, padding: '3px 8px' }}>v2 — Full Audit Mode</span>
+                <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(248,113,113,0.1)', color: C.red, border: `1px solid rgba(248,113,113,0.3)`, borderRadius: 6, padding: '3px 8px' }}>v3 — Full Audit Mode</span>
             </div>
             <p style={{ margin: '0 0 18px', fontSize: 13, color: C.sub }}>
-                Clears all transactional data for clean testing. <strong style={{ color: C.amber }}>Vendor accounts, vendor documents, and platform settings are preserved.</strong>
+                Clears <strong style={{ color: C.red }}>all</strong> transactional data <strong style={{ color: C.red }}>and all vendor docs</strong> for a clean slate. <strong style={{ color: C.amber }}>Login accounts and platform settings are preserved.</strong>
             </p>
 
             {/* Protected banner */}
             <div style={{ ...card, background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.15)' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 8 }}>🔒 PROTECTED — Will NOT be deleted</div>
                 <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13, color: C.sub }}>
-                    {['vendors (collection docs)', 'platformSettings', 'login / user accounts (all)'].map(p => (
+                    {['platformSettings', 'login (all accounts)'].map(p => (
                         <span key={p}>✅ {p}</span>
+                    ))}
+                </div>
+            </div>
+
+            {/* Deleted banner */}
+            <div style={{ ...card, background: 'rgba(248,113,113,0.04)', border: '1px solid rgba(248,113,113,0.12)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 8 }}>🗑️ WILL BE DELETED</div>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: C.sub }}>
+                    {['All vendor docs + subcollections', `${TOP_LEVEL_COLLECTIONS.length} top-level collections`, 'All orders, invoices, dispatches, catalogs, logs, snapshots'].map(p => (
+                        <span key={p}>❌ {p}</span>
                     ))}
                 </div>
             </div>
@@ -435,7 +444,7 @@ export default function MarketplaceResetUtility() {
                     <div style={{ fontSize: 28, marginBottom: 10 }}>🔍</div>
                     <div style={{ fontSize: 14, color: C.sub }}>Counting documents across {TOP_LEVEL_COLLECTIONS.length} collections + vendor subcollections…</div>
                     <div style={{ marginTop: 20, height: 4, background: C.border, borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: '70%', background: C.blue, borderRadius: 2 }} />
+                        <div style={{ height: '100%', width: '70%', background: C.blue, borderRadius: 2, animation: 'pulse 1.5s infinite' }} />
                     </div>
                 </div>
             )}
@@ -462,18 +471,26 @@ export default function MarketplaceResetUtility() {
                             </div>
                         ))}
 
-                        {/* Vendor subcollections */}
+                        {/* Vendors section */}
                         <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Vendor Subcollections ({scan.vendorCount} vendors)</div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: C.red, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                                Vendors — {scan.vendorDocCount} docs + subcollections (ALL DELETED)
+                            </div>
+                            {scan.vendorSubDetail.map(v => (
+                                <div key={v.vendorId} style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '5px 4px', borderBottom: '1px solid rgba(255,255,255,0.03)', color: C.fg }}>
+                                    <span style={{ fontSize: 12 }}>🏢 {v.name} <span style={{ color: C.muted, fontFamily: 'monospace', fontSize: 10 }}>({v.vendorId.slice(0, 12)}…)</span></span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: C.amber }}>{(v.subDocs + 1).toLocaleString()} docs</span>
+                                </div>
+                            ))}
                             {['items', 'items/{id}/history', 'items/{id}/auditLog', 'importBatches', 'importBatches/{id}/rows', 'auditLog'].map(s => (
-                                <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '5px 4px', borderBottom: '1px solid rgba(255,255,255,0.03)', color: C.sub }}>
-                                    <span style={{ fontSize: 12, fontFamily: 'monospace' }}>vendors/*/{s}</span>
-                                    <span style={{ fontSize: 11, color: C.muted }}>included in count below</span>
+                                <div key={s} style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '4px 4px 4px 18px', borderBottom: '1px solid rgba(255,255,255,0.03)', color: C.muted }}>
+                                    <span style={{ fontSize: 11, fontFamily: 'monospace' }}>↳ vendors/*/{s}</span>
+                                    <span style={{ fontSize: 10 }}>included</span>
                                 </div>
                             ))}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '6px 4px', color: C.fg }}>
-                                <span style={{ fontSize: 12, fontWeight: 700 }}>Vendor subcollection total</span>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: scan.vendorSubTotal > 0 ? C.amber : C.muted }}>{scan.vendorSubTotal.toLocaleString()}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700 }}>Vendor total (docs + subcollections)</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>{(scan.vendorDocCount + scan.vendorSubTotal).toLocaleString()}</span>
                             </div>
                         </div>
 
@@ -528,7 +545,7 @@ export default function MarketplaceResetUtility() {
                     </div>
 
                     {/* Live log */}
-                    <div style={{ background: '#080e18', borderRadius: 8, padding: '13px 15px', maxHeight: 340, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.85 }}>
+                    <div style={{ background: '#080e18', borderRadius: 8, padding: '13px 15px', maxHeight: 400, overflowY: 'auto', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.85 }}>
                         {log.map((l, i) => (
                             <div key={i} style={{ color: l.type === 'success' ? C.green : l.type === 'error' ? C.red : l.type === 'warn' ? C.amber : l.type === 'muted' ? '#475569' : C.sub }}>
                                 {l.msg || '\u00A0'}
@@ -551,6 +568,11 @@ export default function MarketplaceResetUtility() {
                                     <span>{v.remaining === 0 ? '✅' : '⚠️'}</span>
                                 </div>
                             ))}
+                            {validation.filter(v => v.remaining > 0).length > 0 && (
+                                <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.12)', fontSize: 12, color: C.sub }}>
+                                    ⚠️ Some collections still have documents. Possible reasons: concurrent writes during reset, Firestore propagation delay, or subcollection ghost documents. Try running a new scan to verify.
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -589,7 +611,7 @@ export default function MarketplaceResetUtility() {
 
             {/* Privacy notice */}
             <div style={{ marginTop: 20, fontSize: 11, color: '#1e293b', fontStyle: 'italic' }}>
-                vendors, platformSettings, and all login accounts are never modified by this tool.
+                platformSettings and all login accounts are never modified by this tool. All vendor docs and subcollections are deleted.
             </div>
         </div>
     );

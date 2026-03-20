@@ -6,7 +6,7 @@ const admin = require("firebase-admin");
 // const { runDeterministicForecast, aggregateForecasts, generateVendorRollups } = require("./forecastEngine");
 // const { checkForecastAccuracy } = require("./forecastAccuracy");
 const { updateCatalogPrices } = require("./updatePrices");
-const { sendOrderConfirmationEmail, SENDGRID_API_KEY, SENDGRID_ORDER_CONFIRMATION_TEMPLATE_ID } = require("./sendGridIntegration");
+const { sendOrderConfirmationEmail, sendVendorWelcomeEmail, SENDGRID_API_KEY, SENDGRID_ORDER_CONFIRMATION_TEMPLATE_ID } = require("./sendGridIntegration");
 const { runSuggestedForecastJob } = require("./suggestedForecastJob");
 
 const app = admin.initializeApp();
@@ -83,5 +83,39 @@ exports.runSuggestedForecastNow = onCall(async (request) => {
     } catch (err) {
         console.error("Manual forecast run failed:", err);
         throw new HttpsError("internal", err.message || "Forecast engine failed");
+    }
+});
+
+// 6. SendGrid Email - Vendor Welcome Email
+// Called from the frontend after a new vendor is onboarded.
+exports.sendVendorWelcomeEmailFn = onCall({
+    secrets: [SENDGRID_API_KEY]
+}, async (request) => {
+    const { vendorName, contactName, toEmail, username, tempPassword } = request.data;
+
+    if (!toEmail || !username || !tempPassword) {
+        throw new HttpsError("invalid-argument", "Missing required fields: toEmail, username, tempPassword.");
+    }
+
+    console.log(`Sending vendor welcome email to ${toEmail} for vendor: ${vendorName}`);
+
+    try {
+        const result = await sendVendorWelcomeEmail({
+            vendorName: vendorName || 'Vendor',
+            contactName: contactName || vendorName || 'Vendor',
+            toEmail,
+            username,
+            tempPassword,
+            loginUrl: 'https://restiq-vendormanagement-9ce02799dcee.herokuapp.com/',
+        });
+
+        if (result) {
+            return { success: true, message: `Welcome email sent to ${toEmail}.` };
+        } else {
+            return { success: false, message: "Email sending failed. Check server logs." };
+        }
+    } catch (error) {
+        console.error(`Failed to send welcome email to ${toEmail}:`, error);
+        throw new HttpsError("internal", error.message || "Failed to send welcome email.");
     }
 });

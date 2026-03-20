@@ -20,6 +20,7 @@ import UserManagementPage from '../Users/UserManagementPage';
 import RolePermissionsPage from '../Settings/RolePermissionsPage';
 import MigrationAdminPage from '../Admin/MigrationAdminPage';
 import AuditLogPage from '../Admin/AuditLogPage';
+import MarketplaceResetUtility from '../Admin/MarketplaceResetUtility';
 
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
@@ -91,12 +92,18 @@ export default function PlatformAdminPage() {
             icon: '📋',
             content: <AuditLogPage />,
         },
+        {
+            key: 'reset',
+            label: 'Reset',
+            icon: '🔴',
+            content: <MarketplaceResetUtility />,
+        },
     ], []);
 
     return (
         <TabbedPageShell
             title="Platform Admin"
-            subtitle="Manage restaurants, users, roles, permissions, migration tools, and audit logs."
+            subtitle="Manage restaurants, users, roles, permissions, migration tools, audit logs, and system reset."
             icon="🔧"
             tabs={tabs}
             defaultTab="restaurants"

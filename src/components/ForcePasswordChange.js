@@ -71,7 +71,8 @@ export default function ForcePasswordChange() {
             }
 
             toast.success('Password updated successfully!');
-            navigate('/');
+            // Full reload to re-fetch user profile with mustChangePassword: false
+            window.location.href = '/';
         } catch (err) {
             console.error('[ForcePasswordChange] Error:', err);
             if (err.code === 'auth/requires-recent-login') {

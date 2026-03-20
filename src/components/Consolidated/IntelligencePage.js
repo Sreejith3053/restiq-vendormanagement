@@ -1,16 +1,3 @@
-/**
- * IntelligencePage.js
- *
- * Consolidated page absorbing:
- *   - AI Intelligence Hub / AIIntelligenceHub
- *   - Marketplace Intelligence / MarketplaceIntelligencePage
- *   - Vendor Allocation / VendorAllocationDashboard
- *   - Supply Capacity / SupplyCapacityDashboard
- *   - Festival Calendar / FestivalSeasonalityPage
- *
- * Old routes redirect here via ?tab= parameter.
- */
-
 import React, { useMemo } from 'react';
 import TabbedPageShell from './TabbedPageShell';
 
@@ -19,6 +6,7 @@ import MarketplaceIntelligencePage from '../Admin/MarketplaceIntelligencePage';
 import VendorAllocationDashboard from '../Admin/VendorAllocationDashboard';
 import SupplyCapacityDashboard from '../Admin/SupplyCapacityDashboard';
 import FestivalSeasonalityPage from '../Forecast/FestivalSeasonalityPage';
+import VendorComparisonPage from '../Admin/VendorComparisonPage';
 
 export default function IntelligencePage() {
     const tabs = useMemo(() => [
@@ -52,12 +40,18 @@ export default function IntelligencePage() {
             icon: '🎄',
             content: <FestivalSeasonalityPage embedded />,
         },
+        {
+            key: 'vendor-comparison',
+            label: 'Vendor Comparison',
+            icon: '⚖️',
+            content: <VendorComparisonPage />,
+        },
     ], []);
 
     return (
         <TabbedPageShell
             title="Intelligence"
-            subtitle="AI insights, price comparisons, vendor allocation, supply capacity, and seasonal planning."
+            subtitle="AI insights, price comparisons, vendor allocation, supply capacity, seasonal planning, and vendor benchmarking."
             icon="🧠"
             tabs={tabs}
             defaultTab="ai-summary"

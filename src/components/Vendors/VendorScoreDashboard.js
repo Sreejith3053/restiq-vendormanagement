@@ -1,9 +1,10 @@
 /**
  * VendorScoreDashboard.js
  *
- * Vendor-facing simplified Competitiveness Score dashboard.
- * Shows the vendor's own scores, factor breakdown, trend, rank, and improvement tips.
- * No competitor names are exposed.
+ * Vendor-facing Competitiveness Score dashboard.
+ * Tab 1: My Score — existing score, factor breakdown, trend, improvement tips.
+ * Tab 2: Market Benchmark — anonymous market comparison (VendorBenchmarkPage).
+ * No competitor names are ever exposed.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../firebase';
@@ -13,14 +14,22 @@ import {
     calculateCompetitivenessScore, scoreLabel, getImprovementSuggestions,
 } from './vendorCompetitivenessEngine';
 import { getMarketBenchmark } from './marketplaceIntelligence';
+import MarketBenchmarkBlock from './MarketBenchmarkBlock';
+import VendorBenchmarkPage from './VendorBenchmarkPage';
 import {
-    FiRefreshCw, FiAward, FiTrendingUp, FiTrendingDown, FiShield,
+    FiRefreshCw, FiAward, FiTrendingUp, FiTrendingDown,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 
 const C = { green: '#34d399', red: '#f87171', amber: '#fbbf24', blue: '#38bdf8', purple: '#a78bfa', cyan: '#22d3ee', muted: '#94a3b8', fg: '#f8fafc' };
 
+const TABS = [
+    { key: 'my-score',  label: '🏆 My Score'       },
+    { key: 'benchmark', label: '📊 Market Benchmark' },
+];
+
 export default function VendorScoreDashboard() {
+    const [activeTab, setActiveTab] = useState('my-score');
     const { vendorId, vendorName } = React.useContext(UserContext);
     const [allItems, setAllItems] = useState([]);
     const [myItems, setMyItems] = useState([]);
@@ -133,6 +142,24 @@ export default function VendorScoreDashboard() {
 
     return (
         <div style={{ padding: 24, paddingBottom: 100 }}>
+            {/* ── Tab switcher ── */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+                {TABS.map(t => (
+                    <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+                        padding: '8px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        background: activeTab === t.key ? 'rgba(56,189,248,0.14)' : 'rgba(255,255,255,0.04)',
+                        color:      activeTab === t.key ? '#38bdf8' : '#94a3b8',
+                        border:     `1px solid ${activeTab === t.key ? 'rgba(56,189,248,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                        transition: 'all 0.15s',
+                    }}>{t.label}</button>
+                ))}
+            </div>
+
+            {/* ── Market Benchmark tab ── */}
+            {activeTab === 'benchmark' && <VendorBenchmarkPage />}
+
+            {/* ── My Score tab (existing content below) ── */}
+            {activeTab === 'my-score' && <>
             {/* HEADER */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
                 <div>
@@ -305,6 +332,17 @@ export default function VendorScoreDashboard() {
                                     ✅ Your price is at or below market median — strong competitive position.
                                 </div>
                             )}
+
+                            {/* Anonymous market benchmark block */}
+                            <MarketBenchmarkBlock
+                                vendorUnitPrice={selected.normalizedPrice}
+                                marketBest={selected._bm.lowest}
+                                marketMedian={selected._bm.median}
+                                baseUnit={selected._bm.unit || 'unit'}
+                                priceRank={selected._priceRank}
+                                totalVendors={selected._groupSize}
+                                itemName={selected.itemName}
+                            />
                         </div>
                     )}
                 </div>
@@ -314,6 +352,7 @@ export default function VendorScoreDashboard() {
             <div style={{ marginTop: 24, fontSize: 12, color: '#475569', fontStyle: 'italic', textAlign: 'center' }}>
                 Scores are based on anonymous marketplace data. No competitor identities are disclosed. Scores update on price changes, dispatch confirmations, and delivery completions.
             </div>
+            </> /* end My Score tab */}
         </div>
     );
 }

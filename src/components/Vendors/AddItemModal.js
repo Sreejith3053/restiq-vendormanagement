@@ -126,7 +126,7 @@ export default function AddItemModal({ vendorId, isSuperAdmin, userId, displayNa
                     changeType: 'add',
                     proposedData: itemData,
                     originalData: null,
-                    requestedBy: userId,
+                    requestedBy: userId || '',
                     requestedByName: displayName || 'Unknown',
                     requestedAt: serverTimestamp(),
                 };

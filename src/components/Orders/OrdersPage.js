@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { db, app } from '../../firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { UserContext } from '../../contexts/UserContext';
 import { getTaxRate } from '../../constants/taxRates';
@@ -95,11 +95,25 @@ export default function OrdersPage() {
             return;
         }
 
+        // Build a map of restaurantId → businessName from the restaurants collection
+        let restaurantNameMap = {};
+        getDocs(collection(db, 'restaurants')).then(snap => {
+            snap.docs.forEach(d => {
+                const data = d.data();
+                restaurantNameMap[d.id] = data.businessName || data.name || d.id;
+            });
+        }).catch(err => console.warn('Could not load restaurant names:', err));
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const data = snapshot.docs.map(d => {
+                const orderData = d.data();
+                const resolvedName = restaurantNameMap[orderData.restaurantId] || orderData.restaurantName || orderData.restaurantId;
+                return {
+                    id: d.id,
+                    ...orderData,
+                    restaurantName: resolvedName,
+                };
+            });
             setOrders(data);
             setLoading(false);
         }, (err) => {
@@ -666,7 +680,7 @@ export default function OrdersPage() {
                                         <td style={{ fontFamily: 'monospace' }}>{order.orderGroupId || order.id.slice(-8).toUpperCase()}</td>
                                         <td>{formatDate(order.createdAt)}</td>
                                         {isSuperAdmin && <td>{order.vendorName}</td>}
-                                        <td>{order.restaurantId}</td>
+                                        <td>{order.restaurantName || order.restaurantId}</td>
                                         <td>
                                             <span className={`status-badge ${order.status?.toLowerCase()}`}>
                                                 {order.status?.replace(/_/g, ' ') || 'unknown'}
@@ -719,7 +733,7 @@ export default function OrdersPage() {
                                 </div>
                                 <div className="info-item">
                                     <span className="info-label">Restaurant</span>
-                                    <span className="info-value">{selectedOrder.restaurantId}</span>
+                                    <span className="info-value">{selectedOrder.restaurantName || selectedOrder.restaurantId}</span>
                                 </div>
                                 <div className="info-item">
                                     <span className="info-label">Status</span>

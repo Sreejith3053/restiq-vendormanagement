@@ -437,6 +437,20 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
             processedRows.push({ ...row, actionResult: 'error', errors: [...(row.errors || []), 'Write failed: ' + err.message] });
         }
     }
+    // ── Send batch notification to superAdmin if new items were created ──
+    if (createdCount > 0) {
+        try {
+            await addDoc(collection(db, 'notifications'), {
+                type: 'vendor_to_admin',
+                entityId: 'superadmin',
+                title: 'New Items Imported',
+                message: `${displayName || 'Vendor'} imported ${createdCount} new item${createdCount !== 1 ? 's' : ''} pending review.`,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                metadata: { vendorId, batchId, changeType: 'import', createdCount },
+            });
+        } catch (nErr) { console.warn('[importFirestore] notification write failed:', nErr); }
+    }
 
     return {
         processedRows,

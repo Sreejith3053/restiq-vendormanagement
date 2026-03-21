@@ -154,7 +154,7 @@ export function formatUnitPrice(price, packSize, baseUnit) {
         packSize === null || packSize === undefined || packSize <= 0 ||
         !baseUnit
     ) return null;
-    return `$${(price / packSize).toFixed(3)}/${baseUnit}`;
+    return `$${(price / packSize).toFixed(2)}/${baseUnit}`;
 }
 
 /**

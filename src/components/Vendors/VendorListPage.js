@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { getRegionsForCountry } from '../../constants/taxRates';
 
 const CATEGORIES = ['All', 'Spices', 'Meat', 'Produce', 'Dairy', 'Seafood', 'Grains', 'Beverages', 'Packaging', 'Other'];
@@ -12,6 +12,7 @@ export default function VendorListPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
+    const [pendingCounts, setPendingCounts] = useState({}); // { vendorId: count }
 
     useEffect(() => {
         (async () => {
@@ -19,6 +20,20 @@ export default function VendorListPage() {
                 const snap = await getDocs(collection(db, 'vendors'));
                 const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 setVendors(list.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+
+                // Load pending review counts per vendor
+                const counts = {};
+                await Promise.all(list.map(async (v) => {
+                    try {
+                        const q = query(
+                            collection(db, 'vendors', v.id, 'items'),
+                            where('status', 'in', ['Pending Review', 'in-review'])
+                        );
+                        const itemSnap = await getDocs(q);
+                        if (itemSnap.size > 0) counts[v.id] = itemSnap.size;
+                    } catch { /* skip */ }
+                }));
+                setPendingCounts(counts);
             } catch (err) {
                 console.error('Failed to load vendors:', err);
             } finally {
@@ -26,6 +41,8 @@ export default function VendorListPage() {
             }
         })();
     }, []);
+
+    const totalPending = Object.values(pendingCounts).reduce((s, n) => s + n, 0);
 
     const filtered = vendors.filter(v => {
         const matchSearch = !search ||
@@ -37,6 +54,20 @@ export default function VendorListPage() {
 
     return (
         <div>
+            {/* Pending Review Banner */}
+            {totalPending > 0 && (
+                <div style={{
+                    padding: '12px 18px', marginBottom: 16, borderRadius: 10,
+                    background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                    <span style={{ fontSize: 18 }}>🔔</span>
+                    <span style={{ fontSize: 14, color: '#fbbf24', fontWeight: 600 }}>
+                        {totalPending} item{totalPending !== 1 ? 's' : ''} pending review across {Object.keys(pendingCounts).length} vendor{Object.keys(pendingCounts).length !== 1 ? 's' : ''}
+                    </span>
+                </div>
+            )}
+
             <div className="page-header">
                 <h2>Vendors</h2>
                 <button className="ui-btn primary" onClick={() => navigate('/vendors/add')}>
@@ -93,7 +124,20 @@ export default function VendorListPage() {
                         <tbody>
                             {filtered.map(v => (
                                 <tr key={v.id} className="is-row" onClick={() => navigate(`/vendors/${v.id}`)}>
-                                    <td data-label="Vendor Name" style={{ fontWeight: 600 }}>{v.name || '—'}</td>
+                                    <td data-label="Vendor Name" style={{ fontWeight: 600 }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            {v.name || '—'}
+                                            {pendingCounts[v.id] > 0 && (
+                                                <span style={{
+                                                    background: '#f59e0b', color: '#0f172a',
+                                                    fontSize: 10, fontWeight: 800, padding: '2px 7px',
+                                                    borderRadius: 10, minWidth: 18, textAlign: 'center',
+                                                }}>
+                                                    {pendingCounts[v.id]}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </td>
                                     <td data-label="Category">
                                         <span className="badge blue">{v.category || 'General'}</span>
                                     </td>
@@ -114,3 +158,4 @@ export default function VendorListPage() {
         </div>
     );
 }
+

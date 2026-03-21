@@ -281,8 +281,9 @@ export default function useAdminNotificationSync() {
 
                     if (isRecent && (order.status === 'new' || order.status === 'pending_confirmation')) {
                         // Idempotent generation for NEW_ORDER
-                        const title = `New Order: ${order.id.slice(-8).toUpperCase()}`;
-                        const message = `A new order has been placed by ${order.restaurantId || 'a customer'}.`;
+                        const orderId = order.orderGroupId || order.id.slice(-8).toUpperCase();
+                        const title = `New Order: ${orderId}`;
+                        const message = `A new order has been placed by ${order.restaurantName || order.restaurantId || 'a customer'}.`;
 
                         newNotifications.push({
                             id: `${order.id}_NEW_ORDER_ADMIN`,
@@ -308,7 +309,7 @@ export default function useAdminNotificationSync() {
                         if (isAwaitingConfirm) { type = 'DELIVERY_CONFIRMED'; title = 'Delivery Awaiting Confirmation'; }
                         if (isInReview) { type = 'ISSUE_RAISED'; title = 'Issue Reported on Order'; }
 
-                        const message = `Order ${order.id.slice(-8).toUpperCase()} is now ${order.status.replace(/_/g, ' ')}.`;
+                        const message = `Order ${order.orderGroupId || order.id.slice(-8).toUpperCase()} is now ${order.status.replace(/_/g, ' ')}.`;
 
                         newNotifications.push({
                             id: `${order.id}_STATUS_${order.status}_ADMIN`,
@@ -346,7 +347,7 @@ export default function useAdminNotificationSync() {
                         // Generate a unique ID for this update using timestamp so multiple updates create multiple notifications
                         const updateTimestamp = Date.now();
                         const title = `Order Updated`;
-                        const message = `Order ${order.id.slice(-8).toUpperCase()} has been modified (items or totals changed).`;
+                        const message = `Order ${order.orderGroupId || order.id.slice(-8).toUpperCase()} has been modified (items or totals changed).`;
 
                         newNotifications.push({
                             id: `${order.id}_UPDATED_${updateTimestamp}_ADMIN`,

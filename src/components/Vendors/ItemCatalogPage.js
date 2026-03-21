@@ -158,8 +158,8 @@ export default function ItemCatalogPage() {
         let active = 0, inactive = 0, missingPack = 0, missingSKU = 0, stale14 = 0, stale30 = 0, suspectPrice = 0, missingCategory = 0;
 
         allItems.forEach(item => {
-            const status = (item.status || 'Active');
-            if (status === 'Active') active++; else inactive++;
+            const status = (item.status || 'Active').toLowerCase();
+            if (status === 'active') active++; else inactive++;
             if (!item.packSize && !item.packQuantity) missingPack++;
             if (!item.vendorSKU) missingSKU++;
             if (!item.category) missingCategory++;
@@ -181,12 +181,12 @@ export default function ItemCatalogPage() {
         let items = allItems.filter(item => {
             const q = search.toLowerCase();
             const matchSearch = !search ||
-                (item.name || '').toLowerCase().includes(q) ||
-                (item.vendorName || '').toLowerCase().includes(q) ||
+                (item.name || item.itemName || '').toLowerCase().includes(q) ||
+                (isSuperAdmin && (item.vendorName || '').toLowerCase().includes(q)) ||
                 (item.vendorSKU || '').toLowerCase().includes(q) ||
                 (item.brand || '').toLowerCase().includes(q);
             const matchCat = categoryFilter === 'All' || item.category === categoryFilter;
-            const matchStatus = statusFilter === 'All' || (item.status || 'Active') === statusFilter;
+            const matchStatus = statusFilter === 'All' || (item.status || 'Active').toLowerCase() === statusFilter.toLowerCase();
 
             // Health filter
             if (healthFilter) {
@@ -202,7 +202,7 @@ export default function ItemCatalogPage() {
                 if (healthFilter === 'suspectPrice' && price > 0 && price <= 5000) return false;
                 if (healthFilter === 'stale14' && (updMs === 0 || (now - updMs) <= day14)) return false;
                 if (healthFilter === 'stale30' && (updMs === 0 || (now - updMs) <= day30)) return false;
-                if (healthFilter === 'inactive' && (item.status || 'Active') !== 'Inactive') return false;
+                if (healthFilter === 'inactive' && (item.status || 'Active').toLowerCase() !== 'inactive') return false;
             }
 
             return matchSearch && matchCat && matchStatus;
@@ -362,7 +362,7 @@ export default function ItemCatalogPage() {
                     style={{ maxWidth: 280 }}
                     placeholder="Search items, SKU, brand…"
                     value={search}
-                    onChange={e => { handleFilterChange(setSearch)(e.target.value); }}
+                    onChange={e => { setSearch(e.target.value); setPage(0); }}
                 />
                 <select className="ui-input" style={{ maxWidth: 160 }} value={categoryFilter} onChange={e => handleFilterChange(setCategoryFilter)(e.target.value)}>
                     {CATEGORIES.map(c => <option key={c}>{c}</option>)}
@@ -371,6 +371,8 @@ export default function ItemCatalogPage() {
                     <option value="All">All Status</option>
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
+                    <option value="Pending Review">Pending Review</option>
+                    <option value="in-review">In Review</option>
                 </select>
                 <span style={{ fontSize: 13, color: '#64748b', marginLeft: 'auto' }}>
                     {filtered.length} items{filtered.length !== allItems.length ? ' (filtered)' : ''}
@@ -428,7 +430,10 @@ export default function ItemCatalogPage() {
                                             <td style={tdStyle}>
                                                 <div style={{ fontWeight: 600, color: '#f8fafc', cursor: 'pointer' }}
                                                     onClick={() => navigate('/vendors/' + item.vendorId + '/items/' + item.id)}>
-                                                    {item.name || '—'}
+                                                    {item.name || item.itemName || '—'}
+                                                </div>
+                                                <div style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', marginTop: 2 }}>
+                                                    ID: {item.id}
                                                 </div>
                                                 {item.vendorSKU && (
                                                     <div style={{ fontSize: 11, color: '#475569' }}>SKU: {item.vendorSKU}</div>
@@ -447,17 +452,17 @@ export default function ItemCatalogPage() {
                                                 <SourceBadge source={item.sourceLastUpdated} />
                                             </td>
                                             <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '2px 10px',
-                                                    borderRadius: 20,
-                                                    fontSize: 11,
-                                                    fontWeight: 700,
-                                                    background: isInactive ? 'rgba(244,63,94,0.1)' : 'rgba(74,222,128,0.1)',
-                                                    color: isInactive ? '#f87171' : '#4ade80',
-                                                }}>
-                                                    {isInactive ? 'Inactive' : 'Active'}
-                                                </span>
+                                                {(() => {
+                                                    const st = item.status || 'Active';
+                                                    const isReview = st === 'Pending Review' || st === 'in-review';
+                                                    const isInact = st === 'Inactive';
+                                                    return (<span style={{
+                                                        display: 'inline-block', padding: '2px 10px', borderRadius: 20,
+                                                        fontSize: 11, fontWeight: 700,
+                                                        background: isReview ? 'rgba(251,191,36,0.1)' : isInact ? 'rgba(244,63,94,0.1)' : 'rgba(74,222,128,0.1)',
+                                                        color: isReview ? '#fbbf24' : isInact ? '#f87171' : '#4ade80',
+                                                    }}>{st}</span>);
+                                                })()}
                                             </td>
                                             {isSuperAdmin && (
                                                 <td style={{ ...tdStyle, fontSize: 12, color: '#94a3b8' }}>{item.vendorName}</td>

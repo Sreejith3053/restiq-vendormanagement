@@ -172,10 +172,10 @@ export default function ItemDetailPage() {
     const hasChanges = () => {
         if (!item || !editForm) return false;
         return (
-            (editForm.name || '').trim() !== (item.name || '').trim() ||
+            (editForm.name || editForm.itemName || '').trim() !== (item.name || item.itemName || '').trim() ||
             (editForm.brand || '').trim() !== (item.brand || '').trim() ||
             (editForm.category || '') !== (item.category || '') ||
-            (editForm.unit || 'kg') !== (item.unit || 'kg') ||
+            (editForm.unit || editForm.baseUnit || 'kg') !== (item.unit || item.baseUnit || 'kg') ||
             Number(editForm.packQuantity || 1) !== Number(item.packQuantity || 1) ||
             (editForm.itemSize || '').trim() !== (item.itemSize || '').trim() ||
             String(editForm.vendorPrice || '') !== String(item.vendorPrice ?? item.price ?? '') ||
@@ -187,33 +187,33 @@ export default function ItemDetailPage() {
 
     // ─── Save edit ───
     const handleSave = async () => {
-        if (!editForm.name?.trim()) { toast.warn('Name is required'); return; }
+        if (!(editForm.name?.trim() || editForm.itemName?.trim())) { toast.warn('Name is required'); return; }
         if (!editForm.vendorPrice || isNaN(editForm.vendorPrice)) { toast.warn('Valid vendor price required'); return; }
         if (!hasChanges()) { toast.info('No changes detected.'); setEditing(false); return; }
         setSaving(true);
         try {
             const proposedData = {
-                itemName:    editForm.name?.trim() || '',  // Phase 3: v2 canonical
+                itemName:    (editForm.name || editForm.itemName || '').trim(),
                 brand:       (editForm.brand || '').trim(),
                 category:    editForm.category || 'Other',
-                baseUnit:    editForm.unit || 'kg',        // v2 canonical
-                orderUnit:   editForm.unit || 'kg',        // v2 canonical
+                baseUnit:    editForm.unit || editForm.baseUnit || 'kg',
+                orderUnit:   editForm.unit || editForm.baseUnit || 'kg',
                 packQuantity: Number(editForm.packQuantity) || 1,
                 itemSize:    editForm.itemSize?.trim() || '',
                 vendorPrice: Number(editForm.vendorPrice),
-                sku:         editForm.sku?.trim() || '',
+                sku:         (editForm.sku || editForm.vendorSKU || '').trim(),
                 notes:       editForm.notes?.trim() || '',
                 taxable:     !!editForm.taxable,
             };
             const originalData = {
-                itemName:    item.itemName || item.name || '',  // v2-first
+                itemName:    item.itemName || item.name || '',
                 brand:       item.brand || '',
                 category:    item.category || '',
                 baseUnit:    item.baseUnit || item.unit || 'kg',
                 packQuantity: item.packQuantity || 1,
                 itemSize:    item.itemSize || '',
                 vendorPrice: item.vendorPrice ?? item.price ?? 0,
-                sku:         item.sku || '',
+                sku:         item.sku || item.vendorSKU || '',
                 notes:       item.notes || '',
                 taxable:     !!item.taxable,
             };
@@ -265,8 +265,8 @@ export default function ItemDetailPage() {
             type: 'delete',
             title: isSuperAdmin ? 'Delete Item' : 'Request Deletion',
             message: isSuperAdmin
-                ? `Permanently delete "${item?.name}"? This cannot be undone.`
-                : `Submit a deletion request for "${item?.name}"? A super admin will review it.`,
+                ? `Permanently delete "${item?.name || item?.itemName}"? This cannot be undone.`
+                : `Submit a deletion request for "${item?.name || item?.itemName}"? A super admin will review it.`,
             icon: '🗑️',
             confirmText: isSuperAdmin ? 'Delete' : 'Submit Request',
             variant: 'danger',
@@ -319,8 +319,8 @@ export default function ItemDetailPage() {
             type: 'stock',
             title: goingOutOfStock ? 'Mark Out of Stock' : 'Mark In Stock',
             message: goingOutOfStock
-                ? `Mark "${item?.name}" as out of stock? Customers won't be able to order it.`
-                : `Mark "${item?.name}" as back in stock? It will be available for ordering again.`,
+                ? `Mark "${item?.name || item?.itemName}" as out of stock? Customers won't be able to order it.`
+                : `Mark "${item?.name || item?.itemName}" as back in stock? It will be available for ordering again.`,
             icon: goingOutOfStock ? '🛑' : '✅',
             confirmText: goingOutOfStock ? 'Mark Out of Stock' : 'Mark In Stock',
             variant: goingOutOfStock ? 'warning' : 'primary',
@@ -351,8 +351,8 @@ export default function ItemDetailPage() {
             type: 'disable',
             title: goingDisabled ? 'Disable Item' : 'Enable Item',
             message: goingDisabled
-                ? `Disable "${item?.name}"? It will be completely hidden from customers.`
-                : `Enable "${item?.name}"? It will become visible to customers again.`,
+                ? `Disable "${item?.name || item?.itemName}"? It will be completely hidden from customers.`
+                : `Enable "${item?.name || item?.itemName}"? It will become visible to customers again.`,
             icon: goingDisabled ? '🚫' : '✅',
             confirmText: goingDisabled ? 'Disable' : 'Enable',
             variant: goingDisabled ? 'danger' : 'primary',
@@ -415,15 +415,23 @@ export default function ItemDetailPage() {
                 toast.success('✅ Deletion approved!');
                 navigate(`/vendors/${vendorId}`);
                 return;
+            } else {
+                // Imported items with no changeType — just approve by setting status to active
+                await updateDoc(itemRef, {
+                    status: 'active',
+                    mappingStatus: 'approved',
+                    updatedAt: serverTimestamp(),
+                });
+                setItem(prev => ({ ...prev, status: 'active', mappingStatus: 'approved' }));
             }
 
             await logAudit('approved', {
-                itemName: item.proposedData?.itemName || item.proposedData?.name || item.itemName || item.name,  // v2-first
+                itemName: item.proposedData?.itemName || item.proposedData?.name || item.itemName || item.name,
                 proposedData: item.proposedData,
                 originalData: item.originalData,
                 requestedBy: item.requestedByName,
             });
-            toast.success(`✅ ${item.changeType === 'add' ? 'New item' : 'Edit'} approved!`);
+            toast.success(`✅ ${item.changeType === 'add' ? 'New item' : item.changeType === 'edit' ? 'Edit' : 'Item'} approved!`);
             if (auditLoaded) loadAuditLog();
         } catch (err) {
             console.error('Error approving:', err);
@@ -512,21 +520,28 @@ export default function ItemDetailPage() {
         return 'pending';
     };
 
+    const isPendingReview = (status) => {
+        const s = (status || '').toLowerCase();
+        return ['in-review', 'in review', 'pending review', 'pending_review'].includes(s);
+    };
+
     const statusBadgeClass = (status) => {
-        if (status === 'active') return 'green';
-        if (status === 'in-review') return 'amber';
-        if (status === 'needs-correction') return 'amber';
-        if (status === 'rejected') return 'red';
-        if (status === 'disabled') return 'red';
+        const s = (status || '').toLowerCase();
+        if (s === 'active') return 'green';
+        if (isPendingReview(status)) return 'amber';
+        if (s === 'needs-correction') return 'amber';
+        if (s === 'rejected') return 'red';
+        if (s === 'disabled') return 'red';
         return 'gray';
     };
 
     const statusLabel = (status) => {
-        if (status === 'active') return 'Active';
-        if (status === 'in-review') return 'In Review';
-        if (status === 'needs-correction') return 'Needs Correction';
-        if (status === 'rejected') return 'Rejected';
-        if (status === 'disabled') return 'Disabled';
+        const s = (status || '').toLowerCase();
+        if (s === 'active') return 'Active';
+        if (isPendingReview(status)) return 'Pending Review';
+        if (s === 'needs-correction') return 'Needs Correction';
+        if (s === 'rejected') return 'Rejected';
+        if (s === 'disabled') return 'Disabled';
         return status;
     };
 
@@ -620,7 +635,7 @@ export default function ItemDetailPage() {
                         </>
                     )}
                     <span className="sep">›</span>
-                    <span style={{ color: 'var(--text)' }}>{item.name}</span>
+                    <span style={{ color: 'var(--text)' }}>{item.name || item.itemName}</span>
                 </div>
 
                 {/* Hidden file input */}
@@ -638,7 +653,7 @@ export default function ItemDetailPage() {
                                 </div>
                             ) : item.imageUrl ? (
                                 <>
-                                    <img src={item.imageUrl} alt={item.name} className="idp-hero__img" />
+                                    <img src={item.imageUrl} alt={item.name || item.itemName} className="idp-hero__img" />
                                     {canEdit && (
                                         <div className="idp-hero__image-overlay">
                                             📷 Change
@@ -654,14 +669,14 @@ export default function ItemDetailPage() {
                         </div>
 
                         <div className="idp-hero__info">
-                            <h1 className="idp-hero__name">{item.name}</h1>
+                            <h1 className="idp-hero__name">{item.name || item.itemName}</h1>
                             <div className="idp-hero__badges">
                                 {item.disabled && <span className="badge red" style={{ fontWeight: 800 }}>🚫 DISABLED</span>}
                                 {item.outOfStock && !item.disabled && <span className="badge amber" style={{ fontWeight: 800 }}>❌ OUT OF STOCK</span>}
                                 <span className={`badge ${statusBadgeClass(item.status)}`}>{statusLabel(item.status || 'active')}</span>
                                 <span className="badge blue">{item.category || 'Other'}</span>
                                 {item.brand && <span className="badge gray">{item.brand}</span>}
-                                {item.sku && <span className="badge gray">SKU: {item.sku}</span>}
+                                {(item.sku || item.vendorSKU) && <span className="badge gray">SKU: {item.sku || item.vendorSKU}</span>}
                                 <span className={`badge ${item.taxable ? 'green' : 'gray'}`}>{item.taxable ? '💲 Taxable' : 'Non-Taxable'}</span>
                             </div>
                             <div className="idp-hero__meta">
@@ -692,7 +707,7 @@ export default function ItemDetailPage() {
                                 <div className="idp-hero__meta-item">
                                     <span className="idp-hero__meta-label">Pricing Unit</span>
                                     <span className="idp-hero__meta-value" style={{ textTransform: 'capitalize' }}>
-                                        {formatItemSize(item.unit, item.packQuantity, item.itemSize)}
+                                        {formatItemSize(item.unit || item.baseUnit, item.packQuantity, item.itemSize)}
                                     </span>
                                 </div>
                                 <div className="idp-hero__meta-item">
@@ -720,7 +735,7 @@ export default function ItemDetailPage() {
                                     </button>
                                 </>
                             )}
-                            {canEdit && item.status !== 'in-review' && (
+                            {canEdit && (
                                 <button className="ui-btn primary small" onClick={() => { setEditForm({ ...item }); setEditing(true); }}>
                                     ✏️ Edit
                                 </button>
@@ -748,7 +763,7 @@ export default function ItemDetailPage() {
                         <div className="idp-stat__icon">📦</div>
                         <div className="idp-stat__label">Unit</div>
                         <div className="idp-stat__value" style={{ textTransform: 'capitalize' }}>
-                            {formatItemSize(item.unit, item.packQuantity, item.itemSize) || '—'}
+                            {formatItemSize(item.unit || item.baseUnit, item.packQuantity, item.itemSize) || '—'}
                         </div>
                     </div>
                     <div className="idp-stat">
@@ -795,7 +810,7 @@ export default function ItemDetailPage() {
                 {activeTab === 'details' && (
                     <div>
                         {/* Review banner */}
-                        {item.status === 'in-review' && (
+                        {isPendingReview(item.status) && (
                             <div className="idp-review-banner">
                                 <div style={{ fontWeight: 700, marginBottom: 6 }}>
                                     🕐 This item is pending review
@@ -871,7 +886,7 @@ export default function ItemDetailPage() {
                                 <div className="idp-details-grid">
                                     <div>
                                         <label className="ui-label">Name *</label>
-                                        <input className="ui-input" value={editForm.name || ''} onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))} />
+                                        <input className="ui-input" value={editForm.name || editForm.itemName || ''} onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value, itemName: e.target.value }))} />
                                     </div>
                                     <div>
                                         <label className="ui-label">Brand</label>
@@ -889,7 +904,7 @@ export default function ItemDetailPage() {
                                     </div>
                                     <div className="idp-detail-item">
                                         <span className="idp-detail-label">Pricing Unit</span>
-                                        <select className="ui-input" value={editForm.unit || 'kg'} onChange={e => setEditForm({ ...editForm, unit: e.target.value })}>
+                                        <select className="ui-input" value={editForm.unit || editForm.baseUnit || 'kg'} onChange={e => setEditForm({ ...editForm, unit: e.target.value, baseUnit: e.target.value })}>
                                             {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                                         </select>
                                     </div>
@@ -903,7 +918,7 @@ export default function ItemDetailPage() {
                                     </div>
                                     <div>
                                         <label className="ui-label">SKU</label>
-                                        <input className="ui-input" value={editForm.sku || ''} onChange={e => setEditForm(prev => ({ ...prev, sku: e.target.value }))} />
+                                        <input className="ui-input" value={editForm.sku || editForm.vendorSKU || ''} onChange={e => setEditForm(prev => ({ ...prev, sku: e.target.value, vendorSKU: e.target.value }))} />
                                     </div>
                                     <div className="idp-field--full">
                                         <label className="ui-label">Notes</label>
@@ -947,7 +962,7 @@ export default function ItemDetailPage() {
 
                                 {/* Pricing Intelligence Panel */}
                                 <PricingIntelligencePanel
-                                    itemName={editForm.name || ''}
+                                    itemName={editForm.name || editForm.itemName || ''}
                                     category={editForm.category || ''}
                                     vendorPrice={editForm.vendorPrice}
                                     originalPrice={item.vendorPrice ?? item.price ?? 0}
@@ -969,7 +984,7 @@ export default function ItemDetailPage() {
                             <div className="idp-details-grid">
                                 <div className="idp-field">
                                     <div className="idp-field__label">Name</div>
-                                    <div className="idp-field__value">{item.name}</div>
+                                    <div className="idp-field__value">{item.name || item.itemName}</div>
                                 </div>
                                 <div className="idp-field">
                                     <div className="idp-field__label">Brand</div>
@@ -981,11 +996,11 @@ export default function ItemDetailPage() {
                                 </div>
                                 <div className="idp-field">
                                     <div className="idp-field__label">Vendor Price</div>
-                                    <div className="idp-field__value" style={{ color: '#4ade80', fontSize: 18, fontWeight: 700 }}>${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>/ {item.unit || '—'}</span></div>
+                                    <div className="idp-field__value" style={{ color: '#4ade80', fontSize: 18, fontWeight: 700 }}>${Number(item.vendorPrice ?? item.price ?? 0).toFixed(2)} <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 400 }}>/ {item.unit || item.baseUnit || '—'}</span></div>
                                 </div>
                                 <div className="idp-field">
                                     <div className="idp-field__label">Pricing Unit</div>
-                                    <div className="idp-field__value" style={{ textTransform: 'capitalize' }}>{item.unit || '—'}</div>
+                                    <div className="idp-field__value" style={{ textTransform: 'capitalize' }}>{item.unit || item.baseUnit || '—'}</div>
                                 </div>
                                 <div className="idp-field">
                                     <div className="idp-field__label">Qty per Unit</div>
@@ -997,7 +1012,7 @@ export default function ItemDetailPage() {
                                 </div>
                                 <div className="idp-field">
                                     <div className="idp-field__label">SKU</div>
-                                    <div className="idp-field__value">{item.sku || '—'}</div>
+                                    <div className="idp-field__value">{item.sku || item.vendorSKU || '—'}</div>
                                 </div>
                                 <div className="idp-field">
                                     <div className="idp-field__label">Taxable</div>

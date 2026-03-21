@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, orderBy, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import StatusChip from '../ui/StatusChip';
@@ -16,6 +16,27 @@ export default function DispatchRequestsPage() {
     const [bulkProcessing, setBulkProcessing] = useState(false);
     const navigate = useNavigate();
 
+    // State to merge two sources
+    const [dispatchItems, setDispatchItems] = useState([]);
+    const [marketplaceItems, setMarketplaceItems] = useState([]);
+
+    // Merge both sources into dispatches
+    useEffect(() => {
+        // Deduplicate: marketplace orders take priority if same ID exists
+        const marketplaceIds = new Set(marketplaceItems.map(m => m.id));
+        const merged = [
+            ...marketplaceItems,
+            ...dispatchItems.filter(d => !marketplaceIds.has(d.id)),
+        ];
+        merged.sort((a, b) => {
+            const tA = a._sortTime || 0;
+            const tB = b._sortTime || 0;
+            return tB - tA;
+        });
+        setDispatches(merged);
+    }, [dispatchItems, marketplaceItems]);
+
+    // Source 1: vendorDispatches
     useEffect(() => {
         if (!isSuperAdmin && !vendorId) { setLoading(false); return; }
 
@@ -28,22 +49,69 @@ export default function DispatchRequestsPage() {
         }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            fetched.sort((a, b) => {
-                const wA = a.weekStart ? new Date(a.weekStart).getTime() : 0;
-                const wB = b.weekStart ? new Date(b.weekStart).getTime() : 0;
-                if (wA !== wB) return wB - wA;
-                const sA = a.sentAt?.toDate ? a.sentAt.toDate().getTime() : new Date(a.sentAt || 0).getTime();
-                const sB = b.sentAt?.toDate ? b.sentAt.toDate().getTime() : new Date(b.sentAt || 0).getTime();
-                return sB - sA;
+            const fetched = snapshot.docs.map(d => {
+                const data = d.data();
+                const sentAt = data.sentAt?.toDate ? data.sentAt.toDate().getTime() : new Date(data.sentAt || 0).getTime();
+                return { id: d.id, ...data, _source: 'dispatch', _sortTime: sentAt };
             });
-            setDispatches(fetched);
+            setDispatchItems(fetched);
             setLoading(false);
         }, (err) => {
             console.error('Error fetching dispatch requests:', err);
             if (err.message.includes('index')) { setLoading(false); return; }
-            toast.error('Failed to load orders.');
+            toast.error('Failed to load dispatch orders.');
             setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [vendorId, isSuperAdmin]);
+
+    // Source 2: marketplaceOrders (vendor admin sees their orders here too)
+    useEffect(() => {
+        if (!vendorId && !isSuperAdmin) return;
+
+        const ordersRef = collection(db, 'marketplaceOrders');
+        let q;
+        if (isSuperAdmin) {
+            q = query(ordersRef, orderBy('createdAt', 'desc'));
+        } else {
+            q = query(ordersRef, where('vendorId', '==', vendorId), orderBy('createdAt', 'desc'));
+        }
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetched = snapshot.docs.map(d => {
+                const data = d.data();
+                const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt || 0).getTime();
+                // Map marketplace order status to dispatch-style status
+                let dispatchStatus = 'Sent';
+                const s = data.status || '';
+                if (s === 'pending_confirmation') dispatchStatus = 'Sent';
+                else if (s === 'pending_fulfillment' || s === 'pending_customer_approval') dispatchStatus = 'Confirmed';
+                else if (s === 'delivery_in_route') dispatchStatus = 'Out for Delivery';
+                else if (s === 'delivered_awaiting_confirmation' || s === 'fulfilled') dispatchStatus = 'Delivered';
+                else if (s === 'cancelled_by_vendor' || s === 'rejected' || s === 'cancelled_by_customer') dispatchStatus = 'Rejected';
+                else if (s === 'in_review') dispatchStatus = 'Vendor Reviewing';
+
+                return {
+                    id: d.id,
+                    dispatchId: data.orderGroupId || d.id.slice(-8).toUpperCase(),
+                    vendorId: data.vendorId,
+                    vendorName: data.vendorName,
+                    restaurantName: data.restaurantName || data.restaurantId || '—',
+                    status: dispatchStatus,
+                    weekStart: data.createdAt,
+                    weekEnd: null,
+                    sentAt: data.createdAt,
+                    vendorPayout: data.total || data.grandTotalAfterTax || 0,
+                    items: data.items || [],
+                    _source: 'marketplace',
+                    _sortTime: createdAt,
+                    _marketplaceStatus: s,
+                };
+            });
+            setMarketplaceItems(fetched);
+        }, (err) => {
+            console.error('Error fetching marketplace orders:', err);
         });
 
         return () => unsubscribe();

@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, collectionGroup } from 'firebase/firestore';
 import restiqLogo from '../assets/restiq-logo-sidebar.png';
 import './Sidebar.css';
 
@@ -63,6 +63,7 @@ export default function Sidebar({ isOpen, onClose }) {
     const { displayName, vendorName, vendorId, isSuperAdmin, isAdmin, logout } = useContext(UserContext);
     const navigate = useNavigate();
     const [pendingDispatches, setPendingDispatches] = useState(0);
+    const [pendingReviewCount, setPendingReviewCount] = useState(0);
     const [search, setSearch] = useState('');
 
     useEffect(() => {
@@ -83,6 +84,23 @@ export default function Sidebar({ isOpen, onClose }) {
 
         return () => unsubscribe();
     }, [vendorId, isSuperAdmin]);
+
+    // SuperAdmin: live-listen for pending review items across all vendors
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+        try {
+            const q = query(
+                collectionGroup(db, 'items'),
+                where('status', 'in', ['Pending Review', 'in-review'])
+            );
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                setPendingReviewCount(snapshot.size);
+            }, (err) => {
+                console.warn('Sidebar pending review listener error:', err);
+            });
+            return () => unsubscribe();
+        } catch { /* skip */ }
+    }, [isSuperAdmin]);
 
     const handleLogout = () => {
         logout();
@@ -172,9 +190,17 @@ export default function Sidebar({ isOpen, onClose }) {
                                         end={link.end || false}
                                         className={({ isActive }) => `sidebar-link sidebar-link-pinned ${isActive ? 'active' : ''}`}
                                         onClick={onClose}
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                                     >
-                                        <span className="link-icon">{link.icon}</span>
-                                        {link.label}
+                                        <span>
+                                            <span className="link-icon">{link.icon}</span>
+                                            {link.label}
+                                        </span>
+                                        {link.label === 'Vendors' && pendingReviewCount > 0 && (
+                                            <span style={{ background: '#f59e0b', color: '#fff', fontSize: '11px', padding: '2px 6px', borderRadius: '10px', fontWeight: 'bold' }}>
+                                                {pendingReviewCount}
+                                            </span>
+                                        )}
                                     </NavLink>
                                 ))}
                             </div>

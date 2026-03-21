@@ -101,6 +101,7 @@ export default function DispatchDetailPage() {
     useEffect(() => {
         const fetchDispatch = async () => {
             try {
+                // First try vendorDispatches
                 const docRef = doc(db, 'vendorDispatches', dispatchId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
@@ -114,8 +115,61 @@ export default function DispatchDetailPage() {
                     setNotes(data.confirmationNotes || '');
                     setEstimatedDelivery(data.estimatedDeliveryTime || '');
                 } else {
-                    toast.error('Dispatch request not found');
-                    navigate('/dispatch-requests');
+                    // Fallback: try marketplaceOrders
+                    const marketRef = doc(db, 'marketplaceOrders', dispatchId);
+                    const marketSnap = await getDoc(marketRef);
+                    if (marketSnap.exists()) {
+                        const data = marketSnap.data();
+                        if (!isSuperAdmin && data.vendorId !== vendorId) {
+                            toast.error('Unauthorized access');
+                            navigate('/dispatch-requests');
+                            return;
+                        }
+                        // Map marketplace order status to dispatch status
+                        let dispatchStatus = 'Sent';
+                        const s = data.status || '';
+                        if (s === 'pending_confirmation') dispatchStatus = 'Sent';
+                        else if (s === 'pending_fulfillment' || s === 'pending_customer_approval') dispatchStatus = 'Confirmed';
+                        else if (s === 'delivery_in_route') dispatchStatus = 'Out for Delivery';
+                        else if (s === 'delivered_awaiting_confirmation' || s === 'fulfilled') dispatchStatus = 'Delivered';
+                        else if (s === 'cancelled_by_vendor' || s === 'rejected' || s === 'cancelled_by_customer') dispatchStatus = 'Rejected';
+                        else if (s === 'in_review') dispatchStatus = 'Vendor Reviewing';
+
+                        // Normalize marketplace items to dispatch item shape
+                        const items = (data.items || []).map(item => ({
+                            itemName: item.name || item.itemName || 'Unknown Item',
+                            packLabel: item.unit || item.packSize || '—',
+                            mondayQty: item.qty || 0,
+                            thursdayQty: 0,
+                            confirmedMondayQty: item.qty || 0,
+                            confirmedThursdayQty: 0,
+                        }));
+
+                        const total = data.grandTotalAfterTax || data.total || 0;
+
+                        setDispatch({
+                            id: marketSnap.id,
+                            dispatchId: data.orderGroupId || marketSnap.id.slice(-8).toUpperCase(),
+                            vendorId: data.vendorId,
+                            vendorName: data.vendorName,
+                            restaurantName: data.restaurantName || data.restaurantId || '—',
+                            status: dispatchStatus,
+                            weekStart: data.createdAt,
+                            weekEnd: null,
+                            sentAt: data.createdAt,
+                            vendorPayout: total,
+                            restaurantBilling: total,
+                            marketplaceCommission: 0,
+                            items,
+                            _source: 'marketplace',
+                            _marketplaceStatus: s,
+                        });
+                        setNotes('');
+                        setEstimatedDelivery('');
+                    } else {
+                        toast.error('Order not found');
+                        navigate('/dispatch-requests');
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching dispatch details:", err);
@@ -142,15 +196,33 @@ export default function DispatchDetailPage() {
     const updateStatus = async (newStatus, extras = {}) => {
         setSaving(true);
         try {
-            const docRef = doc(db, 'vendorDispatches', dispatchId);
             const beforeStatus = dispatch.status;
-            const updates = {
-                status: newStatus,
-                updatedAt: serverTimestamp(),
-                ...extras,
-            };
-            await updateDoc(docRef, updates);
-            setDispatch(prev => ({ ...prev, ...updates, status: newStatus }));
+
+            if (dispatch._source === 'marketplace') {
+                // Map dispatch status back to marketplace status
+                let marketplaceStatus = 'pending_confirmation';
+                if (newStatus === 'Confirmed') marketplaceStatus = 'pending_fulfillment';
+                else if (newStatus === 'Packed') marketplaceStatus = 'pending_fulfillment';
+                else if (newStatus === 'Out for Delivery') marketplaceStatus = 'delivery_in_route';
+                else if (newStatus === 'Delivered') marketplaceStatus = 'delivered_awaiting_confirmation';
+                else if (newStatus === 'Rejected') marketplaceStatus = 'cancelled_by_vendor';
+
+                const marketRef = doc(db, 'marketplaceOrders', dispatchId);
+                await updateDoc(marketRef, {
+                    status: marketplaceStatus,
+                    updatedAt: serverTimestamp(),
+                });
+                setDispatch(prev => ({ ...prev, status: newStatus, _marketplaceStatus: marketplaceStatus }));
+            } else {
+                const docRef = doc(db, 'vendorDispatches', dispatchId);
+                const updates = {
+                    status: newStatus,
+                    updatedAt: serverTimestamp(),
+                    ...extras,
+                };
+                await updateDoc(docRef, updates);
+                setDispatch(prev => ({ ...prev, ...updates, status: newStatus }));
+            }
 
             // Audit logging
             ops.info('dispatch_status_change', { dispatchId, from: beforeStatus, to: newStatus });
@@ -178,32 +250,44 @@ export default function DispatchDetailPage() {
     const handleMarkDelivered = async (day) => {
         setSaving(true);
         try {
-            const docRef = doc(db, 'vendorDispatches', dispatchId);
-            const updates = { updatedAt: serverTimestamp() };
-            if (day === 'Monday') {
-                updates.mondayDelivered = true;
-                updates.mondayDeliveredAt = serverTimestamp();
+            if (dispatch._source === 'marketplace') {
+                // For marketplace orders, just mark as delivered
+                const marketRef = doc(db, 'marketplaceOrders', dispatchId);
+                await updateDoc(marketRef, {
+                    status: 'delivered_awaiting_confirmation',
+                    deliveredAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+                setDispatch(prev => ({ ...prev, status: 'Delivered', _marketplaceStatus: 'delivered_awaiting_confirmation' }));
+                toast.success('Delivery marked as done!');
             } else {
-                updates.thursdayDelivered = true;
-                updates.thursdayDeliveredAt = serverTimestamp();
-            }
+                const docRef = doc(db, 'vendorDispatches', dispatchId);
+                const updates = { updatedAt: serverTimestamp() };
+                if (day === 'Monday') {
+                    updates.mondayDelivered = true;
+                    updates.mondayDeliveredAt = serverTimestamp();
+                } else {
+                    updates.thursdayDelivered = true;
+                    updates.thursdayDeliveredAt = serverTimestamp();
+                }
 
-            const newMonStatus = day === 'Monday' ? true : dispatch.mondayDelivered;
-            const newThuStatus = day === 'Thursday' ? true : dispatch.thursdayDelivered;
-            const hasMondayItems = (dispatch.items || []).some(i => i.mondayQty > 0);
-            const hasThursdayItems = (dispatch.items || []).some(i => i.thursdayQty > 0);
-            let allDelivered = true;
-            if (hasMondayItems && !newMonStatus) allDelivered = false;
-            if (hasThursdayItems && !newThuStatus) allDelivered = false;
-            if (allDelivered) {
-                updates.status = 'Delivered';
-                updates.deliveredAt = serverTimestamp();
-            }
+                const newMonStatus = day === 'Monday' ? true : dispatch.mondayDelivered;
+                const newThuStatus = day === 'Thursday' ? true : dispatch.thursdayDelivered;
+                const hasMondayItems = (dispatch.items || []).some(i => i.mondayQty > 0);
+                const hasThursdayItems = (dispatch.items || []).some(i => i.thursdayQty > 0);
+                let allDelivered = true;
+                if (hasMondayItems && !newMonStatus) allDelivered = false;
+                if (hasThursdayItems && !newThuStatus) allDelivered = false;
+                if (allDelivered) {
+                    updates.status = 'Delivered';
+                    updates.deliveredAt = serverTimestamp();
+                }
 
-            await updateDoc(docRef, updates);
-            setDispatch(prev => ({ ...prev, ...updates, status: allDelivered ? 'Delivered' : prev.status }));
-            ops.info('dispatch_delivery_marked', { dispatchId, day, allDelivered });
-            toast.success(`${day} delivery marked as done!`);
+                await updateDoc(docRef, updates);
+                setDispatch(prev => ({ ...prev, ...updates, status: allDelivered ? 'Delivered' : prev.status }));
+                ops.info('dispatch_delivery_marked', { dispatchId, day, allDelivered });
+                toast.success(`${day} delivery marked as done!`);
+            }
         } catch (err) {
             console.error('Error marking delivered:', err);
             toast.error('Failed to update status');

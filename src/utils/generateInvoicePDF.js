@@ -26,7 +26,7 @@ function loadImageAsBase64(src) {
  * @param {'restaurant'|'vendor'} type - Invoice type
  * @returns {Promise<string>} Base64-encoded PDF data URI
  */
-export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'restaurant') {
+export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'restaurant', vendorInfo = {}) {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -171,11 +171,34 @@ export async function generateInvoicePDF(invoice, restaurantInfo = {}, type = 'r
             doc.text(`Email: ${restaurantInfo.email}`, margin + 4, detY);
         }
     } else {
-        doc.text(invoice.vendorName || 'Vendor', margin + 4, y + 11);
+        const vName = vendorInfo.name || vendorInfo.businessName || invoice.vendorName || 'Vendor';
+        doc.text(vName, margin + 4, y + 11);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...mediumText);
-        doc.text('Marketplace Vendor', margin + 4, y + 16);
+        let detY = y + 16;
+        if (vendorInfo.address || vendorInfo.streetAddress) {
+            doc.text(vendorInfo.address || vendorInfo.streetAddress, margin + 4, detY);
+            detY += 4.5;
+        }
+        if (vendorInfo.city || vendorInfo.province) {
+            const cityProv = [vendorInfo.city, vendorInfo.province, vendorInfo.postalCode].filter(Boolean).join(', ');
+            if (cityProv) {
+                doc.text(cityProv, margin + 4, detY);
+                detY += 4.5;
+            }
+        }
+        if (vendorInfo.phone) {
+            doc.text(`Ph: ${vendorInfo.phone}`, margin + 4, detY);
+            detY += 4.5;
+        }
+        if (vendorInfo.email) {
+            doc.text(vendorInfo.email, margin + 4, detY);
+            detY += 4.5;
+        }
+        if (vendorInfo.hstNumber) {
+            doc.text(`HST#: ${vendorInfo.hstNumber}`, margin + 4, detY);
+        }
     }
 
     // Right section: FROM

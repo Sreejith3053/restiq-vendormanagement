@@ -104,8 +104,21 @@ export default function InvoiceDetailPage() {
                 }
             }
 
+            // Fetch vendor details from vendors collection
+            let vendorInfo = {};
+            if (invoice.vendorId) {
+                try {
+                    const vendorSnap = await getDoc(doc(db, 'vendors', invoice.vendorId));
+                    if (vendorSnap.exists()) {
+                        vendorInfo = vendorSnap.data();
+                    }
+                } catch (vendorErr) {
+                    console.warn('Could not fetch vendor info:', vendorErr);
+                }
+            }
+
             // Generate PDF (returns base64 data URI)
-            const base64Pdf = await generateInvoicePDF(invoice, restaurantInfo, 'vendor');
+            const base64Pdf = await generateInvoicePDF(invoice, restaurantInfo, 'vendor', vendorInfo);
 
             // Convert data URI to Blob for Storage upload
             const byteString = atob(base64Pdf.split(',')[1]);

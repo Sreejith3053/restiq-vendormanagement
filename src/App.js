@@ -237,6 +237,10 @@ function App() {
                                 <Route path="/users" element={<Navigate to="/platform-admin?tab=users" replace />} />
                                 <Route path="/settings/permissions" element={<Navigate to="/platform-admin?tab=permissions" replace />} />
                                 <Route path="/admin/migration" element={<Navigate to="/platform-admin?tab=migration" replace />} />
+
+                                {/* ── Shared pages (accessible to both superadmin and vendors) ── */}
+                                <Route path="/dispatch-requests" element={<PrivateRoute requiredRole="superadmin"><DispatchRequestsPage /></PrivateRoute>} />
+                                <Route path="/dispatch-requests/:dispatchId" element={<PrivateRoute requiredRole="superadmin"><DispatchDetailPage /></PrivateRoute>} />
                             </>
                         )}
 

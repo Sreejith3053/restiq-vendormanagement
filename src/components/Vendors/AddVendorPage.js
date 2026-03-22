@@ -94,6 +94,7 @@ export default function AddVendorPage() {
         commissionPercent: 10,
         status: 'Active',
         taxRate: 13,
+        hstNumber: '',
         paymentTerms: 'Net 30',
         taxIncluded: false,
         // Operations
@@ -138,6 +139,7 @@ export default function AddVendorPage() {
         if (form.contactPhone && !/^[\d\s\-+().]{7,}$/.test(form.contactPhone)) {
             toast.warn('Please enter a valid phone number.'); return false;
         }
+        if (!form.hstNumber.trim()) { toast.warn('HST Number is required.'); return false; }
         return true;
     };
 
@@ -164,6 +166,7 @@ export default function AddVendorPage() {
                 taxRate: selectedRegion ? selectedRegion.rate : (parseFloat(form.taxRate) || 13),
                 paymentTerms: form.paymentTerms || 'Net 30',
                 taxIncluded: form.taxIncluded || false,
+                hstNumber: form.hstNumber.trim(),
                 // Operations
                 deliveryDays: form.deliveryDays || [],
                 deliveryType: form.deliveryType || 'Delivery',
@@ -364,6 +367,15 @@ export default function AddVendorPage() {
                         <select style={selectInputStyle} value={form.paymentTerms} onChange={e => update('paymentTerms', e.target.value)}>
                             {PAYMENT_TERMS.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
+                    </div>
+                    <div style={fieldStyle}>
+                        <label style={labelStyle}>HST Number <span style={{ color: '#f87171' }}>*</span></label>
+                        <input
+                            style={inputStyle}
+                            placeholder="e.g. 123456789RT0001"
+                            value={form.hstNumber}
+                            onChange={e => update('hstNumber', e.target.value)}
+                        />
                     </div>
                 </div>
                 <div style={{ ...gridStyle, marginTop: 16 }}>

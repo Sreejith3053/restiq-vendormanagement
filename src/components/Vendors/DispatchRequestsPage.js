@@ -86,10 +86,12 @@ export default function DispatchRequestsPage() {
                 let dispatchStatus = 'Sent';
                 const s = data.status || '';
                 if (s === 'pending_confirmation') dispatchStatus = 'Sent';
-                else if (s === 'pending_fulfillment' || s === 'pending_customer_approval') dispatchStatus = 'Confirmed';
+                else if (s === 'pending_fulfillment') dispatchStatus = 'Confirmed';
+                else if (s === 'pending_customer_approval') dispatchStatus = 'Pending Customer Approval';
                 else if (s === 'delivery_in_route') dispatchStatus = 'Out for Delivery';
                 else if (s === 'delivered_awaiting_confirmation' || s === 'fulfilled') dispatchStatus = 'Delivered';
-                else if (s === 'cancelled_by_vendor' || s === 'rejected' || s === 'cancelled_by_customer') dispatchStatus = 'Rejected';
+                else if (s === 'cancelled_by_vendor' || s === 'rejected') dispatchStatus = 'Rejected';
+                else if (s === 'cancelled_by_customer') dispatchStatus = 'Cancelled by Customer';
                 else if (s === 'in_review') dispatchStatus = 'Vendor Reviewing';
 
                 return {
@@ -107,6 +109,9 @@ export default function DispatchRequestsPage() {
                     _source: 'marketplace',
                     _sortTime: createdAt,
                     _marketplaceStatus: s,
+                    cancellationReason: data.cancellationReason || '',
+                    cancelledBy: data.cancelledBy || '',
+                    cancelledAt: data.cancelledAt || null,
                 };
             });
             setMarketplaceItems(fetched);
@@ -122,11 +127,11 @@ export default function DispatchRequestsPage() {
         let pending = 0, confirmed = 0, inTransit = 0, delivered = 0, rejected = 0;
         dispatches.forEach(d => {
             const s = d.status || '';
-            if (s === 'Sent' || s === 'Vendor Reviewing') pending++;
+            if (s === 'Sent' || s === 'Vendor Reviewing' || s === 'Pending Customer Approval') pending++;
             else if (s === 'Confirmed' || s === 'Partially Confirmed') confirmed++;
             else if (s === 'Packed' || s === 'Out for Delivery') inTransit++;
             else if (s === 'Delivered') delivered++;
-            else if (s === 'Rejected') rejected++;
+            else if (s === 'Rejected' || s === 'Cancelled by Customer') rejected++;
         });
         return { pending, confirmed, inTransit, delivered, rejected, total: dispatches.length };
     }, [dispatches]);
@@ -155,7 +160,9 @@ export default function DispatchRequestsPage() {
 
     const filteredDispatches = dispatches.filter(d => {
         if (statusFilter === 'All') return true;
-        if (statusFilter === 'Active') return !['Delivered', 'Rejected'].includes(d.status);
+        if (statusFilter === 'Active') return !['Delivered', 'Rejected', 'Cancelled by Customer'].includes(d.status);
+        if (statusFilter === 'Pending') return ['Sent', 'Vendor Reviewing', 'Pending Customer Approval'].includes(d.status);
+        if (statusFilter === 'Rejected') return d.status === 'Rejected' || d.status === 'Cancelled by Customer';
         return d.status === statusFilter;
     });
 

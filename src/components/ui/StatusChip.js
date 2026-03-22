@@ -39,6 +39,9 @@ const STATUS_STYLES = {
     voided:             { bg: 'rgba(100,116,139,0.12)', color: '#94a3b8' },
     inactive:           { bg: 'rgba(100,116,139,0.12)', color: '#94a3b8' },
     draft:              { bg: 'rgba(100,116,139,0.12)', color: '#94a3b8' },
+    // Marketplace-specific
+    'pending customer approval': { bg: 'rgba(244,114,182,0.12)', color: '#f472b6' },
+    'cancelled by customer':     { bg: 'rgba(244,63,94,0.12)',  color: '#f43f5e' },
 };
 
 const DEFAULT_STYLE = { bg: 'rgba(100,116,139,0.12)', color: '#94a3b8' };

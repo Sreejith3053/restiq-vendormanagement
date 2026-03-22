@@ -4,7 +4,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { RouteDayBadge, RaiseIssueModal } from './DispatchShared';
 
 // Unified statuses across both dispatch routes and marketplace orders
-const STATUSES = ['All', 'Pending', 'Confirmed', 'In Transit', 'Delivered', 'Fulfilled', 'Rejected'];
+const STATUSES = ['All', 'Pending', 'Confirmed', 'In Transit', 'Delivered', 'Fulfilled', 'Rejected', 'Cancelled'];
 
 const STATUS_CONFIG = {
     // Dispatch route statuses
@@ -35,7 +35,7 @@ function mapMarketplaceStatus(status) {
         fulfilled: 'Fulfilled',
         completed: 'Fulfilled',
         cancelled_by_vendor: 'Rejected',
-        cancelled_by_customer: 'Rejected',
+        cancelled_by_customer: 'Cancelled',
         rejected: 'Rejected',
     };
     return map[status] || status;
@@ -146,7 +146,7 @@ export default function DispatchConfirmationsPage() {
             sentAt: o.createdAt,
             confirmedAt: o.confirmedAt || null,
             deliveredAt: o.deliveredAt || null,
-            notes: '',
+            notes: o.cancellationReason || '',
             raw: o,
         })),
     ];
@@ -189,7 +189,7 @@ export default function DispatchConfirmationsPage() {
             </div>
 
             {/* KPI Strip */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 12, marginBottom: 24 }}>
                 {STATUSES.slice(1).map(s => {
                     const cfg = STATUS_CONFIG[s] || STATUS_CONFIG.Draft;
                     return (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import { db, app } from '../../firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDoc, getDocs, serverTimestamp } from 'firebase/firestore';
@@ -15,6 +15,7 @@ export default function OrdersPage() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const navigate = useNavigate();
 
     // Editable Items State
     const [editableItems, setEditableItems] = useState([]);
@@ -676,7 +677,7 @@ export default function OrdersPage() {
                                 </tr>
                             ) : (
                                 filteredOrders.map(order => (
-                                    <tr key={order.id} onClick={() => setSelectedOrder(order)}>
+                                    <tr key={order.id} onClick={() => navigate(`/dispatch-requests/${order.id}`)}>
                                         <td style={{ fontFamily: 'monospace' }}>{order.orderGroupId || order.id.slice(-8).toUpperCase()}</td>
                                         <td>{formatDate(order.createdAt)}</td>
                                         {isSuperAdmin && <td>{order.vendorName}</td>}
@@ -758,6 +759,23 @@ export default function OrdersPage() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Cancellation Reason */}
+                            {selectedOrder.cancellationReason && (
+                                <div style={{
+                                    background: 'rgba(251, 146, 60, 0.1)',
+                                    padding: '12px 16px',
+                                    borderRadius: 8,
+                                    marginTop: 16,
+                                    borderLeft: '4px solid #fb923c',
+                                }}>
+                                    <strong style={{ color: '#fb923c', fontSize: 12, textTransform: 'uppercase' }}>Cancellation Reason</strong>
+                                    <div style={{ marginTop: 4, fontSize: 14 }}>{selectedOrder.cancellationReason}</div>
+                                    {selectedOrder.cancelledBy && (
+                                        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-secondary)' }}>Cancelled by: {selectedOrder.cancelledBy}</div>
+                                    )}
+                                </div>
+                            )}
 
                             <h3 style={{ fontSize: '16px', marginBottom: '12px', marginTop: '32px' }}>Items</h3>
                             <table className="order-items-table">

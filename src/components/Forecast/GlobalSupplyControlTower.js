@@ -198,19 +198,19 @@ export default function GlobalSupplyControlTower() {
             computeSeasonalUplifts().catch(() => null),
             computeDispatchOptimization().catch(() => null),
         ]).then(([price, risk, seasonal, dispatch]) => {
-            // Pull real ordersStats from current metrics state so Intelligence summary
-            // shows '4 items ordered across 1 restaurant this week' instead of '— restaurants'
+            // AI engines loaded — regenerate summary with full AI data.
+            // Use setMetrics functional update to safely read current restaurantCount
+            // (AI engines always load AFTER fetchData, so metrics.restaurantCount is set).
             setMetrics(prev => {
-                // restaurantCount is now a numeric field (not the string accuracyScore)
-                const ordersStats = prev.totalMonday + prev.totalThursday > 0 ? {
+                const ordersStats = prev.restaurantCount > 0 || prev.activeItems > 0 ? {
                     totalItems: prev.activeItems || 0,
                     totalQty: (prev.totalMonday || 0) + (prev.totalThursday || 0),
-                    restaurantCount: prev.restaurantCount || 0,
+                    restaurantCount: prev.restaurantCount || 0, // now always a number
                     topItems: [],
                 } : null;
                 const summary = generateWeeklySummary({ priceData: price, riskData: risk, seasonalData: seasonal, dispatchData: dispatch, ordersStats });
                 setAiData({ summary, risk, price, seasonal, dispatch });
-                return prev; // metrics unchanged
+                return prev;
             });
             setAiLoading(false);
         });
@@ -631,6 +631,32 @@ export default function GlobalSupplyControlTower() {
             // accuracyScore: display string for the KPI card
             accuracyScore: restaurantCount > 0 ? `${restaurantCount} rest.` : '—'
         });
+
+        // ── Intelligence summary: generate NOW with local restaurantCount var ──
+        // This avoids the React state timing race where the AI useEffect
+        // (guarded by aiLoadedRef) could run before metrics.restaurantCount
+        // was committed, resulting in '4 items ordered across — restaurants'.
+        //
+        // ordersStats is non-null when there are orders this week.
+        const ordersStatsLocal = tMon + tThu > 0 ? {
+            totalItems: tActive,
+            totalQty: tMon + tThu,
+            restaurantCount,  // ← local variable, always correct
+            topItems: [],
+        } : null;
+        // Regenerate summary text with the freshly-computed ordersStats
+        // (AI Engines for risk/price/seasonal may not be loaded yet on first run— that’s fine;
+        //  they update setAiData separately and don’t affect the summary sentence.)
+        setAiData(prev => ({
+            ...prev,
+            summary: generateWeeklySummary({
+                priceData: prev.price,
+                riskData: prev.risk,
+                seasonalData: prev.seasonal,
+                dispatchData: prev.dispatch,
+                ordersStats: ordersStatsLocal,
+            }),
+        }));
 
         setVendors(Object.values(vMap).sort((a, b) => b.total - a.total));
         setCatDemand(pDemand);

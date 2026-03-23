@@ -361,22 +361,56 @@ export default function SuperadminCatalogReviewQueuePage() {
             {/* ── QUEUE TAB ── */}
             {activeTab === 'queue' && (
                 <>
-                    {/* Filter chips */}
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                        {FILTER_CHIPS.map(chip => (
+                    {/* Filter chips — grouped: queue filters | section switcher (Unmapped) | status chips */}
+                    <div style={{ display: 'flex', gap: 0, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* Queue type/status quick-filters */}
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginRight: 10 }}>
+                            {FILTER_CHIPS.filter(c => !['unmapped', 'held', 'approved'].includes(c.key)).map(chip => (
+                                <button
+                                    key={chip.key}
+                                    onClick={() => handleChipClick(chip)}
+                                    style={{
+                                        padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                        border: activeChip === chip.key ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.08)',
+                                        background: activeChip === chip.key ? 'rgba(56,189,248,0.12)' : 'transparent',
+                                        color: activeChip === chip.key ? '#38bdf8' : '#64748b',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >{chip.label}</button>
+                            ))}
+                        </div>
+                        {/* Divider */}
+                        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.08)', marginRight: 10, alignSelf: 'center', flexShrink: 0 }} />
+                        {/* Section switcher: Unmapped */}
+                        {FILTER_CHIPS.filter(c => c.key === 'unmapped').map(chip => (
                             <button
                                 key={chip.key}
                                 onClick={() => handleChipClick(chip)}
                                 style={{
-                                    padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                                    border: activeChip === chip.key ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.08)',
-                                    background: activeChip === chip.key ? 'rgba(56,189,248,0.12)' : 'transparent',
-                                    color: activeChip === chip.key ? '#38bdf8' : '#64748b',
+                                    padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    border: activeChip === chip.key ? '1px solid #a78bfa' : '1px solid rgba(255,255,255,0.08)',
+                                    background: activeChip === chip.key ? 'rgba(167,139,250,0.12)' : 'transparent',
+                                    color: activeChip === chip.key ? '#a78bfa' : '#64748b',
+                                    transition: 'all 0.15s',
+                                    marginRight: 10,
+                                }}
+                            >{chip.label}</button>
+                        ))}
+                        {/* Divider */}
+                        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.08)', marginRight: 10, alignSelf: 'center', flexShrink: 0 }} />
+                        {/* Status chips: Held, Approved Today */}
+                        {FILTER_CHIPS.filter(c => ['held', 'approved'].includes(c.key)).map(chip => (
+                            <button
+                                key={chip.key}
+                                onClick={() => handleChipClick(chip)}
+                                style={{
+                                    padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    border: activeChip === chip.key ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.08)',
+                                    background: activeChip === chip.key ? 'rgba(245,158,11,0.08)' : 'transparent',
+                                    color: activeChip === chip.key ? '#f59e0b' : '#64748b',
                                     transition: 'all 0.15s',
                                 }}
-                            >
-                                {chip.label}
-                            </button>
+                            >{chip.label}</button>
                         ))}
                     </div>
 

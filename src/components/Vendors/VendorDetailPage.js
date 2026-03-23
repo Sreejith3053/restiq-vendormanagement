@@ -1212,9 +1212,11 @@ export default function VendorDetailPage() {
                                 <tbody>
                                     {invoices.slice(0, 50).map(inv => {
                                         const dateLabel = formatReviewDate(inv.createdAt);
-                                        const gross = Number(inv.subtotalVendorAmount || 0) + Number(inv.taxAmount || 0);
+                                        // grossVendorAmount = pre-commission subtotal (stored by invoice generator)
+                                        const gross = Number(inv.grossVendorAmount || inv.subtotalVendorAmount || 0);
                                         const commission = Number(inv.commissionAmount || 0);
-                                        const net = Number(inv.totalVendorAmount || gross - commission);
+                                        // netVendorPayable = grossVendorAmount - commissionAmount (correct = 215.98)
+                                        const net = Number(inv.netVendorPayable || (gross - commission));
 
                                         return (
                                             <tr key={inv.id} className="is-row" onClick={() => navigate(`/admin/invoices/${inv.id}`)}>

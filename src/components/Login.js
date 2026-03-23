@@ -9,7 +9,7 @@
 //      Firebase Auth account on first success ("just-in-time migration").
 //   4. Rate limit: 5 failures in 2 min → 60s lockout, logged to systemLogs.
 //
-import React, { useState, useContext, useRef } from "react";
+import React, { useState, useContext, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../contexts/UserContext.js";
 import { auth, db } from "../firebase";
@@ -24,7 +24,31 @@ import {
 } from "firebase/firestore";
 
 import restiqLogo from "../assets/restiq-logo.png";
+import heroImg1 from "../assets/vendor-hero-1.png";
+import heroImg2 from "../assets/vendor-hero-2.png";
+import heroImg3 from "../assets/vendor-hero-3.png";
 import "./Login.css";
+
+// ── Hero Carousel Data ────────────────────────────────────────────────────
+const HERO_SLIDES = [
+    {
+        image: heroImg1,
+        heading: "Streamline Your Supply Chain",
+        subtitle: "Manage orders, dispatches, and invoices — all in one place.",
+    },
+    {
+        image: heroImg2,
+        heading: "Quality at Every Step",
+        subtitle: "Track your catalog, pricing, and inventory with precision.",
+    },
+    {
+        image: heroImg3,
+        heading: "Deliver with Confidence",
+        subtitle: "Real-time logistics, dispatch tracking, and fulfillment tools.",
+    },
+];
+
+const SLIDE_INTERVAL = 3000; // 3 seconds
 
 // ── Rate Limiting ──────────────────────────────────────────────────────────
 const MAX_ATTEMPTS        = 5;
@@ -41,6 +65,7 @@ export default function Login() {
     const [loading,          setLoading]          = useState(false);
     const [err,              setErr]              = useState("");
     const [lockoutRemaining, setLockoutRemaining] = useState(0);
+    const [rememberMe,       setRememberMe]       = useState(true);
 
     // Password reset modal state
     const [showReset,       setShowReset]       = useState(false);
@@ -49,8 +74,19 @@ export default function Login() {
     const [resetMsg,        setResetMsg]        = useState("");
     const [resetErr,        setResetErr]        = useState("");
 
+    // Carousel
+    const [currentSlide, setCurrentSlide] = useState(0);
+
     const failureTimestamps = useRef([]);
     const lockoutTimer      = useRef(null);
+
+    // ── Auto-rotate carousel ──────────────────────────────────────────────
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentSlide(prev => (prev + 1) % HERO_SLIDES.length);
+        }, SLIDE_INTERVAL);
+        return () => clearInterval(timer);
+    }, []);
 
     // ── Rate limit helpers ────────────────────────────────────────────────
     const checkRateLimit = () => {
@@ -96,7 +132,6 @@ export default function Login() {
         } catch (err) {
             const code = err.code || "";
             if (code === "auth/user-not-found") {
-                // Don't reveal whether the email exists — security best practice
                 setResetMsg("If that email is registered, a reset link has been sent.");
             } else {
                 setResetErr("Failed to send reset email. Please try again.");
@@ -107,16 +142,13 @@ export default function Login() {
     };
 
     // ── Look up the Firestore login doc by username or email ──────────────
-    // Returns { docId, data } or null
     const resolveFirestoreUser = async (identifierVal) => {
         const trimmed = identifierVal.trim();
         try {
-            // Try by email first
             let q = query(collection(db, "login"), where("email", "==", trimmed), limit(1));
             let snap = await getDocs(q);
             if (!snap.empty) return { docId: snap.docs[0].id, data: snap.docs[0].data() };
 
-            // Try by username
             q = query(collection(db, "login"), where("username", "==", trimmed), limit(1));
             snap = await getDocs(q);
             if (!snap.empty) return { docId: snap.docs[0].id, data: snap.docs[0].data() };
@@ -127,23 +159,14 @@ export default function Login() {
     };
 
     // ── Just-in-time Firebase Auth migration ──────────────────────────────
-    // Called when Firestore check succeeds but Firebase Auth account doesn't exist yet.
     const migrateUserToFirebaseAuth = async (email, password, uid) => {
         try {
-            // We can't preserve the original UID via the client SDK (Admin SDK only).
-            // So we create a new Firebase Auth account. The UID in `login/{uid}` stays
-            // the docId — the new Firebase Auth UID will be different.
-            // UserContext handles this: it calls fetchUserProfile(firebaseUser.uid).
-            // For existing docs keyed by a non-UID doc ID, we also try lookup by email.
             await createUserWithEmailAndPassword(auth, email, password);
-            // Success — Firebase Auth will fire onAuthStateChanged in UserContext
         } catch (createErr) {
             if (createErr.code === "auth/email-already-in-use") {
-                // Race/retry — just sign in
                 await signInWithEmailAndPassword(auth, email, password);
             } else {
                 console.warn("[Login] JIT migration failed:", createErr.message);
-                // Don't block the user — they're already verified by Firestore
             }
         }
     };
@@ -158,7 +181,6 @@ export default function Login() {
 
         setLoading(true);
         try {
-            // ── Step 1: resolve Firestore user doc ───────────────────────
             const firestoreUser = await resolveFirestoreUser(identifier);
             if (!firestoreUser) {
                 recordFailure(identifier);
@@ -169,23 +191,20 @@ export default function Login() {
             const { docId, data } = firestoreUser;
             const email = data.email || `${data.username}@restiq.internal`;
 
-            // Check active flag early
             if (data.active === false) {
                 setErr("Your account has been deactivated. Contact admin.");
                 setLoading(false);
                 return;
             }
 
-            // ── Step 2: try Firebase Auth ────────────────────────────────
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                // Check if user must change password on first login
                 if (data.mustChangePassword === true) {
                     navigate('/change-password');
                 } else {
                     navigate('/');
                 }
-                return; // ✅ Firebase Auth path — done
+                return;
             } catch (firebaseErr) {
                 const code = firebaseErr.code || "";
                 const notMigrated =
@@ -194,7 +213,6 @@ export default function Login() {
                     code === "auth/invalid-login-credentials";
 
                 if (!notMigrated) {
-                    // Real Firebase Auth error (wrong password on FB side, disabled, etc.)
                     if (code === "auth/wrong-password") {
                         recordFailure(identifier);
                         setErr("Incorrect password.");
@@ -210,10 +228,8 @@ export default function Login() {
                     return;
                 }
 
-                // ── Step 3: Firebase Auth account doesn't exist yet — try Firestore legacy ──
                 const storedPw = data.password;
                 if (!storedPw) {
-                    // Account not migrated and has no password stored — needs admin reset
                     setErr("Account not yet set up for sign-in. Contact your admin.");
                     setLoading(false);
                     return;
@@ -226,9 +242,7 @@ export default function Login() {
                     return;
                 }
 
-                // ✅ Firestore credentials valid — auto-migrate to Firebase Auth
                 await migrateUserToFirebaseAuth(email, password, docId);
-                // Check if user must change password on first login
                 if (data.mustChangePassword === true) {
                     navigate('/change-password');
                 } else {
@@ -247,88 +261,137 @@ export default function Login() {
     if (authLoading) {
         return (
             <div className="login-wrap">
-                <div style={{ color: "#9db2ce", textAlign: "center", marginTop: 80 }}>Loading…</div>
+                <div style={{ color: "#9db2ce", textAlign: "center", margin: "auto" }}>Loading…</div>
             </div>
         );
     }
 
+    const activeSlide = HERO_SLIDES[currentSlide];
+
     return (
         <div className="login-wrap">
-            <div className="login-card">
-                <div className="login-brand">
-                    <img src={restiqLogo} alt="RestIQ" className="brand-logo" />
-                    <div className="brand-sub">Vendor Management Portal</div>
+            {/* ── Left: Hero Carousel ─────────────────────────────── */}
+            <div className="login-hero">
+                {HERO_SLIDES.map((slide, idx) => (
+                    <div
+                        key={idx}
+                        className={`hero-slide ${idx === currentSlide ? 'active' : ''}`}
+                        style={{ backgroundImage: `url(${slide.image})` }}
+                    />
+                ))}
+                <div className="hero-overlay" />
+                <div className="hero-content">
+                    <div className="hero-logo">
+                        <span>Rest<span style={{ color: '#818cf8' }}>IQ</span></span>
+                    </div>
+                    <h2 key={currentSlide + '-h'}>{activeSlide.heading}</h2>
+                    <p key={currentSlide + '-p'}>{activeSlide.subtitle}</p>
+                    <div className="hero-indicators">
+                        {HERO_SLIDES.map((_, idx) => (
+                            <div
+                                key={idx}
+                                className={`dot ${idx === currentSlide ? 'active' : ''}`}
+                                onClick={() => setCurrentSlide(idx)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                        ))}
+                    </div>
                 </div>
+            </div>
 
-                <form className="login-form" onSubmit={handleSubmit}>
-                    <div className="field">
-                        <label>Username or Email</label>
-                        <input
-                            type="text"
-                            autoComplete="username"
-                            value={identifier}
-                            onChange={e => setIdentifier(e.target.value)}
-                            placeholder="you@company.com or username"
-                            disabled={lockoutRemaining > 0}
-                        />
+            {/* ── Right: Login Form ───────────────────────────────── */}
+            <div className="login-panel">
+                <div className="login-panel-inner">
+                    <div className="login-brand">
+                        <div className="brand-name">Rest<span style={{ color: '#818cf8' }}>IQ</span></div>
                     </div>
 
-                    <div className="field">
-                        <label>Password</label>
-                        <div className="pw-box">
+                    <div className="login-welcome">
+                        <h2>Welcome back</h2>
+                        <p>Sign in to your vendor management account.</p>
+                    </div>
+
+                    <form className="login-form" onSubmit={handleSubmit}>
+                        <div className="field">
+                            <label>Username or Email</label>
                             <input
-                                type={showPw ? "text" : "password"}
-                                autoComplete="current-password"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                placeholder="••••••••"
+                                type="text"
+                                autoComplete="username"
+                                value={identifier}
+                                onChange={e => setIdentifier(e.target.value)}
+                                placeholder="you@company.com or johndoe"
                                 disabled={lockoutRemaining > 0}
                             />
+                        </div>
+
+                        <div className="field">
+                            <label>Password</label>
+                            <div className="pw-box">
+                                <input
+                                    type={showPw ? "text" : "password"}
+                                    autoComplete="current-password"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    placeholder="Enter your password"
+                                    disabled={lockoutRemaining > 0}
+                                />
+                                <button
+                                    type="button"
+                                    className="ghost"
+                                    onClick={() => setShowPw(s => !s)}
+                                    aria-label={showPw ? "Hide password" : "Show password"}
+                                >
+                                    {showPw ? "🙈" : "👁️"}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="row-between">
+                            <label className="remember-label">
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={e => setRememberMe(e.target.checked)}
+                                />
+                                Remember me
+                            </label>
                             <button
                                 type="button"
-                                className="ghost"
-                                onClick={() => setShowPw(s => !s)}
-                                aria-label={showPw ? "Hide password" : "Show password"}
+                                className="forgot-link"
+                                onClick={() => {
+                                    setShowReset(true);
+                                    setResetEmail(identifier.includes('@') ? identifier : '');
+                                    setResetMsg('');
+                                    setResetErr('');
+                                }}
                             >
-                                {showPw ? "🙈" : "👁️"}
+                                Forgot Password?
                             </button>
                         </div>
-                    </div>
 
-                    <div className="row-between">
-                        <span className="hint">Need access? Contact admin.</span>
+                        {lockoutRemaining > 0 && (
+                            <div className="error">
+                                Too many failed attempts. Please wait {lockoutRemaining}s before retrying.
+                            </div>
+                        )}
+                        {err && !lockoutRemaining && <div className="error">{err}</div>}
+
                         <button
-                            type="button"
-                            className="ghost"
-                            onClick={() => { setShowReset(true); setResetEmail(identifier.includes('@') ? identifier : ''); setResetMsg(''); setResetErr(''); }}
-                            style={{ fontSize: 12, color: '#4a9eff', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            className="login-btn"
+                            type="submit"
+                            disabled={loading || lockoutRemaining > 0}
                         >
-                            Forgot password?
+                            {loading
+                                ? "Signing in…"
+                                : lockoutRemaining > 0
+                                ? `Locked (${lockoutRemaining}s)`
+                                : "Sign in"}
                         </button>
+                    </form>
+
+                    <div className="login-footer">
+                        <span>© {new Date().getFullYear()} RestIQ Solutions · <a href="https://restiqsolutions.com" target="_blank" rel="noopener noreferrer">restiqsolutions.com</a></span>
                     </div>
-
-                    {lockoutRemaining > 0 && (
-                        <div className="error">
-                            Too many failed attempts. Please wait {lockoutRemaining}s before retrying.
-                        </div>
-                    )}
-                    {err && !lockoutRemaining && <div className="error">{err}</div>}
-
-                    <button
-                        className="login-btn"
-                        type="submit"
-                        disabled={loading || lockoutRemaining > 0}
-                    >
-                        {loading
-                            ? "Signing in…"
-                            : lockoutRemaining > 0
-                            ? `Locked (${lockoutRemaining}s)`
-                            : "Sign in"}
-                    </button>
-                </form>
-
-                <div className="login-footer">
-                    <span>© {new Date().getFullYear()} RestIQ Solutions</span>
                 </div>
             </div>
 
@@ -371,7 +434,7 @@ export default function Login() {
                                     disabled={resetLoading}
                                     style={{
                                         flex: 1, padding: '10px 0',
-                                        background: 'linear-gradient(135deg, #2563eb, #4f46e5)',
+                                        background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                                         border: 'none', borderRadius: 8, color: '#fff',
                                         fontSize: 14, fontWeight: 600, cursor: 'pointer',
                                     }}

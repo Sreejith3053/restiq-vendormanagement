@@ -103,7 +103,8 @@ export default function GlobalSupplyControlTower() {
         payout: 0,
         commission: 0,
         missingPrices: 0,
-        accuracyScore: 87
+        restaurantCount: 0,  // distinct restaurants with orders this week
+        accuracyScore: '—'   // display string for KPI card
     });
 
     const [vendors, setVendors] = useState([]);
@@ -200,10 +201,11 @@ export default function GlobalSupplyControlTower() {
             // Pull real ordersStats from current metrics state so Intelligence summary
             // shows '4 items ordered across 1 restaurant this week' instead of '— restaurants'
             setMetrics(prev => {
+                // restaurantCount is now a numeric field (not the string accuracyScore)
                 const ordersStats = prev.totalMonday + prev.totalThursday > 0 ? {
                     totalItems: prev.activeItems || 0,
                     totalQty: (prev.totalMonday || 0) + (prev.totalThursday || 0),
-                    restaurantCount: parseInt(prev.accuracyScore) || 0,
+                    restaurantCount: prev.restaurantCount || 0,
                     topItems: [],
                 } : null;
                 const summary = generateWeeklySummary({ priceData: price, riskData: risk, seasonalData: seasonal, dispatchData: dispatch, ordersStats });
@@ -624,6 +626,9 @@ export default function GlobalSupplyControlTower() {
             activeItems: tActive, totalMonday: tMon, totalThursday: tThu,
             billing: finalBilling, payout: finalPayout, commission: finalCommission,
             missingPrices: tMiss, unmappedVendorItems,
+            // restaurantCount: numeric count for ordersStats interpolation
+            restaurantCount,
+            // accuracyScore: display string for the KPI card
             accuracyScore: restaurantCount > 0 ? `${restaurantCount} rest.` : '—'
         });
 
@@ -690,24 +695,23 @@ export default function GlobalSupplyControlTower() {
     // ── KPI click helper ───────────────────────────────────────────────
     const goTab = (tab, filter = null) => { setActiveTab(tab); setTabFilter(filter); };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { fetchData(); }, [activeWeekStart]);
+    useEffect(() => { fetchData(); }, [activeWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() + 1);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    const weekLabel = `${weekStart.toLocaleString('default', { month: 'short' })} ${weekStart.getDate()} – ${weekEnd.toLocaleString('default', { month: 'short' })} ${weekEnd.getDate()}`;
+    // Week label uses the Monday-start active week (matches fetchData filter).
+    const weekLabel = formatWeekLabel(activeWeekStart);
 
     // ── KPI card definitions (with tab routing) ─────────────────────────
     const KPI_CARDS = [
-        { label: 'Ordered Items', value: metrics.activeItems, icon: '📦', color: '#38bdf8', tab: 'demand', filter: { item: null } },
-        { label: 'Total Monday Demand', value: `${metrics.totalMonday} packs`, icon: '📅', color: '#818cf8', tab: 'demand', filter: { day: 'Monday' } },
-        { label: 'Total Thursday Demand', value: `${metrics.totalThursday} packs`, icon: '📅', color: '#a78bfa', tab: 'demand', filter: { day: 'Thursday' } },
-        { label: 'Total Restaurant Billing', value: `$${metrics.billing.toFixed(2)}`, icon: '💰', color: '#ec4899', tab: 'demand', filter: { view: 'billing' } },
-        { label: 'Total Vendor Payout', value: `$${metrics.payout.toFixed(2)}`, icon: '💰', color: '#f59e0b', tab: 'fulfillment', filter: null },
-        { label: 'Marketplace Commission', value: `$${metrics.commission.toFixed(2)}`, icon: '💰', color: '#10b981', tab: 'demand', filter: { view: 'commission' } },
-        { label: 'Restaurants Ordered', value: metrics.accuracyScore, icon: '🏪', color: '#10b981', tab: 'demand', filter: null },
+        // Demand KPIs — filtered to the active week shown in the header
+        { label: 'Ordered Items (This Week)', value: metrics.activeItems, icon: '📦', color: '#38bdf8', tab: 'demand', filter: { item: null } },
+        { label: 'Monday Demand (This Week)', value: `${metrics.totalMonday} packs`, icon: '📅', color: '#818cf8', tab: 'demand', filter: { day: 'Monday' } },
+        { label: 'Thursday Demand (This Week)', value: `${metrics.totalThursday} packs`, icon: '📅', color: '#a78bfa', tab: 'demand', filter: { day: 'Thursday' } },
+        // Finance KPIs — all-time aggregated from restaurantInvoices / vendorInvoices
+        // Labeled 'All-Time' so users know these are not week-filtered
+        { label: 'Restaurant Billing (All-Time)', value: `$${metrics.billing.toFixed(2)}`, icon: '💰', color: '#ec4899', tab: 'demand', filter: { view: 'billing' } },
+        { label: 'Vendor Payout (All-Time)', value: `$${metrics.payout.toFixed(2)}`, icon: '💰', color: '#f59e0b', tab: 'fulfillment', filter: null },
+        { label: 'Marketplace Commission (All-Time)', value: `$${metrics.commission.toFixed(2)}`, icon: '💰', color: '#10b981', tab: 'demand', filter: { view: 'commission' } },
+        { label: 'Restaurants Ordered (This Week)', value: metrics.accuracyScore, icon: '🏪', color: '#10b981', tab: 'demand', filter: null },
         { label: 'Items Missing Price', value: metrics.missingPrices, icon: '⚠️', color: metrics.missingPrices > 0 ? '#f43f5e' : '#94a3b8', tab: 'exceptions', filter: { view: 'missingPrice' } },
     ];
 

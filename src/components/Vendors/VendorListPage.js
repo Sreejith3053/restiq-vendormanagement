@@ -54,7 +54,7 @@ export default function VendorListPage() {
 
     return (
         <div>
-            {/* Pending Review Banner */}
+            {/* Pending Vendor Items Banner */}
             {totalPending > 0 && (
                 <div style={{
                     padding: '12px 18px', marginBottom: 16, borderRadius: 10,
@@ -62,9 +62,14 @@ export default function VendorListPage() {
                     display: 'flex', alignItems: 'center', gap: 10,
                 }}>
                     <span style={{ fontSize: 18 }}>🔔</span>
-                    <span style={{ fontSize: 14, color: '#fbbf24', fontWeight: 600 }}>
-                        {totalPending} item{totalPending !== 1 ? 's' : ''} pending review across {Object.keys(pendingCounts).length} vendor{Object.keys(pendingCounts).length !== 1 ? 's' : ''}
-                    </span>
+                    <div>
+                        <span style={{ fontSize: 14, color: '#fbbf24', fontWeight: 600 }}>
+                            {totalPending} pending vendor item{totalPending !== 1 ? 's' : ''} across {Object.keys(pendingCounts).length} vendor{Object.keys(pendingCounts).length !== 1 ? 's' : ''}
+                        </span>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                            Pending Vendor Items = distinct items awaiting admin approval · separate from total Review Queue actions
+                        </div>
+                    </div>
                 </div>
             )}
 

@@ -86,41 +86,62 @@ export default function OrdersPage() {
         const ordersRef = collection(db, 'marketplaceOrders');
 
         if (isSuperAdmin) {
-            // Superadmin sees all orders
             q = query(ordersRef, orderBy('createdAt', 'desc'));
         } else if (vendorId) {
-            // Vendor sees only their orders
             q = query(ordersRef, where('vendorId', '==', vendorId), orderBy('createdAt', 'desc'));
         } else {
             setLoading(false);
             return;
         }
 
-        // Build a map of restaurantId → businessName from the restaurants collection
-        let restaurantNameMap = {};
-        getDocs(collection(db, 'restaurants')).then(snap => {
-            snap.docs.forEach(d => {
-                const data = d.data();
-                restaurantNameMap[d.id] = data.businessName || data.name || d.id;
-            });
-        }).catch(err => console.warn('Could not load restaurant names:', err));
+        let unsubscribe = () => {};
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(d => {
-                const orderData = d.data();
-                const resolvedName = restaurantNameMap[orderData.restaurantId] || orderData.restaurantName || orderData.restaurantId;
-                return {
-                    id: d.id,
-                    ...orderData,
-                    restaurantName: resolvedName,
-                };
+        // ── FIX: Load restaurants map FIRST, then subscribe to orders. ────────
+        // Previously the map was populated async in parallel with the snapshot listener,
+        // causing "Unknown Restaurant" on the first snapshot fire (race condition).
+        // Resolution priority: restaurants collection → order.restaurantName snapshot → raw ID
+        getDocs(collection(db, 'restaurants'))
+            .then(snap => {
+                const restaurantNameMap = {};
+                snap.docs.forEach(d => {
+                    const data = d.data();
+                    restaurantNameMap[d.id] = data.businessName || data.name || data.restaurantName || d.id;
+                });
+
+                unsubscribe = onSnapshot(q, (snapshot) => {
+                    const data = snapshot.docs.map(d => {
+                        const orderData = d.data();
+                        // Priority: map lookup → snapshot field → raw ID → fallback label
+                        const resolvedName =
+                            (orderData.restaurantId && restaurantNameMap[orderData.restaurantId]) ||
+                            (orderData.restaurantName && orderData.restaurantName !== 'Unknown Restaurant'
+                                ? orderData.restaurantName : null) ||
+                            orderData.restaurantId ||
+                            'Unknown Restaurant';
+                        return { id: d.id, ...orderData, restaurantName: resolvedName };
+                    });
+                    setOrders(data);
+                    setLoading(false);
+                }, (err) => {
+                    console.error('Error fetching orders:', err);
+                    setLoading(false);
+                });
+            })
+            .catch(err => {
+                console.warn('Could not load restaurant names, subscribing without map:', err);
+                // Fallback: subscribe without map — will show raw IDs but won't crash
+                unsubscribe = onSnapshot(q, (snapshot) => {
+                    const data = snapshot.docs.map(d => {
+                        const orderData = d.data();
+                        return { id: d.id, ...orderData, restaurantName: orderData.restaurantName || orderData.restaurantId || 'Unknown Restaurant' };
+                    });
+                    setOrders(data);
+                    setLoading(false);
+                }, (err2) => {
+                    console.error('Error fetching orders:', err2);
+                    setLoading(false);
+                });
             });
-            setOrders(data);
-            setLoading(false);
-        }, (err) => {
-            console.error("Error fetching orders:", err);
-            setLoading(false);
-        });
 
         return () => unsubscribe();
     }, [isSuperAdmin, vendorId]);

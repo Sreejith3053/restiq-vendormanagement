@@ -186,7 +186,7 @@ export default function PriceIntelligenceSection() {
         { label: 'Monthly Savings Potential', value: fmt(totalMonthlySavings), icon: '💰', color: '#10b981' },
         { label: 'Best Opportunity', value: bestSaving ? fmt(bestSaving.estimatedMonthlySavings) + '/mo' : '—', icon: '🏆', color: '#fbbf24', sub: bestSaving?.itemName },
         { label: 'Avg Market Spread', value: pct(avgSpread), icon: '📈', color: '#ec4899' },
-        { label: 'Items Needing Review', value: reviewItems?.total || 0, icon: '⚠️', color: (reviewItems?.total || 0) > 0 ? '#f43f5e' : '#94a3b8', onClick: () => setShowReviewDrawer(true) },
+        { label: 'Items Excluded from Comparison', value: reviewItems?.total || 0, icon: '⚠️', color: (reviewItems?.total || 0) > 0 ? '#f43f5e' : '#94a3b8', onClick: () => setShowReviewDrawer(true) },
     ];
 
     return (
@@ -198,6 +198,22 @@ export default function PriceIntelligenceSection() {
                     <span style={{ fontSize: 10, color: '#64748b', fontWeight: 400, background: 'rgba(16,185,129,0.08)', padding: '3px 10px', borderRadius: 6 }}>Procurement Insights</span>
                 </h3>
             </div>
+
+            {/* Empty-state explanation banner — shown when no items are comparable yet */}
+            {comparableItems.length === 0 && (
+                <div style={{ background: 'rgba(56,189,248,0.04)', border: '1px solid rgba(56,189,248,0.15)', borderRadius: 10, padding: '14px 18px', marginBottom: 18, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 20 }}>💡</span>
+                    <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 4 }}>Not enough comparable mapped vendor pricing yet.</div>
+                        <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+                            Price comparison requires at least <strong style={{ color: '#94a3b8' }}>2 mapped vendors offering the same catalog item</strong> with valid prices.{' '}
+                            Currently <strong style={{ color: '#f59e0b' }}>{reviewItems?.unmapped || 0} items are unmapped</strong> and{' '}
+                            <strong style={{ color: '#f43f5e' }}>{(reviewItems?.pendingReview || 0) + (reviewItems?.invalidPrice || 0)} items have missing or invalid prices</strong>.{' '}
+                            Resolve these in the Review Queue to unlock comparisons.
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* KPI Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 22 }}>
@@ -263,7 +279,13 @@ export default function PriceIntelligenceSection() {
                                     );
                                 })}
                                 {savingsRows.length === 0 && (
-                                    <tr><td colSpan={8} style={{ ...TABLE_CELL, textAlign: 'center', color: '#64748b', padding: 28 }}>No comparable items found across vendors.</td></tr>
+                                    <tr><td colSpan={8} style={{ ...TABLE_CELL, textAlign: 'center', color: '#64748b', padding: 28 }}>
+                                        <div style={{ marginBottom: 8, fontSize: 20 }}>🔗</div>
+                                        <div style={{ fontWeight: 600, color: '#475569', marginBottom: 4 }}>No comparable items yet</div>
+                                        <div style={{ fontSize: 11, color: '#334155', lineHeight: 1.6 }}>
+                                            At least 2 mapped vendors must offer the same catalog item with valid prices for comparison to appear.
+                                        </div>
+                                    </td></tr>
                                 )}
                             </tbody>
                         </table>

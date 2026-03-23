@@ -10,6 +10,7 @@ export default function AdminInvoicesPage() {
     const { isSuperAdmin, displayName } = useContext(UserContext);
     const [invoices, setInvoices] = useState([]);
     const [vendors, setVendors] = useState([]);
+    const [restaurants, setRestaurants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [scanning, setScanning] = useState(false);
     const [processingId, setProcessingId] = useState(null);
@@ -29,7 +30,15 @@ export default function AdminInvoicesPage() {
             const vSnap = await getDocs(collection(db, 'vendors'));
             setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         };
+        // Load restaurants for name resolution
+        const loadRestaurants = async () => {
+            try {
+                const rSnap = await getDocs(collection(db, 'restaurants'));
+                setRestaurants(rSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) { /* optional */ }
+        };
         loadVendors();
+        loadRestaurants();
 
         // Listen to Invoices
         const q = query(collection(db, 'vendorInvoices'), orderBy('createdAt', 'desc'));
@@ -154,11 +163,19 @@ export default function AdminInvoicesPage() {
                 const totalVendorAmount = Number((subtotalVendorAmount + totalTaxAmount).toFixed(2));
                 const invoiceNumber = `INV-V-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}${i}`;
 
+                // Resolution priority: restaurantId → restaurants collection → order.restaurantName → minimal fallback
+                const resolvedRestaurant = (() => {
+                    if (!order.restaurantId) return order.restaurantName || 'Not Specified';
+                    const rDoc = restaurants.find(r => r.id === order.restaurantId);
+                    return (rDoc?.name || rDoc?.restaurantName) || order.restaurantName || order.restaurantId;
+                })();
+
                 const invoiceData = {
                     orderId: order.id,
                     orderGroupId: order.orderGroupId || order.id.slice(-8).toUpperCase(),
                     vendorId: order.vendorId,
-                    restaurantId: order.restaurantId || 'Unknown Restaurant',
+                    restaurantId: order.restaurantId || '',
+                    restaurantName: resolvedRestaurant,
                     invoiceNumber,
                     invoiceDate: serverTimestamp(),
                     dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -315,9 +332,10 @@ export default function AdminInvoicesPage() {
                                         <td>{vName}</td>
                                         <td>{formatDate(inv.invoiceDate)}</td>
                                         <td style={{ fontWeight: 600, color: '#4ade80' }}>
-                                            ${inv.commissionModel === 'VENDOR_FLAT_PERCENT'
-                                                ? Number((inv.netVendorPayable || 0) + (inv.totalTaxAmount || 0)).toFixed(2)
-                                                : Number(inv.totalVendorAmount || 0).toFixed(2)}
+                                            {/* Net Payout = netVendorPayable (after commission deduction = 215.98) */}
+                                            ${Number(inv.netVendorPayable ||
+                                                ((inv.grossVendorAmount || inv.subtotalVendorAmount || 0) - (inv.commissionAmount || 0))
+                                            ).toFixed(2)}
                                         </td>
                                         <td>
                                             <span className={`badge ${isPending ? 'amber' : 'green'}`}>

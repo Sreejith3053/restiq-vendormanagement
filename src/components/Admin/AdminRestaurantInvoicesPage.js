@@ -10,6 +10,7 @@ export default function AdminRestaurantInvoicesPage() {
     const { isSuperAdmin, displayName } = useContext(UserContext);
     const [invoices, setInvoices] = useState([]);
     const [vendors, setVendors] = useState([]);
+    const [restaurants, setRestaurants] = useState([]); // lookup cache
     const [loading, setLoading] = useState(true);
     const [scanning, setScanning] = useState(false);
     const [processingId, setProcessingId] = useState(null);
@@ -35,7 +36,17 @@ export default function AdminRestaurantInvoicesPage() {
             const vSnap = await getDocs(collection(db, 'vendors'));
             setVendors(vSnap.docs.map(d => ({ id: d.id, ...d.data() })));
         };
+
+        // Load restaurants for name resolution
+        const loadRestaurants = async () => {
+            try {
+                const rSnap = await getDocs(collection(db, 'restaurants'));
+                setRestaurants(rSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) { /* optional collection */ }
+        };
+
         loadVendors();
+        loadRestaurants();
 
         const q = query(collection(db, 'restaurantInvoices'), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -109,12 +120,20 @@ export default function AdminRestaurantInvoicesPage() {
                 const grandTotal = Number((subtotal + totalTax).toFixed(2));
                 const invoiceNumber = `INV-C-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(Date.now()).slice(-5)}${i}`;
 
-                const invRef = doc(db, 'restaurantInvoices', order.id);
-                await setDoc(invRef, {
-                    orderId: order.id,
-                    vendorId: order.vendorId,
-                    vendorName: order.vendorName || vData.name || 'Unknown Vendor',
-                    restaurantId: order.restaurantId || 'Unknown Restaurant',
+                    // Resolution priority: restaurantId → restaurants collection → order.restaurantName → fallback
+                    const resolvedRestaurant = (() => {
+                        if (!order.restaurantId) return order.restaurantName || 'Not Specified';
+                        const rDoc = restaurants.find(r => r.id === order.restaurantId);
+                        return (rDoc?.name || rDoc?.restaurantName) || order.restaurantName || order.restaurantId;
+                    })();
+
+                    const invRef = doc(db, 'restaurantInvoices', order.id);
+                    await setDoc(invRef, {
+                        orderId: order.id,
+                        vendorId: order.vendorId,
+                        vendorName: order.vendorName || vData.name || 'Unknown Vendor',
+                        restaurantId: order.restaurantId || '',
+                        restaurantName: resolvedRestaurant,
                     invoiceNumber,
                     invoiceDate: serverTimestamp(),
                     dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -346,7 +365,7 @@ export default function AdminRestaurantInvoicesPage() {
                                     <tr key={inv.id} className="is-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/admin/restaurant-invoices/${inv.id}`)}>
                                         <td style={{ fontWeight: 600 }}>{inv.invoiceNumber}</td>
                                         <td style={{ fontSize: 13, color: 'var(--muted)' }}>{inv.orderGroupId || inv.orderId.slice(-8).toUpperCase()}</td>
-                                        <td>{inv.restaurantId}</td>
+                                        <td>{inv.restaurantName || inv.restaurantId || '—'}</td>
                                         <td>{vName}</td>
                                         <td>{formatDate(inv.invoiceDate)}</td>
                                         <td style={{ fontWeight: 600, color: '#4ade80' }}>

@@ -86,26 +86,51 @@ function PaymentTrackingTab({ financials }) {
 }
 
 export default function FinancePage() {
-    const [financials, setFinancials] = useState({ totalBilled: 0, totalInvoices: 0, paid: 0, pending: 0, overdue: 0 });
+    const [financials, setFinancials] = useState({
+        totalBilled: 0, vendorPayout: 0, commission: 0,
+        totalInvoices: 0, paid: 0, pending: 0, overdue: 0,
+    });
 
     useEffect(() => {
         (async () => {
             try {
-                // Aggregate from restaurant invoices
-                const invoicesSnap = await getDocs(collection(db, 'restaurantInvoices'));
-                let totalBilled = 0;
-                let paid = 0, pending = 0, overdue = 0;
-                invoicesSnap.docs.forEach(d => {
+                // ── Restaurant invoices → totalBilled + payment status ────────
+                // Field name confirmed from Firestore: `grandTotal`
+                const [restSnap, vendorInvSnap] = await Promise.all([
+                    getDocs(collection(db, 'restaurantInvoices')),
+                    getDocs(collection(db, 'vendorInvoices')),
+                ]);
+
+                let totalBilled = 0, paid = 0, pending = 0, overdue = 0;
+                restSnap.docs.forEach(d => {
                     const data = d.data();
-                    totalBilled += parseFloat(data.totalAmount || data.total || 0);
-                    const status = (data.status || '').toLowerCase();
+                    // grandTotal is the canonical field; fall back to alternatives defensively
+                    const amt = parseFloat(
+                        data.grandTotal ?? data.totalAmount ?? data.total ?? data.amount ?? 0
+                    );
+                    totalBilled += isNaN(amt) ? 0 : amt;
+
+                    const status = (data.paymentStatus || data.status || '').toLowerCase();
                     if (status === 'paid') paid++;
                     else if (status === 'overdue') overdue++;
                     else pending++;
                 });
+
+                // ── Vendor invoices → actual payout + commission ──────────────
+                let vendorPayout = 0, commission = 0;
+                vendorInvSnap.docs.forEach(d => {
+                    const data = d.data();
+                    vendorPayout += parseFloat(data.netVendorPayable   ?? data.vendorPayout    ?? 0) || 0;
+                    commission   += parseFloat(data.commissionAmount    ?? data.commission      ?? 0) || 0;
+                });
+
+                // If vendorInvoices are empty, derive from restaurantInvoices (10% platform fee)
+                if (vendorPayout === 0 && totalBilled > 0) vendorPayout = totalBilled * 0.9;
+                if (commission   === 0 && totalBilled > 0) commission   = totalBilled * 0.1;
+
                 setFinancials({
-                    totalBilled,
-                    totalInvoices: invoicesSnap.size,
+                    totalBilled, vendorPayout, commission,
+                    totalInvoices: restSnap.size,
                     paid, pending, overdue,
                 });
             } catch (err) {
@@ -115,10 +140,10 @@ export default function FinancePage() {
     }, []);
 
     const kpiStats = useMemo(() => [
-        { label: 'Total Billed', value: `$${financials.totalBilled.toFixed(2)}`, icon: '🧾', color: '#38bdf8' },
-        { label: 'Vendor Payout', value: `$${(financials.totalBilled * 0.9).toFixed(2)}`, icon: '💰', color: '#fbbf24' },
-        { label: 'Platform Commission', value: `$${(financials.totalBilled * 0.1).toFixed(2)}`, icon: '💵', color: '#34d399' },
-        { label: 'Pending Payments', value: financials.pending, icon: '⏳', color: financials.pending > 0 ? '#f59e0b' : '#10b981' },
+        { label: 'Total Billed',       value: `$${financials.totalBilled.toFixed(2)}`,  icon: '🧾', color: '#38bdf8' },
+        { label: 'Vendor Payout',      value: `$${financials.vendorPayout.toFixed(2)}`, icon: '💰', color: '#fbbf24' },
+        { label: 'Platform Commission',value: `$${financials.commission.toFixed(2)}`,   icon: '💵', color: '#34d399' },
+        { label: 'Pending Payments',   value: financials.pending, icon: '⏳', color: financials.pending > 0 ? '#f59e0b' : '#10b981' },
     ], [financials]);
 
     const tabs = useMemo(() => [

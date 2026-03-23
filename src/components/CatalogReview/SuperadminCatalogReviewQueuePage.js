@@ -16,6 +16,7 @@
 
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { UserContext } from '../../contexts/UserContext';
+import { useSearchParams } from 'react-router-dom';
 import ReviewSummaryCards from './ReviewSummaryCards';
 import BulkReviewActionsBar from './BulkReviewActionsBar';
 import SuperadminReviewItemModal from './SuperadminReviewItemModal';
@@ -86,13 +87,16 @@ const CARD_FILTER_MAP = {
 // ── Filter chips config ────────────────────────────────────────────────────────
 
 const FILTER_CHIPS = [
-    { key: 'all',         label: 'All Pending',        type: '', status: '' },
-    { key: 'new',         label: '✨ New Items',       type: 'new_item', status: 'pending' },
-    { key: 'duplicate',   label: '⚠️ Duplicates',     type: 'possible_duplicate', status: 'pending' },
-    { key: 'high_risk',   label: '🚨 High Risk',      type: 'high_risk_update', status: 'pending' },
-    { key: 'mapping',     label: '🔗 Mapping',         type: 'mapping_review', status: 'pending' },
-    { key: 'held',        label: '🕐 Held',            type: '', status: 'held' },
-    { key: 'approved',    label: '✅ Approved Today',  type: '', status: 'approved' },
+    { key: 'all',       label: 'All Pending',      type: '', status: '' },
+    { key: 'new',       label: '✨ New Items',     type: 'new_item', status: 'pending' },
+    { key: 'duplicate', label: '⚠️ Duplicates',   type: 'possible_duplicate', status: 'pending' },
+    { key: 'high_risk', label: '🚨 High Risk',    type: 'high_risk_update', status: 'pending' },
+    { key: 'mapping',   label: '🔗 Mapping',       type: 'mapping_review', status: 'pending' },
+    // Unmapped chip — switches to the Unmapped tab (vendor items not in master catalog)
+    // This is the same destination as clicking the 'Unmapped Items' KPI card from Catalog & Reviews
+    { key: 'unmapped',  label: '🔗 Unmapped Items', tab: 'unmapped' },
+    { key: 'held',      label: '🕐 Held',          type: '', status: 'held' },
+    { key: 'approved',  label: '✅ Approved Today', type: '', status: 'approved' },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -128,9 +132,16 @@ function StatusBadge({ status }) {
 export default function SuperadminCatalogReviewQueuePage() {
     const { currentUser } = useContext(UserContext);
     const reviewerInfo = { userId: currentUser?.uid, displayName: currentUser?.displayName || currentUser?.email || 'Admin' };
+    const [searchParams] = useSearchParams();
 
     // Active tab: queue | unmapped
-    const [activeTab, setActiveTab] = useState('queue');
+    // Initialized from URL ?filter=unmapped param so that clicking the
+    // 'Unmapped Items' KPI card on Catalog & Reviews routes directly here
+    // with the Unmapped tab pre-selected.
+    const [activeTab, setActiveTab] = useState(() => {
+        const f = searchParams.get('filter');
+        return f === 'unmapped' ? 'unmapped' : 'queue';
+    });
 
     // Data
     const [items,      setItems]      = useState([]);
@@ -276,11 +287,19 @@ export default function SuperadminCatalogReviewQueuePage() {
         }
     };
 
-    // Chip click
+    // Chip click: handles both queue filters and the special unmapped chip
+    // (The duplicate above has been removed; this is the canonical definition)
     const handleChipClick = (chip) => {
+        if (chip.key === 'unmapped' || chip.tab === 'unmapped') {
+            // Unmapped items live in the Unmapped tab, not queue filters
+            setActiveTab('unmapped');
+            setActiveCard('unmappedVendorItems');
+            setActiveChip('unmapped');
+            return;
+        }
         setActiveChip(chip.key);
-        setFilterType(chip.type);
-        setFilterStatus(chip.status);
+        setFilterType(chip.type ?? '');
+        setFilterStatus(chip.status ?? '');
         setActiveCard(null);
         setPage(0);
     };
@@ -302,9 +321,14 @@ export default function SuperadminCatalogReviewQueuePage() {
         <div style={{ padding: '28px 32px', maxWidth: 1400, margin: '0 auto' }}>
             {/* Page header */}
             <div style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc', margin: 0 }}>🗂️ Mapping Review / Catalog Review Queue</h1>
+                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc', margin: 0 }}>🗂️ Review Queue</h1>
                 <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-                    Review vendor import items, resolve duplicates, map unmapped items, and manage catalog quality — all in one place.
+                    Review vendor items, approve new items, resolve mappings, and maintain catalog quality.
+                </div>
+                <div style={{ fontSize: 11, color: '#334155', marginTop: 6, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    <span>📋 <strong style={{ color: '#475569' }}>Pending Review</strong> = unresolved review actions (pending + held)</span>
+                    <span>🔗 <strong style={{ color: '#475569' }}>Unmapped Items</strong> = vendor items not yet in master catalog</span>
+                    <span style={{ color: '#1e293b' }}>· Counts may differ: multiple review actions can exist per vendor item over time</span>
                 </div>
             </div>
 

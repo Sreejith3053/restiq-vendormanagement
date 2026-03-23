@@ -779,9 +779,10 @@ export default function VendorDetailPage() {
             }}>
                 {[
                     { label: 'Total Items',    value: enrichedItems.length,                                          icon: '📦' },
-                    { label: 'Active',         value: activeItems.length,                                            icon: '✅', color: '#4ade80' },
-                    { label: 'Pending Review', value: pendingItems.length + unknownItems.length,                     icon: '🕐', color: '#fbbf24' },
-                    { label: 'Rejected',       value: rejectedItems.length,                                          icon: '❌', color: '#f87171' },
+                    { label: 'Active',              value: activeItems.length,                                            icon: '✅', color: '#4ade80' },
+                    // Pending Vendor Items = distinct vendor items awaiting admin approval (not total review queue actions)
+                    { label: 'Pending Vendor Items', value: pendingItems.length + unknownItems.length,                     icon: '🕐', color: '#fbbf24' },
+                    { label: 'Rejected',             value: rejectedItems.length,                                          icon: '❌', color: '#f87171' },
                     { label: 'Avg /lb',        value: avgLb   !== null ? `$${avgLb.toFixed(3)}/lb`   : '—',          icon: '⚖️', color: '#818cf8' },
                     { label: 'Avg /unit',      value: avgUnit  !== null ? `$${avgUnit.toFixed(3)}/unit` : '—',        icon: '🔢', color: '#818cf8' },
                 ].map(({ label, value, icon, color }) => (
@@ -807,7 +808,8 @@ export default function VendorDetailPage() {
             <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 4, width: 'fit-content', flexWrap: 'wrap' }}>
                 {([
                     { key: 'active',   label: 'Active',         count: activeItems.length,                      color: '#4ade80' },
-                    { key: 'pending',  label: 'Pending Review', count: pendingItems.length + unknownItems.length, color: '#fbbf24' },
+                    // Pending Vendor Items = distinct items awaiting approval (may differ from Review Queue total)
+                    { key: 'pending',  label: 'Pending Vendor Items', count: pendingItems.length + unknownItems.length, color: '#fbbf24' },
                     { key: 'rejected', label: 'Rejected',       count: rejectedItems.length,                    color: '#f87171' },
                     { key: 'unmapped', label: 'Unmapped',       count: unmappedItems.length,                    color: '#94a3b8' },
                     ...(unknownItems.length > 0 ? [{ key: 'unknown', label: '⚠️ Unknown Status', count: unknownItems.length, color: '#f59e0b' }] : []),

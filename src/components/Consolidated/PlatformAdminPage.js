@@ -21,9 +21,11 @@ import RolePermissionsPage from '../Settings/RolePermissionsPage';
 import MigrationAdminPage from '../Admin/MigrationAdminPage';
 import AuditLogPage from '../Admin/AuditLogPage';
 import MarketplaceResetUtility from '../Admin/MarketplaceResetUtility';
+import DataReconciliationTools from '../Admin/DataReconciliationTools';
 
 import { db } from '../../firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { normalizeRestaurantStatus } from '../../services/resolvers';
 
 export default function PlatformAdminPage() {
     const [kpi, setKpi] = useState({ restaurants: 0, active: 0, onHold: 0, users: 0 });
@@ -31,13 +33,13 @@ export default function PlatformAdminPage() {
     useEffect(() => {
         (async () => {
             try {
-                // Restaurants
+                // Restaurants — normalize status using shared resolver
                 const restSnap = await getDocs(collection(db, 'restaurants'));
                 let active = 0, onHold = 0;
                 restSnap.docs.forEach(d => {
-                    const s = (d.data().status || '').toLowerCase();
-                    if (s === 'active') active++;
-                    else if (s === 'on hold' || s === 'onhold') onHold++;
+                    const norm = normalizeRestaurantStatus(d.data());
+                    if (norm === 'active')  active++;
+                    else if (norm === 'onhold') onHold++;
                 });
 
                 // Users (try users collection)
@@ -91,6 +93,12 @@ export default function PlatformAdminPage() {
             label: 'Audit Logs',
             icon: '📋',
             content: <AuditLogPage />,
+        },
+        {
+            key: 'reconciliation',
+            label: 'Reconciliation',
+            icon: '🛠️',
+            content: <DataReconciliationTools />,
         },
         {
             key: 'reset',

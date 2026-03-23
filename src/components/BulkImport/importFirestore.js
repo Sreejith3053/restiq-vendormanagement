@@ -19,7 +19,12 @@ import {
 } from 'firebase/firestore';
 import { normalizeString } from './importHelpers';
 import { normalizeUnit, normalizePackSize } from './importMatching';
-import { createCatalogReviewQueueEntry, writeVendorItemHistory } from '../CatalogReview/reviewQueueService';
+// ═══════════════════════════════════════════════════════════════
+// REVIEW WORKFLOW: changeRequests is the official collection.
+// catalogReviewQueue is DEPRECATED — no new writes go there.
+// ═══════════════════════════════════════════════════════════════
+import { upsertChangeRequest } from '../../services/changeRequestService';
+import { writeVendorItemHistory } from '../CatalogReview/reviewQueueService';
 import { buildRiskFlags } from '../CatalogReview/catalogMatchService';
 
 // ── Normalize a row for Firestore write ───────────────────────────────────────
@@ -289,15 +294,21 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
         if (row.actionResult === 'needs_review') {
             reviewCount++;
             processedRows.push(row);
-            // ── Route to catalogReviewQueue so superadmin can resolve it ──
+            // ── Route to changeRequests (official review collection) ──
+            // catalogReviewQueue is DEPRECATED — no writes go there.
             try {
-                await createCatalogReviewQueueEntry({
+                await upsertChangeRequest({
+                    requestType: 'NEW_ITEM',
                     vendorId,
                     vendorName: displayName || vendorId,
                     vendorItemId: row.matchedItemId || '',
-                    importBatchId: batchId,
-                    importRowId: row._rowNumber ? String(row._rowNumber) : '',
-                    reviewType: 'needs_review',
+                    itemName:    row.itemName || '',
+                    category:    row.category || '',
+                    unit:        row.unit     || '',
+                    packSize:    row.packSize || '',
+                    price:       row.price    || 0,
+                    source:      'IMPORT',
+                    notes:       row.reason  || 'Ambiguous match — needs manual review',
                     proposedData: {
                         itemName:    row.itemName,
                         category:    row.category,
@@ -310,17 +321,13 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
                         minOrderQty: row.minOrderQty,
                         status:      row.status,
                         notes:       row.notes,
+                        importBatchId: batchId,
+                        importRowId:   row._rowNumber ? String(row._rowNumber) : '',
                     },
-                    existingVendorItemData: row.oldValues || {},
-                    suggestedCatalogMatches: row.ambiguousCandidates || [],
-                    suggestedVendorMatches:  [],
-                    matchConfidence: row.confidence || null,
-                    riskFlags: buildRiskFlags(row, row.oldValues || null),
-                    reviewReason: row.reason || 'Ambiguous match — needs manual review',
                     createdBy: displayName || userId,
                 });
             } catch (queueErr) {
-                console.warn('[importFirestore] needs_review queue entry failed:', queueErr);
+                console.warn('[importFirestore] needs_review changeRequest failed:', queueErr);
             }
             continue;
         }
@@ -338,14 +345,20 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
                 createdCount++;
                 processedRows.push({ ...row, _createdItemId: newId });
 
-                // Write review queue entry for superadmin
-                await createCatalogReviewQueueEntry({
+                // ── Write changeRequest for superadmin review (official collection) ──
+                // catalogReviewQueue is DEPRECATED — no writes go there.
+                await upsertChangeRequest({
+                    requestType: row.actionResult === 'new_possible_duplicate' ? 'MAPPING' : 'NEW_ITEM',
                     vendorId,
-                    vendorName: displayName || vendorId,
+                    vendorName:  displayName || vendorId,
                     vendorItemId: newId,
-                    importBatchId: batchId,
-                    importRowId: row._rowNumber ? String(row._rowNumber) : '',
-                    reviewType: row.actionResult === 'new_possible_duplicate' ? 'possible_duplicate' : 'new_item',
+                    itemName:    row.itemName || '',
+                    category:    row.category || '',
+                    unit:        row.unit     || '',
+                    packSize:    row.packSize || '',
+                    price:       row.price    || 0,
+                    source:      'IMPORT',
+                    notes:       row.reason  || row.actionResult,
                     proposedData: {
                         itemName:    row.itemName,
                         category:    row.category,
@@ -358,13 +371,9 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
                         minOrderQty: row.minOrderQty,
                         status:      row.status,
                         notes:       row.notes,
+                        importBatchId: batchId,
+                        importRowId:   row._rowNumber ? String(row._rowNumber) : '',
                     },
-                    existingVendorItemData: {},
-                    suggestedCatalogMatches: row.ambiguousCandidates || [],
-                    suggestedVendorMatches:  [],
-                    matchConfidence: row.confidence || null,
-                    riskFlags: buildRiskFlags(row, null),
-                    reviewReason: row.reason || row.actionResult,
                     createdBy: displayName || userId,
                 });
 
@@ -380,14 +389,20 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
                 }
                 processedRows.push(row);
 
-                // Write review queue entry so superadmin can audit the high-risk update
-                await createCatalogReviewQueueEntry({
+                // ── Write changeRequest for superadmin audit of high-risk update ──
+                // catalogReviewQueue is DEPRECATED — no writes go there.
+                await upsertChangeRequest({
+                    requestType: 'EDIT',
                     vendorId,
-                    vendorName: displayName || vendorId,
+                    vendorName:  displayName || vendorId,
                     vendorItemId: row.matchedItemId || '',
-                    importBatchId: batchId,
-                    importRowId: row._rowNumber ? String(row._rowNumber) : '',
-                    reviewType: 'high_risk_update',
+                    itemName:    row.itemName || '',
+                    category:    row.category || '',
+                    unit:        row.unit     || '',
+                    packSize:    row.packSize || '',
+                    price:       row.price    || 0,
+                    source:      'IMPORT',
+                    notes:       (row._riskReasons || []).join('; ') || 'High-risk update applied by vendor',
                     proposedData: {
                         itemName:  row.itemName,
                         category:  row.category,
@@ -398,15 +413,12 @@ export async function processImportBatch(vendorId, matchedRows, batchId, userId,
                         vendorSKU: row.vendorSKU,
                         status:    row.status,
                         notes:     row.notes,
+                        importBatchId: batchId,
+                        importRowId:   row._rowNumber ? String(row._rowNumber) : '',
                     },
-                    existingVendorItemData: row.oldValues || {},
-                    suggestedCatalogMatches: [],
-                    suggestedVendorMatches:  [],
-                    matchConfidence: row.confidence || null,
-                    riskFlags: row._riskReasons || buildRiskFlags(row, row.oldValues || {}),
-                    reviewReason: (row._riskReasons || []).join('; ') || 'High-risk update applied by vendor',
                     createdBy: displayName || userId,
                 });
+
 
             // ── HIGH CONFIDENCE UPDATES → Direct write, no queue entry ──
             } else if (row.actionResult === 'update_high') {

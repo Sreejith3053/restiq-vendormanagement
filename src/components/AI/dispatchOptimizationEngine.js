@@ -70,6 +70,29 @@ export async function computeDispatchOptimization() {
         console.warn('[DispatchOpt] Could not load marketplace orders:', e);
     }
 
+    // 2b. Build invoice billing map from restaurantInvoices line items
+    // Used as primary source for per-item billed amounts (catalog prices often unmapped/0)
+    const invoiceBillMap = {}; // itemName → { totalBilled, totalQty }
+    try {
+        const restInvSnap = await getDocs(collection(db, 'restaurantInvoices'));
+        restInvSnap.docs.forEach(d => {
+            const inv = d.data();
+            (inv.items || []).forEach(line => {
+                const itemName = line.itemName || line.name;
+                if (!itemName) return;
+                const lineBilled =
+                    parseFloat(line.lineTotal ?? line.lineTotalAfterTax ?? line.lineSubtotal ?? 0) ||
+                    (parseFloat(line.price || line.vendorPrice || 0) * (parseFloat(line.qty) || 1));
+                const qty = parseFloat(line.qty) || 1;
+                if (!invoiceBillMap[itemName]) invoiceBillMap[itemName] = { totalBilled: 0, totalQty: 0 };
+                invoiceBillMap[itemName].totalBilled += lineBilled;
+                invoiceBillMap[itemName].totalQty += qty;
+            });
+        });
+    } catch (e) {
+        console.warn('[DispatchOpt] Could not load invoice billing map:', e);
+    }
+
     // 3. Aggregate items by vendor + delivery day
     // key: "vendorName|day" → { items: [{ itemName, qty, category }] }
     const groups = {};
@@ -112,7 +135,12 @@ export async function computeDispatchOptimization() {
                 });
             }
             groups[key].totalQty += qty;
-            groups[key].totalValue += qty * (cat.price || 0);
+            // Use real invoice billed amount if available, else estimate from catalog price
+            const invoiceEntry = invoiceBillMap[itemName];
+            const itemBilled = invoiceEntry?.totalBilled > 0
+                ? (qty / Math.max(invoiceEntry.totalQty, 1)) * invoiceEntry.totalBilled
+                : qty * (cat.price || 0);
+            groups[key].totalValue += itemBilled;
             groups[key].categories.add(line.category || cat.category || 'Produce');
             groups[key].restaurants.add(order.restaurantName || order.restaurantId || 'Unknown');
         });

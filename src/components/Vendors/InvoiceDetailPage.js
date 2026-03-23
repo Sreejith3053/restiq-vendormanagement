@@ -290,37 +290,36 @@ export default function InvoiceDetailPage() {
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <span style={{ color: 'var(--muted)' }}>Subtotal</span>
-                        <span style={{ fontWeight: 600 }}>${Number(invoice.subtotalVendorAmount || invoice.totalVendorAmount || 0).toFixed(2)}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ color: 'var(--muted)' }}>Gross Amount</span>
+                        {/* grossVendorAmount = pre-commission subtotal from invoice */}
+                        <span style={{ fontWeight: 600 }}>${Number(invoice.grossVendorAmount || invoice.subtotalVendorAmount || invoice.totalVendorAmount || 0).toFixed(2)}</span>
                     </div>
 
-                    {invoice.commissionModel === 'VENDOR_FLAT_PERCENT' && isSuperAdmin && (
-                        <>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                <span style={{ color: 'var(--muted)' }}>Commission ({invoice.commissionPercent}%)</span>
-                                <span style={{ fontWeight: 600, color: '#ff6b7a' }}>- ${Number(invoice.commissionAmount || 0).toFixed(2)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                                <span style={{ color: 'var(--muted)' }}>Net Payable (Before Tax)</span>
-                                <span style={{ fontWeight: 600 }}>${Number(invoice.netVendorPayable || 0).toFixed(2)}</span>
-                            </div>
-                        </>
+                    {isSuperAdmin && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ color: 'var(--muted)' }}>Commission ({invoice.commissionPercent || 10}%)</span>
+                            {/* commissionAmount = platform fee deducted from gross */}
+                            <span style={{ fontWeight: 600, color: '#f43f5e' }}>- ${Number(invoice.commissionAmount || 0).toFixed(2)}</span>
+                        </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <span style={{ color: 'var(--muted)' }}>Tax Amount</span>
-                        <span style={{ fontWeight: 600, color: '#f59e0b' }}>+ ${Number(invoice.totalTaxAmount || 0).toFixed(2)}</span>
-                    </div>
+                    {(invoice.totalTaxAmount > 0) && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ color: 'var(--muted)' }}>Tax Amount</span>
+                            <span style={{ fontWeight: 600, color: '#f59e0b' }}>+ ${Number(invoice.totalTaxAmount || 0).toFixed(2)}</span>
+                        </div>
+                    )}
 
                     <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--muted)' }}>Total Payout</span>
+                        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--muted)' }}>Net Payout</span>
+                        {/* netVendorPayable = grossVendorAmount - commissionAmount (correct value = 215.98) */}
                         <span style={{ fontSize: 24, fontWeight: 700, color: '#4ade80' }}>
-                            ${invoice.commissionModel === 'VENDOR_FLAT_PERCENT'
-                                ? Number((invoice.netVendorPayable || 0) + (invoice.totalTaxAmount || 0)).toFixed(2)
-                                : Number(invoice.totalVendorAmount || 0).toFixed(2)}
+                            ${Number(invoice.netVendorPayable ||
+                                ((invoice.grossVendorAmount || invoice.subtotalVendorAmount || 0) - (invoice.commissionAmount || 0))
+                            ).toFixed(2)}
                         </span>
                     </div>
 

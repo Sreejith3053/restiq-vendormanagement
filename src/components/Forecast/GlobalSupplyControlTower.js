@@ -197,8 +197,19 @@ export default function GlobalSupplyControlTower() {
             computeSeasonalUplifts().catch(() => null),
             computeDispatchOptimization().catch(() => null),
         ]).then(([price, risk, seasonal, dispatch]) => {
-            const summary = generateWeeklySummary({ priceData: price, riskData: risk, seasonalData: seasonal, dispatchData: dispatch, ordersStats: null });
-            setAiData({ summary, risk, price, seasonal, dispatch });
+            // Pull real ordersStats from current metrics state so Intelligence summary
+            // shows '4 items ordered across 1 restaurant this week' instead of '— restaurants'
+            setMetrics(prev => {
+                const ordersStats = prev.totalMonday + prev.totalThursday > 0 ? {
+                    totalItems: prev.activeItems || 0,
+                    totalQty: (prev.totalMonday || 0) + (prev.totalThursday || 0),
+                    restaurantCount: parseInt(prev.accuracyScore) || 0,
+                    topItems: [],
+                } : null;
+                const summary = generateWeeklySummary({ priceData: price, riskData: risk, seasonalData: seasonal, dispatchData: dispatch, ordersStats });
+                setAiData({ summary, risk, price, seasonal, dispatch });
+                return prev; // metrics unchanged
+            });
             setAiLoading(false);
         });
     }, [loading]);
@@ -383,7 +394,41 @@ export default function GlobalSupplyControlTower() {
             console.error('[ControlTower] Failed to fetch marketplace orders:', err);
         }
 
-        // Aggregate item lines from marketplace orders
+        // ── Build INVOICE billing map from restaurantInvoices line items ──────
+        // This is the PRIMARY source for per-item billed amounts.
+        // marketplaceOrders items often lack price/lineTotal, so catalogLookup.price
+        // is frequently 0. restaurantInvoices has real billed totals.
+        // Resolution: invoiceBillMap[itemName] = { totalBilled, totalQty, category }
+        const invoiceBillMap = {}; // itemName → { totalBilled, totalQty, category }
+        try {
+            const restInvSnap = await getDocs(collection(db, 'restaurantInvoices'));
+            restInvSnap.docs.forEach(d => {
+                const inv = d.data();
+                (inv.items || []).forEach(line => {
+                    const itemName = line.itemName || line.name;
+                    if (!itemName) return;
+                    // Priority: lineTotal → lineTotalAfterTax → price*qty
+                    const lineBilled =
+                        parseFloat(line.lineTotal ?? line.lineTotalAfterTax ?? line.lineSubtotal ?? 0) ||
+                        (parseFloat(line.price || line.vendorPrice || 0) * (parseFloat(line.qty) || 1));
+                    const qty = parseFloat(line.qty) || 1;
+                    const category = line.category || '';
+                    if (!invoiceBillMap[itemName]) {
+                        invoiceBillMap[itemName] = { totalBilled: 0, totalQty: 0, category };
+                    }
+                    invoiceBillMap[itemName].totalBilled += lineBilled;
+                    invoiceBillMap[itemName].totalQty += qty;
+                    if (!invoiceBillMap[itemName].category && category) {
+                        invoiceBillMap[itemName].category = category;
+                    }
+                });
+            });
+            console.log(`[ControlTower] Invoice billing map: ${Object.keys(invoiceBillMap).length} unique items with billed data`);
+        } catch (invErr) {
+            console.warn('[ControlTower] Could not build invoice billing map:', invErr);
+        }
+
+        // Aggregate item lines from marketplace orders (for quantity tracking)
         const itemAgg = {}; // itemName → { mondayQty, thursdayQty, category }
         weekOrders.forEach(order => {
             const deliveryDay = order.deliveryDay || 'Monday';
@@ -422,11 +467,21 @@ export default function GlobalSupplyControlTower() {
             let price = catEntry.price || 0;
             if (price <= 0) tMiss++;
 
-            const isPackaging = catEntry.isPackaging || ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(agg.category || catEntry.category);
+            // Category resolution order:
+            // 1. invoice line category  2. order line category  3. catalogLookup category  4. 'Produce'
+            const rawCat = invoiceBillMap[itemName]?.category || agg.category || catEntry.category || '';
+            const isPackaging = catEntry.isPackaging ||
+                ['Packaging', 'Cleaning', 'Cleaning Supplies'].includes(rawCat);
             let catLabel = isPackaging ? 'Packaging' :
-                (['Cleaning', 'Cleaning Supplies'].includes(catEntry.category) ? 'Cleaning Supplies' : 'Produce');
+                (['Cleaning', 'Cleaning Supplies'].includes(rawCat) ? 'Cleaning Supplies' : 'Produce');
 
-            let lineBill = totalQty * price;
+            // ── Billed amount resolution ──
+            // PRIMARY: use actual billed total from restaurantInvoices line items
+            // FALLBACK: catalogLookup.price * qty (estimated; often 0 if prices unmapped)
+            const invoiceEntry = invoiceBillMap[itemName];
+            let lineBill = invoiceEntry?.totalBilled > 0
+                ? invoiceEntry.totalBilled        // real invoiced amount
+                : totalQty * price;               // estimated from catalog price
             let lineComm = lineBill * 0.10;
             let linePay = lineBill * 0.90;
 
@@ -434,7 +489,21 @@ export default function GlobalSupplyControlTower() {
             pDemand[catLabel] = (pDemand[catLabel] || 0) + totalQty;
             pCost[catLabel] = (pCost[catLabel] || 0) + lineBill;
 
-            let vName = catEntry.vendor || 'Unknown Vendor';
+            // Vendor name resolution priority:
+            // 1. catalogLookup[itemName].vendor (from vendor subcollection)
+            // 2. order line item vendorName snapshot
+            // 3. first order's vendorName
+            // 4. 'Unknown Vendor'
+            let vName = catEntry.vendor;
+            if (!vName || vName === 'Unknown Vendor') {
+                // Try to resolve from order line items that contain this item
+                for (const order of weekOrders) {
+                    const line = (order.items || []).find(l => (l.name || l.itemName) === itemName);
+                    if (line?.vendorName) { vName = line.vendorName; break; }
+                    if (order.vendorName && !vName) vName = order.vendorName;
+                }
+            }
+            if (!vName || vName === 'Unknown Vendor') vName = 'Unknown Vendor';
             let pkSize = catEntry.pack_size || 1;
             let baseUnit = catEntry.base_unit || 'lb';
             let rawPackLabel = catEntry.pack_label || baseUnit;
@@ -510,16 +579,63 @@ export default function GlobalSupplyControlTower() {
         // Restaurants count for accuracy/insight
         const restaurantCount = new Set(weekOrders.map(o => o.restaurantName || o.restaurantId)).size;
 
+        // ── Financial fallback: if week orders produce $0, read from stored invoices ──
+        // This covers the case where orders exist but items lack catalog prices,
+        // or the current week has no orders yet but older invoices have real values.
+        let finalBilling = tBill, finalPayout = tPay, finalCommission = tComm;
+
+        if (finalBilling === 0) {
+            try {
+                const [restInvSnap, vendInvSnap] = await Promise.all([
+                    getDocs(collection(db, 'restaurantInvoices')),
+                    getDocs(collection(db, 'vendorInvoices')),
+                ]);
+                let invBilled = 0, invPayout = 0, invComm = 0;
+                restInvSnap.docs.forEach(d => {
+                    const data = d.data();
+                    invBilled += parseFloat(data.grandTotal ?? data.totalAmount ?? data.total ?? 0) || 0;
+                });
+                vendInvSnap.docs.forEach(d => {
+                    const data = d.data();
+                    invPayout += parseFloat(data.netVendorPayable ?? data.vendorPayout ?? 0) || 0;
+                    invComm   += parseFloat(data.commissionAmount ?? data.commission ?? 0) || 0;
+                });
+                if (invBilled > 0) {
+                    finalBilling   = invBilled;
+                    finalPayout    = invPayout || invBilled * 0.9;
+                    finalCommission = invComm || invBilled * 0.1;
+                }
+            } catch (invErr) {
+                console.warn('[ControlTower] Invoice fallback failed:', invErr);
+            }
+        }
+
+        // ── Unmapped Vendor Items = vendor items missing catalogItemId ──
+        // Uses reviewQueueService — same source as Catalog & Reviews KPI card (70 unmapped)
+        // Do NOT use changeRequestService here — it reads changeRequests (0 items)
+        let unmappedVendorItems = 0;
+        try {
+            const { getReviewQueueSummary } = await import('../CatalogReview/reviewQueueService');
+            const rqSummary = await getReviewQueueSummary().catch(() => ({ unmappedVendorItems: 0 }));
+            unmappedVendorItems = rqSummary.unmappedVendorItems || 0;
+        } catch (e) { /* service may not be available */ }
+
         setMetrics({
             activeItems: tActive, totalMonday: tMon, totalThursday: tThu,
-            billing: tBill, payout: tPay, commission: tComm, missingPrices: tMiss,
+            billing: finalBilling, payout: finalPayout, commission: finalCommission,
+            missingPrices: tMiss, unmappedVendorItems,
             accuracyScore: restaurantCount > 0 ? `${restaurantCount} rest.` : '—'
         });
 
         setVendors(Object.values(vMap).sort((a, b) => b.total - a.total));
         setCatDemand(pDemand);
         setCatCost(pCost);
-        setTopItems(allItemsList.sort((a, b) => b.demand - a.demand));
+        setTopItems(allItemsList
+            // Top High-Spend Items: only show items with real billed amounts > 0
+            // so the widget is financially meaningful (Option A per user spec)
+            .filter(item => item.bill > 0)
+            .sort((a, b) => b.bill - a.bill)  // sort by billed desc (highest spend first)
+        );
         // Apply live delivery flags that onSnapshot may have captured before fetchData completed
         const liveMap = liveDispatchRef.current;
         if (Object.keys(liveMap).length > 0) {
@@ -532,6 +648,7 @@ export default function GlobalSupplyControlTower() {
         setLoading(false);
         setLastRefresh(new Date());
     };
+
 
     // Ref to persist live dispatch delivery map across effects (prevents race between onSnapshot and fetchData)
     const liveDispatchRef = useRef({});
@@ -706,6 +823,8 @@ export default function GlobalSupplyControlTower() {
                             {/* ═══ ROW 2 — ALERTS / EXCEPTIONS STRIP ═══ */}
                             <AlertCardRow alerts={[
                                 { label: 'Items Missing Price', count: metrics.missingPrices, icon: '⚠️', color: '#f43f5e', onClick: () => window.location.href = '/catalog-reviews?tab=unmapped' },
+                                // Unmapped Vendor Items = vendor items not linked to master catalog (from reviewQueueService, same source as Catalog & Reviews KPI)
+                                { label: 'Unmapped Vendor Items', count: metrics.unmappedVendorItems, icon: '🔗', color: '#f59e0b', onClick: () => window.location.href = '/catalog-reviews?tab=unmapped' },
                                 { label: 'Open Issues', count: orderPipeline.openIssues, icon: '🚨', color: '#ef4444', onClick: () => window.location.href = '/orders-fulfillment?tab=issues' },
                                 { label: 'Dispatch Alerts', count: dispatchAlerts.length, icon: '📋', color: '#f59e0b', onClick: () => goTab('exceptions') },
                                 { label: 'Pending Aggregation', count: orderPipeline.pendingAggregation, icon: '🔄', color: '#fbbf24', onClick: () => window.location.href = '/orders-fulfillment?tab=submitted' },
@@ -850,6 +969,12 @@ export default function GlobalSupplyControlTower() {
                                             {metrics.missingPrices > 0 && (
                                                 <div style={{ background: 'rgba(244,63,94,0.06)', padding: '7px 10px', borderRadius: 6, borderLeft: '3px solid #f43f5e', fontSize: 11, color: '#94a3b8' }}>
                                                     <strong style={{ color: '#f43f5e' }}>Missing Pricing:</strong> {metrics.missingPrices} items
+                                                </div>
+                                            )}
+                                            {(metrics.unmappedVendorItems || 0) > 0 && (
+                                                <div style={{ background: 'rgba(245,158,11,0.06)', padding: '7px 10px', borderRadius: 6, borderLeft: '3px solid #f59e0b', fontSize: 11, color: '#94a3b8' }}>
+                                                    {/* Unmapped Vendor Items = distinct vendor items not yet linked to master catalog */}
+                                                    <strong style={{ color: '#f59e0b' }}>Unmapped Vendor Items:</strong> {metrics.unmappedVendorItems} items not yet in master catalog
                                                 </div>
                                             )}
                                         </div>

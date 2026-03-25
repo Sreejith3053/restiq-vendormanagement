@@ -1,27 +1,21 @@
 // src/components/Login.js
 //
-// HYBRID LOGIN — works during the Firebase Auth migration period.
-// Strategy:
-//   1. Resolve username → email (Firestore lookup)
-//   2. Try Firebase Auth signInWithEmailAndPassword
-//   3. If the account doesn't exist in Firebase Auth yet, fall back to
-//      the Firestore plaintext check (legacy path) and auto-create the
-//      Firebase Auth account on first success ("just-in-time migration").
-//   4. Rate limit: 5 failures in 2 min → 60s lockout, logged to systemLogs.
+// HARDENED LOGIN — all credential lookups go through server-side endpoints.
+// Security:
+//   • No client-side Firestore queries on the `login` collection
+//   • Password never leaves the server (legacy verify returns a custom token)
+//   • Generic error messages prevent username enumeration
+//   • Rate limiting enforced server-side (client-side is cosmetic only)
 //
-import React, { useState, useContext, useRef, useEffect, useCallback } from "react";
+import React, { useState, useContext, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../contexts/UserContext.js";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
 import {
     signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
+    signInWithCustomToken,
     sendPasswordResetEmail,
 } from "firebase/auth";
-import {
-    collection, getDocs, query, where, limit,
-    doc, getDoc, addDoc, serverTimestamp,
-} from "firebase/firestore";
 
 import restiqLogo from "../assets/restiq-logo.png";
 import heroImg1 from "../assets/vendor-hero-1.png";
@@ -50,10 +44,10 @@ const HERO_SLIDES = [
 
 const SLIDE_INTERVAL = 3000; // 3 seconds
 
-// ── Rate Limiting ──────────────────────────────────────────────────────────
+// ── Client-side rate limiting (cosmetic — real enforcement is server-side) ──
 const MAX_ATTEMPTS        = 5;
-const ATTEMPT_WINDOW_MS   = 2 * 60 * 1000;  // 2 min
-const LOCKOUT_DURATION_MS = 60 * 1000;       // 60 s
+const ATTEMPT_WINDOW_MS   = 2 * 60 * 1000;
+const LOCKOUT_DURATION_MS = 60 * 1000;
 
 export default function Login() {
     const { authLoading } = useContext(UserContext);
@@ -88,7 +82,7 @@ export default function Login() {
         return () => clearInterval(timer);
     }, []);
 
-    // ── Rate limit helpers ────────────────────────────────────────────────
+    // ── Client-side rate limit helpers (cosmetic) ─────────────────────────
     const checkRateLimit = () => {
         const now = Date.now();
         failureTimestamps.current = failureTimestamps.current.filter(
@@ -97,14 +91,8 @@ export default function Login() {
         return failureTimestamps.current.length >= MAX_ATTEMPTS;
     };
 
-    const recordFailure = (id) => {
+    const recordClientFailure = () => {
         failureTimestamps.current.push(Date.now());
-        addDoc(collection(db, "systemLogs"), {
-            level: "warn", category: "auth", action: "login_failed",
-            entityType: "user", entityId: id,
-            metadata: { identifier: id, attempts: failureTimestamps.current.length },
-            performedBy: "system", timestamp: serverTimestamp(),
-        }).catch(() => {});
         if (failureTimestamps.current.length >= MAX_ATTEMPTS) startLockout();
     };
 
@@ -130,44 +118,10 @@ export default function Login() {
             await sendPasswordResetEmail(auth, resetEmail.trim());
             setResetMsg("Reset link sent! Check your inbox (and spam folder).");
         } catch (err) {
-            const code = err.code || "";
-            if (code === "auth/user-not-found") {
-                setResetMsg("If that email is registered, a reset link has been sent.");
-            } else {
-                setResetErr("Failed to send reset email. Please try again.");
-            }
+            // Generic message — don't reveal if the email exists
+            setResetMsg("If that email is registered, a reset link has been sent.");
         } finally {
             setResetLoading(false);
-        }
-    };
-
-    // ── Look up the Firestore login doc by username or email ──────────────
-    const resolveFirestoreUser = async (identifierVal) => {
-        const trimmed = identifierVal.trim();
-        try {
-            let q = query(collection(db, "login"), where("email", "==", trimmed), limit(1));
-            let snap = await getDocs(q);
-            if (!snap.empty) return { docId: snap.docs[0].id, data: snap.docs[0].data() };
-
-            q = query(collection(db, "login"), where("username", "==", trimmed), limit(1));
-            snap = await getDocs(q);
-            if (!snap.empty) return { docId: snap.docs[0].id, data: snap.docs[0].data() };
-        } catch (e) {
-            console.warn("[Login] Firestore user lookup failed:", e.message);
-        }
-        return null;
-    };
-
-    // ── Just-in-time Firebase Auth migration ──────────────────────────────
-    const migrateUserToFirebaseAuth = async (email, password, uid) => {
-        try {
-            await createUserWithEmailAndPassword(auth, email, password);
-        } catch (createErr) {
-            if (createErr.code === "auth/email-already-in-use") {
-                await signInWithEmailAndPassword(auth, email, password);
-            } else {
-                console.warn("[Login] JIT migration failed:", createErr.message);
-            }
         }
     };
 
@@ -181,25 +135,37 @@ export default function Login() {
 
         setLoading(true);
         try {
-            const firestoreUser = await resolveFirestoreUser(identifier);
-            if (!firestoreUser) {
-                recordFailure(identifier);
-                setErr("No account found with that username or email.");
+            // ── Step 1: Resolve user via server-side endpoint ──────────────
+            const resolveRes = await fetch('/api/auth/resolve-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifier: identifier.trim() }),
+            });
+
+            if (resolveRes.status === 429) {
+                const data = await resolveRes.json();
+                setErr(`Too many attempts. Please wait ${data.remaining || 60}s.`);
+                startLockout();
                 setLoading(false);
                 return;
             }
-            const { docId, data } = firestoreUser;
-            const email = data.email || `${data.username}@restiq.internal`;
 
-            if (data.active === false) {
-                setErr("Your account has been deactivated. Contact admin.");
+            if (!resolveRes.ok) {
+                // Generic error — no enumeration (server returns 401 for both
+                // "not found" and other pre-auth failures)
+                recordClientFailure();
+                setErr("Invalid username/email or password.");
                 setLoading(false);
                 return;
             }
 
+            const userData = await resolveRes.json();
+            const email = userData.email;
+
+            // ── Step 2: Try Firebase Auth sign-in ─────────────────────────
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                if (data.mustChangePassword === true) {
+                if (userData.mustChangePassword) {
                     navigate('/change-password');
                 } else {
                     navigate('/');
@@ -207,15 +173,18 @@ export default function Login() {
                 return;
             } catch (firebaseErr) {
                 const code = firebaseErr.code || "";
+
+                // Errors that indicate the user hasn't been migrated to Firebase Auth yet
                 const notMigrated =
-                    code === "auth/user-not-found"       ||
-                    code === "auth/invalid-credential"   ||
+                    code === "auth/user-not-found"          ||
+                    code === "auth/invalid-credential"      ||
                     code === "auth/invalid-login-credentials";
 
                 if (!notMigrated) {
-                    if (code === "auth/wrong-password") {
-                        recordFailure(identifier);
-                        setErr("Incorrect password.");
+                    // Real Firebase Auth error
+                    if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+                        recordClientFailure();
+                        setErr("Invalid username/email or password.");
                     } else if (code === "auth/user-disabled") {
                         setErr("Account disabled. Contact admin.");
                     } else if (code === "auth/too-many-requests") {
@@ -228,22 +197,43 @@ export default function Login() {
                     return;
                 }
 
-                const storedPw = data.password;
-                if (!storedPw) {
-                    setErr("Account not yet set up for sign-in. Contact your admin.");
+                // ── Step 3: Legacy fallback — verify password server-side ──
+                if (!userData.hasPassword) {
+                    setErr("Account not set up for sign-in. Contact your admin.");
                     setLoading(false);
                     return;
                 }
 
-                if (String(storedPw) !== String(password)) {
-                    recordFailure(identifier);
-                    setErr("Incorrect password.");
+                const legacyRes = await fetch('/api/auth/legacy-verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        identifier: identifier.trim(),
+                        password,
+                    }),
+                });
+
+                if (legacyRes.status === 429) {
+                    const data = await legacyRes.json();
+                    setErr(`Too many attempts. Please wait ${data.remaining || 60}s.`);
+                    startLockout();
                     setLoading(false);
                     return;
                 }
 
-                await migrateUserToFirebaseAuth(email, password, docId);
-                if (data.mustChangePassword === true) {
+                if (!legacyRes.ok) {
+                    recordClientFailure();
+                    setErr("Invalid username/email or password.");
+                    setLoading(false);
+                    return;
+                }
+
+                const legacyData = await legacyRes.json();
+
+                // Sign in with the custom token returned from server
+                await signInWithCustomToken(auth, legacyData.customToken);
+
+                if (legacyData.mustChangePassword) {
                     navigate('/change-password');
                 } else {
                     navigate('/');

@@ -4,6 +4,7 @@ import { UserContext } from '../../contexts/UserContext';
 import { db } from '../../firebase';
 import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
+import { authFetch } from '../../utils/authFetch';
 
 export default function AdminRestaurantDetailPage() {
     const { restaurantId } = useParams();
@@ -50,7 +51,7 @@ export default function AdminRestaurantDetailPage() {
 
                 // Fetch restaurant profile info from RMS
                 try {
-                    const res = await fetch(`/api/restaurant-info/${decodedId}`);
+                    const res = await authFetch(`/api/restaurant-info/${decodedId}`);
                     if (res.ok) {
                         const info = await res.json();
                         setRestaurantInfo(info);

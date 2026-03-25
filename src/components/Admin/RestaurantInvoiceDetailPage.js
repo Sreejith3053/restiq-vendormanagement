@@ -6,6 +6,7 @@ import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'fir
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'react-toastify';
 import { generateInvoicePDF } from '../../utils/generateInvoicePDF';
+import { authFetch } from '../../utils/authFetch';
 
 export default function RestaurantInvoiceDetailPage() {
     const { invoiceId } = useParams();
@@ -72,7 +73,7 @@ export default function RestaurantInvoiceDetailPage() {
             let restaurantInfo = {};
             if (invoice.restaurantId) {
                 try {
-                    const res = await fetch(`/api/restaurant-info/${invoice.restaurantId}`);
+                    const res = await authFetch(`/api/restaurant-info/${invoice.restaurantId}`);
                     if (res.ok) {
                         restaurantInfo = await res.json();
                     }

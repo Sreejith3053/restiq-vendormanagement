@@ -9,6 +9,7 @@ import { logDispatchSent } from '../../utils/adminAuditLogger';
 import { ops } from '../../services/operationsLogger';
 import '../../components/Orders/OrdersPage.css';
 import { getTaxRate } from '../../constants/taxRates';
+import { authFetch } from '../../utils/authFetch';
 
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -503,7 +504,7 @@ export default function DispatchDetailPage() {
                 let toEmail = '';
                 let restaurantName = dispatch.restaurantId;
                 try {
-                    const res = await fetch(`/api/restaurant-info/${dispatch.restaurantId}`);
+                    const res = await authFetch(`/api/restaurant-info/${dispatch.restaurantId}`);
                     if (res.ok) {
                         const info = await res.json();
                         toEmail = info.email || '';

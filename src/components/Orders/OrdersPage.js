@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { UserContext } from '../../contexts/UserContext';
 import { getTaxRate } from '../../constants/taxRates';
 import './OrdersPage.css';
+import { authFetch } from '../../utils/authFetch';
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -252,7 +253,7 @@ export default function OrdersPage() {
                 let toEmail = '';
                 let restaurantName = selectedOrder.restaurantId;
                 try {
-                    const res = await fetch(`/api/restaurant-info/${selectedOrder.restaurantId}`);
+                    const res = await authFetch(`/api/restaurant-info/${selectedOrder.restaurantId}`);
                     if (res.ok) {
                         const info = await res.json();
                         toEmail = info.email || '';

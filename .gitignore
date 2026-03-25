@@ -37,6 +37,8 @@ deploy_output*.txt
 scripts/serviceAccountKey.json
 serviceAccountKey.json
 firebase-adminsdk*.json
+.vm-service-account.json
+.rms-service-account.json
 
 # ── IDE / OS ──────────────────────────────────────────────────────────────────
 .idea/

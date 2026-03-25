@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { UserContext } from '../../contexts/UserContext';
 import { db, app } from '../../firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { doc, getDoc, getDocs, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, updateDoc, deleteDoc, serverTimestamp, collection, query, where, limit } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 import { logDispatchSent } from '../../utils/adminAuditLogger';
 import { ops } from '../../services/operationsLogger';
@@ -96,6 +96,7 @@ export default function DispatchDetailPage() {
 
     const [dispatch, setDispatch] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [restaurantInfo, setRestaurantInfo] = useState(null);
     const [notes, setNotes] = useState('');
     const [estimatedDelivery, setEstimatedDelivery] = useState('');
 
@@ -238,8 +239,32 @@ export default function DispatchDetailPage() {
                 setLoading(false);
             }
         };
+
+
         fetchDispatch();
     }, [dispatchId, isSuperAdmin, vendorId, navigate]);
+
+    // Fetch restaurant contact info once dispatch.restaurantId is available
+    useEffect(() => {
+        if (!dispatch?.restaurantId) return;
+        const fetchRestaurantInfo = async (rid) => {
+            try {
+                const docSnap = await getDoc(doc(db, 'restaurants', rid));
+                if (docSnap.exists()) {
+                    setRestaurantInfo(docSnap.data());
+                    return;
+                }
+                const q = query(collection(db, 'restaurants'), where('restaurantId', '==', rid), limit(1));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    setRestaurantInfo(snap.docs[0].data());
+                }
+            } catch (err) {
+                console.warn('Could not fetch restaurant info:', err);
+            }
+        };
+        fetchRestaurantInfo(dispatch.restaurantId);
+    }, [dispatch?.restaurantId]);
 
     const formatDate = (timestamp) => {
         if (!timestamp) return '';
@@ -426,6 +451,19 @@ export default function DispatchDetailPage() {
     const handleConfirmAcceptMarketplace = async () => {
         if (!pickupDate || !pickupTime) {
             toast.warn('Please select both a pickup date and time.');
+            return;
+        }
+
+        // Validate pickup date/time is not in the past
+        const now = new Date();
+        const pickupDateTime = new Date(`${pickupDate}T${pickupTime}`);
+        const today = now.toISOString().split('T')[0];
+        if (pickupDate < today) {
+            toast.warn('Pickup date cannot be in the past.');
+            return;
+        }
+        if (pickupDate === today && pickupDateTime <= now) {
+            toast.warn('Pickup time cannot be in the past.');
             return;
         }
 
@@ -891,6 +929,24 @@ export default function DispatchDetailPage() {
                         <span className="info-label">Restaurant</span>
                         <span className="info-value">{dispatch.restaurantName}</span>
                     </div>
+                    {restaurantInfo && (restaurantInfo.address || restaurantInfo.city || restaurantInfo.province) && (
+                        <div className="info-item">
+                            <span className="info-label">Address</span>
+                            <span className="info-value">{[restaurantInfo.address, restaurantInfo.city, restaurantInfo.province, restaurantInfo.postalCode].filter(Boolean).join(', ')}</span>
+                        </div>
+                    )}
+                    {restaurantInfo && restaurantInfo.phone && (
+                        <div className="info-item">
+                            <span className="info-label">Phone</span>
+                            <span className="info-value"><a href={`tel:${restaurantInfo.phone}`} style={{ color: '#38bdf8', textDecoration: 'none' }}>{restaurantInfo.phone}</a></span>
+                        </div>
+                    )}
+                    {restaurantInfo && restaurantInfo.email && (
+                        <div className="info-item">
+                            <span className="info-label">Email</span>
+                            <span className="info-value"><a href={`mailto:${restaurantInfo.email}`} style={{ color: '#38bdf8', textDecoration: 'none' }}>{restaurantInfo.email}</a></span>
+                        </div>
+                    )}
                     <div className="info-item">
                         <span className="info-label">Status</span>
                         <span className={`status-badge ${mStatus}`}>{mStatus.replace(/_/g, ' ')}</span>
